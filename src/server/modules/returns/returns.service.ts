@@ -1,0 +1,212 @@
+import { prisma } from '../../infrastructure/prisma';
+import { auditService } from '../../services/audit.service';
+import { NotFoundError, ValidationError } from '../../common/errors';
+
+type ReturnTypeValue = 'CUSTOMER' | 'SUPPLIER';
+
+type CreateReturnItemInput = {
+  productId: string;
+  batchId?: string | null;
+  quantity: number;
+  unitPrice?: number | null;
+  reason?: string | null;
+};
+
+type CreateReturnInput = {
+  type: ReturnTypeValue;
+  invoiceId?: string | null;
+  supplierId?: string | null;
+  customerName?: string | null;
+  refundMethod?: 'CASH' | 'CARD' | 'STORE_BALANCE' | null;
+  reason?: string | null;
+  note?: string | null;
+  items: CreateReturnItemInput[];
+  userId: string;
+  userRole?: string;
+};
+
+const buildReturnNumber = () => `RET-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+const mapProductStatus = (totalStock: number, minStock: number) => {
+  if (totalStock <= 0) return 'OUT_OF_STOCK';
+  if (totalStock < minStock) return 'LOW_STOCK';
+  return 'ACTIVE';
+};
+
+export class ReturnsService {
+  async createReturn(input: CreateReturnInput) {
+    if (!input.items.length) {
+      throw new ValidationError('items array is required');
+    }
+
+    const totalAmount = input.items.reduce((sum, item) => {
+      return sum + Number(item.quantity || 0) * Number(item.unitPrice || 0);
+    }, 0);
+
+    const created = await prisma.return.create({
+      data: {
+        returnNo: buildReturnNumber(),
+        type: input.type,
+        status: 'DRAFT',
+        invoiceId: input.invoiceId || null,
+        supplierId: input.supplierId || null,
+        customerName: input.customerName || null,
+        refundMethod: input.refundMethod || null,
+        reason: input.reason || null,
+        note: input.note || null,
+        totalAmount,
+        createdById: input.userId,
+        items: {
+          create: input.items.map((item) => ({
+            productId: item.productId,
+            batchId: item.batchId || null,
+            quantity: Number(item.quantity),
+            unitPrice: item.unitPrice != null ? Number(item.unitPrice) : null,
+            lineTotal: Number(item.quantity || 0) * Number(item.unitPrice || 0),
+            reason: item.reason || null,
+          })),
+        },
+      },
+      include: { items: { include: { product: true } } },
+    });
+
+    await auditService.log({
+      userId: input.userId,
+      userRole: input.userRole as any,
+      module: 'returns',
+      action: 'CREATE_RETURN',
+      entity: 'RETURN',
+      entityId: created.id,
+      newValue: { type: input.type, itemCount: input.items.length },
+    });
+
+    return created;
+  }
+
+  async approveReturn(returnId: string, userId: string, userRole?: string) {
+    const ret = await prisma.return.findUnique({
+      where: { id: returnId },
+      include: { items: true },
+    });
+    if (!ret) throw new NotFoundError('Return not found');
+    if (ret.status !== 'DRAFT') {
+      throw new ValidationError(`Return is already ${ret.status.toLowerCase()}`);
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      for (const item of ret.items) {
+        if (!item.batchId) continue;
+
+        const batch = await tx.batch.findUnique({ where: { id: item.batchId } });
+        if (!batch) continue;
+
+        let movementQty: number;
+        if (ret.type === 'CUSTOMER') {
+          movementQty = item.quantity;
+        } else {
+          if (batch.quantity < item.quantity) {
+            throw new ValidationError(
+              `Insufficient stock in batch ${batch.batchNumber} (available: ${batch.quantity}, requested: ${item.quantity})`,
+            );
+          }
+          movementQty = -item.quantity;
+        }
+
+        await tx.batch.update({
+          where: { id: item.batchId },
+          data: {
+            quantity: Math.max(0, Number(batch.quantity) + movementQty),
+            currentQty: Math.max(0, Number(batch.currentQty || batch.quantity) + movementQty),
+            availableQty: Math.max(0, Number(batch.availableQty || batch.quantity) + movementQty),
+          },
+        });
+
+        const product = await tx.product.findUnique({ where: { id: item.productId } });
+        if (!product) continue;
+
+        const nextStock = Math.max(0, Number(product.totalStock) + movementQty);
+        await tx.product.update({
+          where: { id: item.productId },
+          data: {
+            totalStock: nextStock,
+            status: mapProductStatus(nextStock, product.minStock),
+          },
+        });
+
+        if (batch.warehouseId) {
+          await tx.warehouseStock.upsert({
+            where: {
+              warehouseId_productId: {
+                warehouseId: batch.warehouseId,
+                productId: item.productId,
+              },
+            },
+            update: {
+              quantity: movementQty >= 0 ? { increment: movementQty } : { decrement: Math.abs(movementQty) },
+            },
+            create: {
+              warehouseId: batch.warehouseId,
+              productId: item.productId,
+              quantity: Math.max(0, movementQty),
+            },
+          });
+        }
+
+        await tx.batchMovement.create({
+          data: {
+            batchId: item.batchId,
+            type: 'RETURN',
+            quantity: movementQty,
+            description: `Return ${ret.returnNo} - ${ret.type.toLowerCase()}`,
+            userId,
+          },
+        });
+      }
+
+      return tx.return.update({
+        where: { id: ret.id },
+        data: { status: 'COMPLETED', approvedById: userId },
+        include: { items: { include: { product: true } } },
+      });
+    });
+
+    await auditService.log({
+      userId,
+      userRole: userRole as any,
+      module: 'returns',
+      action: 'APPROVE_RETURN',
+      entity: 'RETURN',
+      entityId: ret.id,
+      oldValue: { status: 'DRAFT' },
+      newValue: { status: 'COMPLETED' },
+    });
+
+    return updated;
+  }
+
+  async rejectReturn(returnId: string, userId: string, userRole?: string) {
+    const ret = await prisma.return.findUnique({ where: { id: returnId } });
+    if (!ret) throw new NotFoundError('Return not found');
+    if (ret.status !== 'DRAFT') {
+      throw new ValidationError(`Return is already ${ret.status.toLowerCase()}`);
+    }
+
+    const updated = await prisma.return.update({
+      where: { id: returnId },
+      data: { status: 'REJECTED', approvedById: userId },
+    });
+
+    await auditService.log({
+      userId,
+      userRole: userRole as any,
+      module: 'returns',
+      action: 'REJECT_RETURN',
+      entity: 'RETURN',
+      entityId: ret.id,
+    });
+
+    return updated;
+  }
+}
+
+export const returnsService = new ReturnsService();

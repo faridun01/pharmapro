@@ -1,0 +1,1336 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { usePharmacy } from '../context';
+import { useDebounce } from '../../lib/useDebounce';
+import { 
+  Search, 
+  FileText, 
+  Download, 
+  Printer, 
+  ChevronRight,
+  Calendar,
+  DollarSign,
+  User as UserIcon,
+  Pencil,
+  RotateCcw,
+  Clock,
+  AlertCircle,
+  Trash2,
+  X,
+} from 'lucide-react';
+
+type EditableInvoiceItem = {
+  id: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  unitsPerPack?: number | null;
+};
+
+type ReturnInvoiceItem = {
+  id: string;
+  productName: string;
+  batchNo: string;
+  soldQuantity: number;
+  quantity: number;
+  unitsPerPack?: number | null;
+};
+
+export const InvoicesView: React.FC<{
+  initialSearchTerm?: string;
+  initialPaymentInvoiceId?: string;
+  onInitialPaymentInvoiceHandled?: () => void;
+}> = ({ initialSearchTerm = '', initialPaymentInvoiceId = '', onInitialPaymentInvoiceHandled }) => {
+  const { t } = useTranslation();
+  const { invoices, isLoading, refreshInvoices, refreshProducts } = usePharmacy();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'id'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [detailsInvoice, setDetailsInvoice] = useState<any | null>(null);
+  const [returnInvoiceTarget, setReturnInvoiceTarget] = useState<{
+    invoice: any;
+    items: ReturnInvoiceItem[];
+    error: string | null;
+  } | null>(null);
+  const [deleteInvoiceTarget, setDeleteInvoiceTarget] = useState<any | null>(null);
+  const [editModal, setEditModal] = useState<{
+    open: boolean;
+    invoiceId: string;
+    customer: string;
+    taxAmount: number;
+    discount: number;
+    totalAmount: string;
+    items: EditableInvoiceItem[];
+    error: string | null;
+  }>({
+    open: false,
+    invoiceId: '',
+    customer: '',
+    taxAmount: 0,
+    discount: 0,
+    totalAmount: '',
+    items: [],
+    error: null,
+  });
+  const [paymentModal, setPaymentModal] = useState<{
+    open: boolean;
+    invoice: any | null;
+    amount: string;
+    method: 'CASH' | 'CARD' | 'BANK_TRANSFER';
+    comment: string;
+    error: string | null;
+  }>({
+    open: false,
+    invoice: null,
+    amount: '',
+    method: 'CASH',
+    comment: '',
+    error: null,
+  });
+  const paymentAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const [invoicesScrollTop, setInvoicesScrollTop] = useState(0);
+  const resetPaymentModal = () => setPaymentModal({ open: false, invoice: null, amount: '', method: 'CASH', comment: '', error: null });
+
+  const INVOICE_ROW_HEIGHT = 88;
+  const INVOICE_VIEWPORT_HEIGHT = 620;
+  const INVOICE_OVERSCAN = 8;
+
+  // Debounce search to 300ms to avoid filtering on every keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  useEffect(() => {
+    if (initialSearchTerm) {
+      setSearchTerm(initialSearchTerm);
+    }
+  }, [initialSearchTerm]);
+
+  const filteredInvoices = useMemo(() => {
+    const filtered = invoices.filter((inv) => 
+      (inv.invoiceNo || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      inv.id.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      (inv.customer || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    );
+
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      let compareValue = 0;
+      
+      if (sortBy === 'date') {
+        compareValue = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+      } else if (sortBy === 'amount') {
+        compareValue = (a.totalAmount || 0) - (b.totalAmount || 0);
+      } else if (sortBy === 'id') {
+        compareValue = (a.id || '').localeCompare(b.id || '');
+      }
+
+      return sortOrder === 'asc' ? compareValue : -compareValue;
+    });
+
+    return sorted;
+  }, [invoices, debouncedSearchTerm, sortBy, sortOrder]);
+
+  const invoicesSummary = useMemo(() => {
+    const totalRevenue = invoices.reduce((acc, inv) => acc + inv.totalAmount, 0);
+    const totalCount = invoices.length;
+    return {
+      totalRevenue,
+      totalCount,
+      averageOrder: totalRevenue / (totalCount || 1),
+    };
+  }, [invoices]);
+
+  const onInvoicesScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    setInvoicesScrollTop(event.currentTarget.scrollTop);
+  }, []);
+
+  const invoiceStartIndex = Math.max(0, Math.floor(invoicesScrollTop / INVOICE_ROW_HEIGHT) - INVOICE_OVERSCAN);
+  const invoiceVisibleCount = Math.ceil(INVOICE_VIEWPORT_HEIGHT / INVOICE_ROW_HEIGHT) + INVOICE_OVERSCAN * 2;
+  const invoiceEndIndex = Math.min(filteredInvoices.length, invoiceStartIndex + invoiceVisibleCount);
+  const visibleInvoices = filteredInvoices.slice(invoiceStartIndex, invoiceEndIndex);
+  const invoiceTopSpacerHeight = invoiceStartIndex * INVOICE_ROW_HEIGHT;
+  const invoiceBottomSpacerHeight = Math.max(0, (filteredInvoices.length - invoiceEndIndex) * INVOICE_ROW_HEIGHT);
+
+  const isReturnLocked = (status: string) => status === 'RETURNED';
+  const isEditLocked = (status: string) => status === 'RETURNED' || status === 'PARTIALLY_RETURNED';
+
+  const getUnitsPerPack = (value: number | null | undefined) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 2 ? parsed : null;
+  };
+
+  const formatMoney = (value: number) => `${Number(value || 0).toFixed(2)} TJS`;
+
+  const formatMoneyCompact = (value: number) => `${Number(value || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TJS`;
+
+  const formatPackQuantity = (quantity: number, unitsPerPack?: number | null) => {
+    const safeUnitsPerPack = getUnitsPerPack(unitsPerPack);
+    if (!safeUnitsPerPack) {
+      return `${Number(quantity || 0)} ед.`;
+    }
+
+    const wholeQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
+    const boxes = Math.floor(wholeQuantity / safeUnitsPerPack);
+    const units = wholeQuantity % safeUnitsPerPack;
+
+    if (boxes > 0 && units > 0) return `${boxes} кор. ${units} ед.`;
+    if (boxes > 0) return `${boxes} кор.`;
+    return `${units} ед.`;
+  };
+
+  const computeInvoiceModalTotal = (items: EditableInvoiceItem[], taxAmount: number, discount: number) => {
+    const subtotal = items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0);
+    return Math.max(0, subtotal + Number(taxAmount || 0) - Number(discount || 0));
+  };
+
+  const formatInvoiceQuantitySummary = (items: any[] = []) => {
+    const totals = items.reduce(
+      (acc, item) => {
+        const quantity = Math.max(0, Math.floor(Number(item?.quantity || 0)));
+        const unitsPerPack = getUnitsPerPack(item?.product?.unitsPerPack);
+        if (!unitsPerPack) {
+          acc.units += quantity;
+          return acc;
+        }
+
+        acc.boxes += Math.floor(quantity / unitsPerPack);
+        acc.units += quantity % unitsPerPack;
+        return acc;
+      },
+      { boxes: 0, units: 0 },
+    );
+
+    if (totals.boxes > 0 && totals.units > 0) return `${totals.boxes} кор. ${totals.units} шт.`;
+    if (totals.boxes > 0) return `${totals.boxes} кор.`;
+    return `${totals.units} шт.`;
+  };
+
+  const closeEditModal = () => setEditModal({ open: false, invoiceId: '', customer: '', taxAmount: 0, discount: 0, totalAmount: '', items: [], error: null });
+
+  const openReturnModal = (invoice: any) => {
+    const returnedByItemKey = new Map<string, number>();
+    for (const ret of invoice.returns || []) {
+      for (const item of ret.items || []) {
+        const key = `${item.productId}:${item.batchId || ''}`;
+        returnedByItemKey.set(key, Number(returnedByItemKey.get(key) || 0) + Number(item.quantity || 0));
+      }
+    }
+
+    setReturnInvoiceTarget({
+      invoice,
+      items: (invoice.items || []).map((item: any) => {
+        const remainingQuantity = Math.max(0, Number(item.quantity || 0) - Number(returnedByItemKey.get(`${item.productId}:${item.batchId || ''}`) || 0));
+        return {
+          id: item.id,
+          productName: item.productName || '-',
+          batchNo: item.batchNo || '—',
+          soldQuantity: remainingQuantity,
+          quantity: remainingQuantity,
+          unitsPerPack: item.product?.unitsPerPack ?? null,
+        };
+      }),
+      error: null,
+    });
+  };
+
+  const closeReturnModal = () => setReturnInvoiceTarget(null);
+
+  const updateReturnItemPackaging = (itemId: string, boxesValue: string, unitsValue: string) => {
+    setReturnInvoiceTarget((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        error: null,
+        items: prev.items.map((item) => {
+          if (item.id !== itemId) return item;
+
+          const unitsPerPack = getUnitsPerPack(item.unitsPerPack);
+          if (!unitsPerPack) {
+            return {
+              ...item,
+              quantity: Math.max(0, Math.min(item.soldQuantity, Math.floor(Number(unitsValue) || 0))),
+            };
+          }
+
+          const boxes = Math.max(0, Math.floor(Number(boxesValue) || 0));
+          const units = Math.max(0, Math.floor(Number(unitsValue) || 0));
+          const normalizedBoxes = boxes + Math.floor(units / unitsPerPack);
+          const normalizedUnits = units % unitsPerPack;
+          const totalUnits = normalizedBoxes * unitsPerPack + normalizedUnits;
+
+          return {
+            ...item,
+            quantity: Math.max(0, Math.min(item.soldQuantity, totalUnits)),
+          };
+        }),
+      };
+    });
+  };
+
+  const updateEditItem = (itemId: string, patch: Partial<EditableInvoiceItem>) => {
+    setEditModal((prev) => {
+      const items = prev.items.map((item) => item.id === itemId ? { ...item, ...patch } : item);
+      return {
+        ...prev,
+        totalAmount: computeInvoiceModalTotal(items, prev.taxAmount, prev.discount).toFixed(2),
+        error: null,
+      };
+    });
+  };
+
+  const updateEditItemPackaging = (itemId: string, boxesValue: string, unitsValue: string) => {
+    setEditModal((prev) => {
+      const items = prev.items.map((item) => {
+        if (item.id !== itemId) return item;
+
+        const unitsPerPack = getUnitsPerPack(item.unitsPerPack);
+        if (!unitsPerPack) {
+          const quantity = Math.max(1, Math.floor(Number(unitsValue) || 0));
+          return { ...item, quantity };
+        }
+
+        const boxes = Math.max(0, Math.floor(Number(boxesValue) || 0));
+        const units = Math.max(0, Math.floor(Number(unitsValue) || 0));
+        const normalizedBoxes = boxes + Math.floor(units / unitsPerPack);
+        const normalizedUnits = units % unitsPerPack;
+        const quantity = Math.max(1, normalizedBoxes * unitsPerPack + normalizedUnits);
+
+        return { ...item, quantity };
+      });
+
+      return {
+        ...prev,
+        items,
+        totalAmount: computeInvoiceModalTotal(items, prev.taxAmount, prev.discount).toFixed(2),
+        error: null,
+      };
+    });
+  };
+
+  const authHeaders = () => {
+    const token = window.sessionStorage.getItem('pharmapro_token') || localStorage.getItem('pharmapro_token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
+
+  const exportInvoicesReport = () => {
+    const rows = invoices.map((invoice) => ({
+      invoiceNo: invoice.invoiceNo || invoice.id,
+      customer: invoice.customer || '',
+      createdAt: new Date(invoice.createdAt).toLocaleString('ru-RU'),
+      paymentType: invoice.paymentType,
+      status: invoice.status,
+      paymentStatus: invoice.paymentStatus || 'UNPAID',
+      totalAmount: Number(invoice.totalAmount || 0).toFixed(2),
+      debt: Number(invoice.receivables?.[0]?.remainingAmount || 0).toFixed(2),
+    }));
+
+    const header = ['Накладная', 'Клиент', 'Дата', 'Тип оплаты', 'Статус', 'Статус оплаты', 'Сумма', 'Долг'];
+    const csvBody = rows
+      .map((r) => [r.invoiceNo, r.customer, r.createdAt, r.paymentType, r.status, r.paymentStatus, r.totalAmount, r.debt]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const csv = `${header.join(',')}\n${csvBody}`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sales-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const editInvoice = async (invoice: any) => {
+    const items: EditableInvoiceItem[] = (invoice.items || []).map((item: any) => ({
+      id: item.id,
+      productName: item.productName || '-',
+      quantity: Number(item.quantity || 0),
+      unitPrice: Number(item.unitPrice || 0),
+      unitsPerPack: item.product?.unitsPerPack ?? null,
+    }));
+
+    setEditModal({
+      open: true,
+      invoiceId: invoice.id,
+      customer: invoice.customer || '',
+      taxAmount: Number(invoice.taxAmount || 0),
+      discount: Number(invoice.discount || 0),
+      totalAmount: computeInvoiceModalTotal(items, Number(invoice.taxAmount || 0), Number(invoice.discount || 0)).toFixed(2),
+      items,
+      error: null,
+    });
+  };
+
+  const submitEditInvoice = async () => {
+    const totalAmount = Number(editModal.totalAmount);
+    if (Number.isNaN(totalAmount) || totalAmount < 0) {
+      setEditModal((prev) => ({ ...prev, error: t('Invalid total amount') }));
+      return;
+    }
+
+    if (editModal.items.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+      setEditModal((prev) => ({ ...prev, error: 'Укажите корректное количество для всех строк' }));
+      return;
+    }
+
+    try {
+      setBusyId(editModal.invoiceId);
+      setActionError(null);
+      const res = await fetch(`/api/invoices/${editModal.invoiceId}`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          customer: editModal.customer,
+          taxAmount: editModal.taxAmount,
+          discount: editModal.discount,
+          totalAmount,
+          items: editModal.items.map((item) => ({
+            id: item.id,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+          })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || t('Failed to edit invoice'));
+      closeEditModal();
+      await Promise.all([refreshInvoices(), refreshProducts()]);
+    } catch (e: any) {
+      setEditModal((prev) => ({ ...prev, error: e.message || t('Failed to edit invoice') }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const returnInvoice = async (invoice: any) => {
+    const target = returnInvoiceTarget;
+    if (!target) return;
+
+    const selectedItems = target.items
+      .filter((item) => item.quantity > 0)
+      .map((item) => ({ id: item.id, quantity: item.quantity }));
+
+    if (selectedItems.length === 0) {
+      setReturnInvoiceTarget((prev) => prev ? { ...prev, error: 'Укажите количество хотя бы для одной позиции' } : prev);
+      return;
+    }
+
+    try {
+      setBusyId(invoice.id);
+      setActionError(null);
+      const res = await fetch(`/api/invoices/${invoice.id}/return`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ reason: 'Return from sales history', refundMethod: 'CASH', items: selectedItems }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || t('Failed to return invoice'));
+      closeReturnModal();
+      await Promise.all([refreshInvoices(), refreshProducts()]);
+    } catch (e: any) {
+      setReturnInvoiceTarget((prev) => prev ? { ...prev, error: e.message || t('Failed to return invoice') } : prev);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const printInvoice = (invoice: any) => {
+    const createdAt = new Date(invoice.createdAt);
+    const formatQuantityLabel = (item: any) => `${Number(item?.quantity || 0)} шт. (${formatPackQuantity(Number(item?.quantity || 0), item?.product?.unitsPerPack)})`;
+
+    const receiptHtml = `
+      <html>
+        <head>
+          <title>Накладная ${invoice.id}</title>
+          <style>
+            body { font-family: Segoe UI, Arial, sans-serif; margin: 0; padding: 20px; color: #2d2d2d; background: #f3f4f6; }
+            .toolbar { max-width: 900px; margin: 0 auto 12px; display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 10px 14px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+            .btn { border: 0; background: #374151; color: #fff; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+            .sheet { max-width: 900px; margin: 0 auto; background: #fff; padding: 26px; border-radius: 10px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08); }
+            h1 { margin: 0 0 8px; font-size: 22px; }
+            .muted { color: #666; font-size: 12px; margin-bottom: 16px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border-bottom: 1px solid #e5e7eb; padding: 8px; text-align: left; font-size: 12px; }
+            th { background: #f8fafc; color: #64748b; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; }
+            .num { width: 36px; text-align: center; color: #666; }
+            .right { text-align: right; }
+            .total { margin-top: 16px; font-size: 16px; font-weight: bold; text-align: right; }
+            @page { size: A4 portrait; margin: 12mm; }
+            @media print {
+              body { background: #fff; padding: 0; }
+              .toolbar { display: none; }
+              .sheet { box-shadow: none; border-radius: 0; max-width: unset; padding: 0; }
+            }
+          </style>
+          <script>
+            function saveInvoicePreview() {
+              const html = document.documentElement.outerHTML;
+              const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'invoice-${invoice.id}.html';
+              a.click();
+              URL.revokeObjectURL(url);
+            }
+          </script>
+        </head>
+        <body>
+          <div class="toolbar">
+            <div style="font-weight:700">Предпросмотр накладной</div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn" onclick="saveInvoicePreview()" style="background:#2563eb;">Сохранить</button>
+              <button class="btn" onclick="window.print()">Печать</button>
+              <button class="btn" onclick="window.close()" style="background:#9ca3af;">Закрыть</button>
+            </div>
+          </div>
+          <div class="sheet">
+            <h1>Накладная ${invoice.id}</h1>
+            <div class="muted">Клиент: ${invoice.customer || '-'} | Дата: ${createdAt.toLocaleString('ru-RU')} | Статус: ${invoice.status}</div>
+            <table>
+              <thead>
+                <tr><th class="num">№</th><th>Товар</th><th class="right">Кол-во</th><th class="right">Цена</th><th class="right">Сумма</th></tr>
+              </thead>
+              <tbody>
+                ${(invoice.items || []).map((item: any, index: number) => `<tr>
+                  <td class="num">${index + 1}</td>
+                  <td>${item.productName || '-'}</td>
+                  <td class="right">${formatQuantityLabel(item)}</td>
+                  <td class="right">${Number(item.unitPrice || 0).toFixed(2)} TJS</td>
+                  <td class="right">${Number(item.totalPrice || 0).toFixed(2)} TJS</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+            <div class="total">Итого: ${Number(invoice.totalAmount || 0).toFixed(2)} TJS</div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank', 'width=980,height=800');
+    if (!printWindow) {
+      setActionError('Разрешите открытие всплывающих окон для печати накладной');
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(receiptHtml);
+    printWindow.document.close();
+    printWindow.focus();
+  };
+
+  const deleteInvoice = async (invoice: any) => {
+    try {
+      setBusyId(invoice.id);
+      setActionError(null);
+      const res = await fetch(`/api/invoices/${invoice.id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || t('Failed to delete invoice'));
+      setDeleteInvoiceTarget(null);
+      await Promise.all([refreshInvoices(), refreshProducts()]);
+    } catch (e: any) {
+      setActionError(e.message || t('Failed to delete invoice'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const addInvoicePayment = useCallback((invoice: any) => {
+    const paymentStatus = String(invoice.paymentStatus || 'UNPAID');
+    if (!['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'].includes(paymentStatus)) {
+      return;
+    }
+
+    setPaymentModal({
+      open: true,
+      invoice,
+      amount: '',
+      method: 'CASH',
+      comment: '',
+      error: null,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!paymentModal.open) return;
+
+    const focusTimer = window.setTimeout(() => {
+      paymentAmountInputRef.current?.focus();
+      paymentAmountInputRef.current?.select();
+    }, 0);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [paymentModal.open]);
+
+  useEffect(() => {
+    if (!initialPaymentInvoiceId) return;
+
+    const targetInvoice = invoices.find((invoice) => invoice.id === initialPaymentInvoiceId);
+    if (!targetInvoice) return;
+
+    addInvoicePayment(targetInvoice);
+    onInitialPaymentInvoiceHandled?.();
+  }, [addInvoicePayment, initialPaymentInvoiceId, invoices, onInitialPaymentInvoiceHandled]);
+
+  const submitInvoicePayment = async () => {
+    const invoice = paymentModal.invoice;
+    if (!invoice) return;
+
+    const outstanding = Number(invoice.outstandingAmount ?? invoice.receivables?.[0]?.remainingAmount ?? invoice.totalAmount ?? 0);
+    const amount = Number(paymentModal.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setPaymentModal((prev) => ({ ...prev, error: 'Введите корректную сумму оплаты' }));
+      return;
+    }
+    if (amount > outstanding) {
+      setPaymentModal((prev) => ({
+        ...prev,
+        error: `Сумма оплаты не может быть больше остатка долга (${outstanding.toFixed(2)} TJS)`,
+      }));
+      return;
+    }
+
+    try {
+      setBusyId(invoice.id);
+      setActionError(null);
+      const res = await fetch(`/api/invoices/${invoice.id}/payments`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ amount, method: paymentModal.method, comment: paymentModal.comment || undefined }),
+      });
+      const rawResponse = await res.text();
+      let data: any = {};
+      if (rawResponse) {
+        try {
+          data = JSON.parse(rawResponse);
+        } catch {
+          data = { error: rawResponse };
+        }
+      }
+      if (!res.ok) throw new Error(data.error || data.message || t('Failed to add payment'));
+      resetPaymentModal();
+      await refreshInvoices();
+    } catch (e: any) {
+      setPaymentModal((prev) => ({ ...prev, error: e.message || t('Failed to add payment') }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const fillPaymentAmount = useCallback((mode: 'HALF' | 'FULL') => {
+    const outstanding = Number(
+      paymentModal.invoice?.outstandingAmount
+        ?? paymentModal.invoice?.receivables?.[0]?.remainingAmount
+        ?? paymentModal.invoice?.totalAmount
+        ?? 0
+    );
+
+    const nextAmount = mode === 'HALF'
+      ? Math.max(0, outstanding / 2)
+      : Math.max(0, outstanding);
+
+    setPaymentModal((prev) => ({
+      ...prev,
+      amount: nextAmount.toFixed(2),
+      error: null,
+    }));
+  }, [paymentModal.invoice]);
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">{t('Sales History')}</h2>
+          <p className="text-[#5A5A40]/60 mt-1 italic">{t('Track transactions, invoices, and billing')}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
+            <input 
+              type="text" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={t('Search invoices...')} 
+              className="w-64 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 transition-all shadow-sm"
+            />
+          </div>
+          <button
+            onClick={exportInvoicesReport}
+            className="bg-white text-[#5A5A40] px-6 py-3 rounded-2xl font-medium border border-[#5A5A40]/10 shadow-sm hover:bg-[#f5f5f0] transition-all flex items-center gap-2"
+          >
+            <Download size={20} />
+            {t('Export Report')}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+        <span className="text-xs font-semibold text-[#5A5A40]/50 whitespace-nowrap">Сортировка:</span>
+        {[
+          { key: 'date', label: 'По дате' },
+          { key: 'amount', label: 'По сумме' },
+          { key: 'id', label: 'По номеру' },
+        ].map((option) => (
+          <button
+            key={option.key}
+            onClick={() => {
+              if (sortBy === option.key) {
+                setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+              } else {
+                setSortBy(option.key as any);
+                setSortOrder('desc');
+              }
+            }}
+            className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+              sortBy === option.key
+                ? `bg-[#5A5A40] text-white border-[#5A5A40] ${sortOrder === 'desc' ? '' : 'opacity-70'}`
+                : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
+            }`}
+          >
+            {option.label} {sortBy === option.key && (sortOrder === 'asc' ? '↑' : '↓')}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {[
+          { label: t('Total Revenue'), value: `${invoicesSummary.totalRevenue.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TJS`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: t('Total Invoices'), value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: t('Avg. Order Value'), value: `${invoicesSummary.averageOrder.toFixed(2)} TJS`, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
+        ].map((stat, i) => (
+          <div key={i} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
+              <stat.icon size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-[#5A5A40]/40 uppercase tracking-widest">{stat.label}</p>
+              <p className="text-2xl font-bold text-[#5A5A40] mt-0.5">{stat.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+        {actionError && (
+          <div className="mx-6 mt-6 p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 flex items-center gap-2">
+            <AlertCircle size={14} />
+            {actionError}
+          </div>
+        )}
+        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: INVOICE_VIEWPORT_HEIGHT }} onScroll={onInvoicesScroll}>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-[#f5f5f0]/50 text-[9px] uppercase tracking-[0.2em] text-[#5A5A40]/45 font-bold">
+                <th className="px-6 py-3.5">{t('Invoice ID')}</th>
+                <th className="px-6 py-3.5">{t('Customer')}</th>
+                <th className="px-6 py-3.5">{t('Date & Time')}</th>
+                <th className="px-6 py-3.5">{t('Payment')}</th>
+                <th className="px-4 py-3.5 text-right">Количество</th>
+                <th className="px-4 py-3.5 text-right">Сумма</th>
+                <th className="px-4 py-3.5 text-right">Оплачено</th>
+                <th className="px-4 py-3.5 text-right">Остаток</th>
+                <th className="px-6 py-3.5 text-right">{t('Actions')}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#5A5A40]/5">
+              {invoiceTopSpacerHeight > 0 && (
+                <tr>
+                  <td colSpan={9} style={{ height: invoiceTopSpacerHeight }} />
+                </tr>
+              )}
+              {visibleInvoices.map((invoice) => {
+                const totalAmount = Number(invoice.totalAmount || 0);
+                const returnedAmount = Number((invoice as any).returnedAmountTotal || 0);
+                const netAmount = totalAmount - returnedAmount;
+                const taxAmount = Number((invoice as any).taxAmount || 0);
+                const paidAmount = Number((invoice as any).paidAmountTotal ?? Math.max(0, netAmount - Number((invoice as any).outstandingAmount ?? invoice.receivables?.[0]?.remainingAmount ?? netAmount)));
+                const outstandingAmount = Number((invoice as any).outstandingAmount ?? invoice.receivables?.[0]?.remainingAmount ?? Math.max(0, netAmount - paidAmount));
+                const paymentState = String(invoice.paymentStatus || 'UNPAID');
+                const shouldShowDebt = ['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'].includes(paymentState) && outstandingAmount > 0;
+                const paymentBadge = paymentState === 'PAID'
+                  ? { label: 'Оплачено', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+                  : paymentState === 'PARTIALLY_PAID'
+                    ? { label: 'Частично оплачено', className: 'bg-amber-50 text-amber-700 border-amber-200' }
+                    : { label: 'Долг', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+                const paymentMethodBadge = invoice.paymentType === 'CASH'
+                  ? { label: 'Наличные', className: 'bg-blue-50 text-blue-700 border-blue-200' }
+                  : invoice.paymentType === 'CARD'
+                    ? { label: 'Карта', className: 'bg-violet-50 text-violet-700 border-violet-200' }
+                    : { label: 'В долг', className: 'bg-stone-50 text-stone-700 border-stone-200' };
+
+                return (
+                <tr key={invoice.id} className="hover:bg-[#f5f5f0]/30 transition-colors group align-top">
+                  <td className="px-6 py-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 bg-[#f5f5f0] rounded-lg flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
+                        <FileText size={14} />
+                      </div>
+                      <span className="font-mono font-bold text-[#5A5A40] text-[13px] leading-none">{invoice.id}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <div className="flex items-center gap-2">
+                      <UserIcon size={13} className="text-[#5A5A40]/35" />
+                      <span className="text-[13px] font-medium text-[#5A5A40] leading-tight">{invoice.customer}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <div className="space-y-1 text-[12px] text-[#5A5A40]/60 leading-none">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar size={12} />
+                        <span>{new Date(invoice.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Clock size={12} />
+                        <span>{new Date(invoice.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <div className="inline-flex flex-col gap-1.5">
+                      <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border ${paymentMethodBadge.className}`}>
+                        {paymentMethodBadge.label}
+                      </span>
+                      <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${paymentBadge.className}`}>
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
+                        {paymentBadge.label}
+                      </span>
+                    </div>
+                    {shouldShowDebt && (
+                      <p className="text-[9px] font-semibold text-rose-700 leading-none mt-1.5 bg-rose-50 border border-rose-100 rounded-full px-2 py-1 inline-flex items-center">
+                        Остаток: {outstandingAmount.toFixed(2)} TJS
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <p className="text-[12px] font-semibold text-[#5A5A40] leading-none">{formatInvoiceQuantitySummary(invoice.items || [])}</p>
+                    <p className="text-[9px] text-[#5A5A40]/40 mt-1">{invoice.items.length} поз.</p>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <p className="text-[13px] font-bold text-[#5A5A40] leading-none">{netAmount.toFixed(2)} TJS</p>
+                    {returnedAmount > 0 && (
+                      <p className="text-[9px] text-red-600 mt-1">Возврат {returnedAmount.toFixed(2)} TJS</p>
+                    )}
+                    {taxAmount > 0 && <p className="text-[9px] text-[#5A5A40]/45 mt-1">Налог {taxAmount.toFixed(2)} TJS</p>}
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <p className="text-[13px] font-semibold text-emerald-700 leading-none">{paidAmount.toFixed(2)} TJS</p>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <p className={`text-[13px] font-semibold leading-none ${outstandingAmount > 0 ? 'text-rose-700' : 'text-[#5A5A40]/60'}`}>{outstandingAmount.toFixed(2)} TJS</p>
+                  </td>
+                  <td className="px-6 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => printInvoice(invoice)}
+                        className="p-1 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
+                        title={t('Print invoice')}
+                      >
+                        <Printer size={14} />
+                      </button>
+                      {['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'].includes(paymentState) && (
+                        <button
+                          onClick={() => addInvoicePayment(invoice)}
+                            disabled={busyId === invoice.id || isReturnLocked(invoice.status)}
+                          className="p-1 text-[#5A5A40]/30 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-all disabled:opacity-40"
+                          title={t('Add payment')}
+                        >
+                          <DollarSign size={14} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => editInvoice(invoice)}
+                        disabled={busyId === invoice.id || isEditLocked(invoice.status)}
+                        className="p-1 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all disabled:opacity-40"
+                        title={t('Edit invoice')}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => openReturnModal(invoice)}
+                        disabled={busyId === invoice.id || isReturnLocked(invoice.status)}
+                        className="p-1 text-[#5A5A40]/30 hover:text-amber-700 hover:bg-amber-50 rounded-md transition-all disabled:opacity-40"
+                        title={t('Create return')}
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteInvoiceTarget(invoice)}
+                        disabled={busyId === invoice.id || isEditLocked(invoice.status)}
+                        className="p-1 text-[#5A5A40]/30 hover:text-red-700 hover:bg-red-50 rounded-md transition-all disabled:opacity-40"
+                        title={t('Delete invoice')}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <button
+                        onClick={() => setDetailsInvoice(invoice)}
+                        className="p-1 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
+                        title="Сверка: детали и суммы"
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                );
+              })}
+              {invoiceBottomSpacerHeight > 0 && (
+                <tr>
+                  <td colSpan={9} style={{ height: invoiceBottomSpacerHeight }} />
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {detailsInvoice && (
+        <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-[#5A5A40]/10 overflow-hidden">
+            <div className="px-6 py-4 bg-[#5A5A40] text-white flex items-center justify-between">
+              <h3 className="text-base font-bold">Детали накладной</h3>
+              <button
+                onClick={() => setDetailsInvoice(null)}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div>Накладная: <span className="font-semibold">{detailsInvoice.invoiceNo || detailsInvoice.id}</span></div>
+                <div>Клиент: <span className="font-semibold">{detailsInvoice.customer || '-'}</span></div>
+                <div>Дата: <span className="font-semibold">{new Date(detailsInvoice.createdAt).toLocaleString('ru-RU')}</span></div>
+                <div>Оплата: <span className="font-semibold">{detailsInvoice.paymentType}</span></div>
+                <div>Статус: <span className="font-semibold">{detailsInvoice.status}</span></div>
+                <div>Статус оплаты: <span className="font-semibold">{detailsInvoice.paymentStatus || 'UNPAID'}</span></div>
+              </div>
+
+              <div className="rounded-2xl border border-[#5A5A40]/10 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-[#f5f5f0]/60 text-[#5A5A40]/70 text-xs uppercase">
+                    <tr>
+                      <th className="px-3 py-2 text-left">№</th>
+                      <th className="px-3 py-2 text-left">Товар</th>
+                      <th className="px-3 py-2 text-right">Кол-во</th>
+                      <th className="px-3 py-2 text-right">Цена</th>
+                      <th className="px-3 py-2 text-right">Сумма</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detailsInvoice.items || []).map((item: any, idx: number) => (
+                      <tr key={item.id || idx} className="border-t border-[#5A5A40]/10">
+                        <td className="px-3 py-2">{idx + 1}</td>
+                        <td className="px-3 py-2">{item.productName || '-'}</td>
+                        <td className="px-3 py-2 text-right">{formatPackQuantity(Number(item.quantity || 0), item.product?.unitsPerPack)}</td>
+                        <td className="px-3 py-2 text-right">{Number(item.unitPrice || 0).toFixed(2)} TJS</td>
+                        <td className="px-3 py-2 text-right">{Number(item.totalPrice || 0).toFixed(2)} TJS</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-end text-lg font-bold text-[#5A5A40]">
+                Итого: {Number(detailsInvoice.totalAmount || 0).toFixed(2)} TJS
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editModal.open && (
+        <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#5A5A40]/10 overflow-hidden">
+            <div className="px-6 py-4 bg-[#5A5A40] text-white flex items-center justify-between">
+              <h3 className="text-base font-bold">Редактировать накладную</h3>
+              <button
+                onClick={closeEditModal}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60 mb-1">Клиент</label>
+                <input
+                  type="text"
+                  value={editModal.customer}
+                  onChange={(e) => setEditModal((prev) => ({ ...prev, customer: e.target.value, error: null }))}
+                  className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                />
+              </div>
+              <div className="rounded-2xl border border-[#5A5A40]/10 overflow-hidden">
+                <div className="px-4 py-3 bg-[#f5f5f0]/60 text-xs font-bold uppercase tracking-widest text-[#5A5A40]/50">
+                  Позиции накладной
+                </div>
+                <div className="overflow-auto divide-y divide-[#5A5A40]/10" style={{ maxHeight: 320 }}>
+                  {editModal.items.map((item) => {
+                    const unitsPerPack = getUnitsPerPack(item.unitsPerPack);
+                    const boxes = unitsPerPack ? Math.floor(item.quantity / unitsPerPack) : 0;
+                    const units = unitsPerPack ? item.quantity % unitsPerPack : item.quantity;
+
+                    return (
+                      <div key={item.id} className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-[#5A5A40]">{item.productName}</p>
+                            <p className="text-[11px] text-[#5A5A40]/55 mt-1">
+                              {unitsPerPack ? `1 кор. = ${unitsPerPack} ед.` : 'Продажа поштучно'}
+                            </p>
+                          </div>
+                          <p className="text-sm font-bold text-[#5A5A40]">{(item.quantity * item.unitPrice).toFixed(2)} TJS</p>
+                        </div>
+
+                        <div className={`grid gap-3 ${unitsPerPack ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                          {unitsPerPack ? (
+                            <>
+                              <label>
+                                <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Коробки</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={1}
+                                  value={boxes}
+                                  onChange={(e) => updateEditItemPackaging(item.id, e.target.value, String(units))}
+                                  className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                                />
+                              </label>
+                              <label>
+                                <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={1}
+                                  value={units}
+                                  onChange={(e) => updateEditItemPackaging(item.id, String(boxes), e.target.value)}
+                                  className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                                />
+                              </label>
+                            </>
+                          ) : (
+                            <label>
+                              <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={item.quantity}
+                                onChange={(e) => updateEditItemPackaging(item.id, '0', e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                              />
+                            </label>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Цена за единицу</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={item.unitPrice}
+                            onChange={(e) => updateEditItem(item.id, { unitPrice: Math.max(0, Number(e.target.value) || 0) })}
+                            className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className={`grid gap-3 text-sm ${Number(editModal.taxAmount || 0) > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Подытог</p>
+                    <p className="font-semibold text-[#5A5A40]">{editModal.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0).toFixed(2)} TJS</p>
+                  </div>
+                  {Number(editModal.taxAmount || 0) > 0 && (
+                    <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Налог</p>
+                      <p className="font-semibold text-[#5A5A40]">{Number(editModal.taxAmount || 0).toFixed(2)} TJS</p>
+                    </div>
+                  )}
+                  <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Итого</p>
+                    <p className="font-semibold text-[#5A5A40]">{Number(editModal.totalAmount || 0).toFixed(2)} TJS</p>
+                  </div>
+                </div>
+              </div>
+              {editModal.error && (
+                <div className="p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 flex items-center gap-2">
+                  <AlertCircle size={14} />
+                  {editModal.error}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={closeEditModal}
+                  className="py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={submitEditInvoice}
+                  disabled={busyId === editModal.invoiceId}
+                  className="py-2.5 rounded-xl bg-[#5A5A40] text-white text-sm font-semibold hover:bg-[#4A4A30] disabled:opacity-50 transition-colors"
+                >
+                  {busyId === editModal.invoiceId ? 'Сохраняю...' : 'Сохранить'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {returnInvoiceTarget && (
+        <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-[#5A5A40]/10 overflow-hidden">
+            <div className="px-6 py-4 bg-amber-600 text-white flex items-center justify-between">
+              <h3 className="text-base font-bold">Возврат по накладной</h3>
+              <button onClick={closeReturnModal} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              <p className="text-sm text-[#5A5A40]/80">Укажите, сколько вернуть по накладной <span className="font-semibold">{returnInvoiceTarget.invoice.invoiceNo || returnInvoiceTarget.invoice.id}</span>.</p>
+              <div className="space-y-3 max-h-96 overflow-auto">
+                {returnInvoiceTarget.items.map((item) => {
+                  const unitsPerPack = getUnitsPerPack(item.unitsPerPack);
+                  const boxes = unitsPerPack ? Math.floor(item.quantity / unitsPerPack) : 0;
+                  const units = unitsPerPack ? item.quantity % unitsPerPack : item.quantity;
+
+                  return (
+                    <div key={item.id} className="rounded-2xl border border-[#5A5A40]/10 p-4 space-y-3 bg-[#f5f5f0]/35">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[#5A5A40]">{item.productName}</p>
+                          <p className="text-[11px] text-[#5A5A40]/55 mt-1">Партия: {item.batchNo} • Продано: {formatPackQuantity(item.soldQuantity, item.unitsPerPack)}</p>
+                        </div>
+                        <p className="text-[11px] font-semibold text-[#5A5A40]/60">Макс: {formatPackQuantity(item.soldQuantity, item.unitsPerPack)}</p>
+                      </div>
+                      <div className={`grid gap-3 ${unitsPerPack ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        {unitsPerPack ? (
+                          <>
+                            <label>
+                              <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Коробки</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={boxes}
+                                onChange={(e) => updateReturnItemPackaging(item.id, e.target.value, String(units))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                              />
+                            </label>
+                            <label>
+                              <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={units}
+                                onChange={(e) => updateReturnItemPackaging(item.id, String(boxes), e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                              />
+                            </label>
+                          </>
+                        ) : (
+                          <label>
+                            <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={item.quantity}
+                              onChange={(e) => updateReturnItemPackaging(item.id, '0', e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {returnInvoiceTarget.error && (
+                <div className="p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 flex items-center gap-2">
+                  <AlertCircle size={14} />
+                  {returnInvoiceTarget.error}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={closeReturnModal} className="py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors">Отмена</button>
+                <button onClick={() => returnInvoice(returnInvoiceTarget.invoice)} disabled={busyId === returnInvoiceTarget.invoice.id} className="py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 transition-colors">{busyId === returnInvoiceTarget.invoice.id ? 'Выполняю...' : 'Подтвердить'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteInvoiceTarget && (
+        <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#5A5A40]/10 overflow-hidden">
+            <div className="px-6 py-4 bg-red-600 text-white flex items-center justify-between">
+              <h3 className="text-base font-bold">Удаление накладной</h3>
+              <button onClick={() => setDeleteInvoiceTarget(null)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              <p className="text-sm text-[#5A5A40]/80">Удалить накладную <span className="font-semibold">{deleteInvoiceTarget.invoiceNo || deleteInvoiceTarget.id}</span>? Остатки и связанные долги/платежи будут откатаны.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setDeleteInvoiceTarget(null)} className="py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors">Отмена</button>
+                <button onClick={() => deleteInvoice(deleteInvoiceTarget)} disabled={busyId === deleteInvoiceTarget.id} className="py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors">{busyId === deleteInvoiceTarget.id ? 'Удаляю...' : 'Удалить'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paymentModal.open && (
+        <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#5A5A40]/10 overflow-hidden">
+            <div className="px-6 py-4 bg-[#5A5A40] text-white flex items-center justify-between">
+              <h3 className="text-base font-bold">Внесение оплаты</h3>
+              <button
+                onClick={resetPaymentModal}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="text-sm text-[#5A5A40]/70">
+                Накладная: <span className="font-semibold text-[#5A5A40]">{paymentModal.invoice?.invoiceNo || paymentModal.invoice?.id}</span>
+              </div>
+              <div className="text-sm text-[#5A5A40]/70">
+                Клиент: <span className="font-semibold text-[#5A5A40]">{paymentModal.invoice?.customer || '-'}</span>
+              </div>
+              <div className="text-sm text-[#5A5A40]/70">
+                Остаток долга: <span className="font-semibold text-rose-700">{Number(paymentModal.invoice?.outstandingAmount ?? paymentModal.invoice?.receivables?.[0]?.remainingAmount ?? paymentModal.invoice?.totalAmount ?? 0).toFixed(2)} TJS</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60 mb-1">Сумма оплаты</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={paymentAmountInputRef}
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={paymentModal.amount}
+                    onChange={(e) => setPaymentModal((prev) => ({ ...prev, amount: e.target.value, error: null }))}
+                    className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                    placeholder="Введите сумму или нажмите Все"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fillPaymentAmount('FULL')}
+                    className="shrink-0 px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-xs font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
+                  >
+                    Все
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fillPaymentAmount('HALF')}
+                    className="px-3 py-1.5 rounded-xl border border-[#5A5A40]/15 text-xs font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
+                  >
+                    50%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fillPaymentAmount('FULL')}
+                    className="px-3 py-1.5 rounded-xl border border-[#5A5A40]/15 text-xs font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
+                  >
+                    100%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fillPaymentAmount('FULL')}
+                    className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  >
+                    Остаток
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-[#5A5A40]/55">Поле открывается пустым, чтобы сумма не дописывалась к уже подставленному остатку.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60 mb-1">Способ оплаты</label>
+                <select
+                  value={paymentModal.method}
+                  onChange={(e) => setPaymentModal((prev) => ({ ...prev, method: e.target.value as 'CASH' | 'CARD' | 'BANK_TRANSFER' }))}
+                  className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                >
+                  <option value="CASH">Наличные (CASH)</option>
+                  <option value="CARD">Карта (CARD)</option>
+                  <option value="BANK_TRANSFER">Перевод (BANK_TRANSFER)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60 mb-1">Комментарий (необязательно)</label>
+                <input
+                  type="text"
+                  value={paymentModal.comment}
+                  onChange={(e) => setPaymentModal((prev) => ({ ...prev, comment: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                  placeholder="Например: доплата по договору"
+                />
+              </div>
+
+              {paymentModal.error && (
+                <div className="p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 flex items-center gap-2">
+                  <AlertCircle size={14} />
+                  {paymentModal.error}
+                </div>
+              )}
+
+              <div className="pt-2 grid grid-cols-2 gap-3">
+                <button
+                  onClick={resetPaymentModal}
+                  className="py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={submitInvoicePayment}
+                  disabled={busyId === paymentModal.invoice?.id}
+                  className="py-2.5 rounded-xl bg-[#5A5A40] text-white text-sm font-semibold hover:bg-[#4A4A30] disabled:opacity-50 transition-colors"
+                >
+                  {busyId === paymentModal.invoice?.id ? 'Сохраняю...' : 'Подтвердить оплату'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TrendingUp: React.FC<{ size?: number, className?: string }> = ({ size = 24, className = "" }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+    <polyline points="17 6 23 6 23 12"></polyline>
+  </svg>
+);

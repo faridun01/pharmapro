@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-manrope: "Manrope", sans-serif;
+  --font-inter: "Inter", sans-serif;
+
+  --color-primary: #005c97;
+  --color-primary-container: #d1e4ff;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #001d36;
+  
+  --color-secondary: #535f70;
+  --color-secondary-container: #d7e3f7;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-container: #101c2b;
+
+  --color-tertiary: #6b5778;
+  --color-tertiary-container: #f2daff;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-container: #251431;
+
+  --color-surface: #f8f9ff;
+  --color-on-surface: #191c1e;
+  --color-surface-container-low: #f1f4f9;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #e1e2e9;
+  --color-surface-container-highest: #dbdde4;
+  
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #93000a;
+
+  --color-outline: #73777f;
+  --color-outline-variant: #c3c7cf;
+}
+
+@layer base {
+  body {
+    @apply font-inter bg-surface text-on-surface;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-manrope;
+  }
+}
+
+/* Custom scrollbar for alerts panel */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-stone-200 rounded-full;
+}
+
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.desktop-titlebar {
+  height: 38px;
+  background: #151619;
+  color: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.desktop-titlebar__icon {
+  width: 18px;
+  height: 18px;
+  color: #d9d4b6;
+}
+
+.desktop-titlebar__title {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.desktop-titlebar__button {
+  width: 46px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.92);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.desktop-titlebar__button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.desktop-titlebar__button--close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+/* Sidebar collapse/expand transition */
+.pharma-sidebar {
+  transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Fade-in for elements that appear (e.g. sidebar text) */
+@keyframes pharma-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.pharma-fade-in {
+  animation: pharma-fade-in 200ms ease-out;
+}
+
+/* Slide down for error banner */
+@keyframes pharma-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.pharma-slide-down {
+  animation: pharma-slide-down 200ms ease-out;
+}
+
+/* View transition: fade + slide up on enter */
+@keyframes pharma-view-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.pharma-view-enter {
+  animation: pharma-view-enter 300ms ease-out;
+}
