@@ -4,7 +4,6 @@ import express from 'express';
 import dotenv from 'dotenv';
 import { createApp } from './src/server/app/createApp';
 import { ensureAdminUser } from './src/server/common/auth';
-import { ensureProductPackagingBackfill } from './src/server/services/packaging.service';
 
 dotenv.config();
 
@@ -54,8 +53,4 @@ if (isDev) {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`PharmaPro server running on http://localhost:${PORT}`);
   await ensureAdminUser();
-  const packagingBackfill = await ensureProductPackagingBackfill();
-  if (packagingBackfill.updated > 0) {
-    log.info(`Backfilled unitsPerPack for ${packagingBackfill.updated} products`);
-  }
 });

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
+import { defaultUserSettingsPreferences } from '../../lib/systemPreferences';
 import { 
   Search, 
   FileText, 
@@ -43,9 +44,15 @@ export const InvoicesView: React.FC<{
 }> = ({ initialSearchTerm = '', initialPaymentInvoiceId = '', initialDetailsInvoiceId = '', onInitialPaymentInvoiceHandled, onInitialDetailsInvoiceHandled }) => {
   const { t } = useTranslation();
   const { invoices, isLoading, refreshInvoices, refreshProducts } = usePharmacy();
+  const todayIso = new Date().toISOString().slice(0, 10);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'id'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [dateFilterMode, setDateFilterMode] = useState<'all' | 'today' | 'custom'>('all');
+  const [dateFrom, setDateFrom] = useState(todayIso);
+  const [dateTo, setDateTo] = useState(todayIso);
+  const [onlyDebtors, setOnlyDebtors] = useState(false);
+  const [currencyCode, setCurrencyCode] = useState(defaultUserSettingsPreferences.currency.code);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [detailsInvoice, setDetailsInvoice] = useState<any | null>(null);
@@ -106,11 +113,46 @@ export const InvoicesView: React.FC<{
     }
   }, [initialSearchTerm]);
 
+  const matchesDateFilter = useCallback((createdAt: string | Date) => {
+    const invoiceDate = new Date(createdAt);
+    if (Number.isNaN(invoiceDate.getTime())) return false;
+
+    if (dateFilterMode === 'all') {
+      return true;
+    }
+
+    const invoiceDay = invoiceDate.toISOString().slice(0, 10);
+    if (dateFilterMode === 'today') {
+      return invoiceDay === todayIso;
+    }
+
+    const from = dateFrom || todayIso;
+    const to = dateTo || from;
+    return invoiceDay >= from && invoiceDay <= to;
+  }, [dateFilterMode, dateFrom, dateTo, todayIso]);
+
+  const getInvoiceOutstandingAmount = useCallback((invoice: any) => Number(
+    invoice?.outstandingAmount
+      ?? invoice?.receivables?.[0]?.remainingAmount
+      ?? invoice?.totalAmount
+      ?? 0
+  ), []);
+
+  const normalizeCurrencyCode = useCallback((value: unknown) => {
+    const code = String(value || '').trim().toUpperCase();
+    if (!code) return defaultUserSettingsPreferences.currency.code;
+    return code === 'UZS' ? 'TJS' : code;
+  }, []);
+
+  const moneyLabel = useCallback((label: string) => `${label} (${currencyCode})`, [currencyCode]);
+
   const filteredInvoices = useMemo(() => {
     const filtered = invoices.filter((inv) => 
-      (inv.invoiceNo || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-      inv.id.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-      (inv.customer || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+      matchesDateFilter(inv.createdAt) && (
+        (inv.invoiceNo || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        inv.id.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        (inv.customer || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+      ) && (!onlyDebtors || getInvoiceOutstandingAmount(inv) > 0)
     );
 
     // Apply sorting
@@ -129,17 +171,17 @@ export const InvoicesView: React.FC<{
     });
 
     return sorted;
-  }, [invoices, debouncedSearchTerm, sortBy, sortOrder]);
+  }, [invoices, debouncedSearchTerm, sortBy, sortOrder, matchesDateFilter, onlyDebtors, getInvoiceOutstandingAmount]);
 
   const invoicesSummary = useMemo(() => {
-    const totalRevenue = invoices.reduce((acc, inv) => acc + inv.totalAmount, 0);
-    const totalCount = invoices.length;
+    const totalRevenue = filteredInvoices.reduce((acc, inv) => acc + inv.totalAmount, 0);
+    const totalCount = filteredInvoices.length;
     return {
       totalRevenue,
       totalCount,
       averageOrder: totalRevenue / (totalCount || 1),
     };
-  }, [invoices]);
+  }, [filteredInvoices]);
 
   const onInvoicesScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     setInvoicesScrollTop(event.currentTarget.scrollTop);
@@ -260,8 +302,37 @@ export const InvoicesView: React.FC<{
     };
   };
 
+  useEffect(() => {
+    let ignore = false;
+
+    const loadCurrencyCode = async () => {
+      try {
+        const response = await fetch('/api/system/me/preferences', {
+          method: 'GET',
+          headers: authHeaders(),
+        });
+        if (!response.ok) return;
+
+        const body = await response.json().catch(() => null);
+        if (ignore) return;
+
+        setCurrencyCode(normalizeCurrencyCode(body?.currency?.code));
+      } catch {
+        if (!ignore) {
+          setCurrencyCode(defaultUserSettingsPreferences.currency.code);
+        }
+      }
+    };
+
+    void loadCurrencyCode();
+
+    return () => {
+      ignore = true;
+    };
+  }, [normalizeCurrencyCode]);
+
   const exportInvoicesReport = () => {
-    const rows = invoices.map((invoice) => ({
+    const rows = filteredInvoices.map((invoice) => ({
       invoiceNo: invoice.invoiceNo || invoice.id,
       customer: invoice.customer || '',
       createdAt: new Date(invoice.createdAt).toLocaleString('ru-RU'),
@@ -272,7 +343,7 @@ export const InvoicesView: React.FC<{
       debt: Number(invoice.receivables?.[0]?.remainingAmount || 0).toFixed(2),
     }));
 
-    const header = ['Накладная', 'Клиент', 'Дата', 'Тип оплаты', 'Статус', 'Статус оплаты', 'Сумма', 'Долг'];
+    const header = ['Накладная', 'Клиент', 'Дата', 'Тип оплаты', 'Статус', 'Статус оплаты', moneyLabel('Сумма'), moneyLabel('Долг')];
     const csvBody = rows
       .map((r) => [r.invoiceNo, r.customer, r.createdAt, r.paymentType, r.status, r.paymentStatus, r.totalAmount, r.debt]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
@@ -437,19 +508,19 @@ export const InvoicesView: React.FC<{
             <div class="muted">Клиент: ${invoice.customer || '-'} | Дата: ${createdAt.toLocaleString('ru-RU')} | Статус: ${invoice.status}</div>
             <table>
               <thead>
-                <tr><th class="num">№</th><th>Товар</th><th class="right">Кол-во</th><th class="right">Цена</th><th class="right">Сумма</th></tr>
+                <tr><th class="num">№</th><th>Товар</th><th class="right">Кол-во</th><th class="right">${moneyLabel('Цена')}</th><th class="right">${moneyLabel('Сумма')}</th></tr>
               </thead>
               <tbody>
                 ${(invoice.items || []).map((item: any, index: number) => `<tr>
                   <td class="num">${index + 1}</td>
                   <td>${item.productName || '-'}</td>
                   <td class="right">${formatQuantityLabel(item)}</td>
-                  <td class="right">${Number(item.unitPrice || 0).toFixed(2)} TJS</td>
-                  <td class="right">${Number(item.totalPrice || 0).toFixed(2)} TJS</td>
+                  <td class="right">${Number(item.unitPrice || 0).toFixed(2)}</td>
+                  <td class="right">${Number(item.totalPrice || 0).toFixed(2)}</td>
                 </tr>`).join('')}
               </tbody>
             </table>
-            <div class="total">Итого: ${Number(invoice.totalAmount || 0).toFixed(2)} TJS</div>
+            <div class="total">${moneyLabel('Итого')}: ${Number(invoice.totalAmount || 0).toFixed(2)} ${currencyCode}</div>
           </div>
         </body>
       </html>
@@ -492,15 +563,17 @@ export const InvoicesView: React.FC<{
       return;
     }
 
+    const outstanding = getInvoiceOutstandingAmount(invoice);
+
     setPaymentModal({
       open: true,
       invoice,
-      amount: '',
+      amount: outstanding > 0 ? outstanding.toFixed(2) : '',
       method: 'CASH',
       comment: '',
       error: null,
     });
-  }, []);
+  }, [getInvoiceOutstandingAmount]);
 
   useEffect(() => {
     if (!paymentModal.open) return;
@@ -537,16 +610,16 @@ export const InvoicesView: React.FC<{
     const invoice = paymentModal.invoice;
     if (!invoice) return;
 
-    const outstanding = Number(invoice.outstandingAmount ?? invoice.receivables?.[0]?.remainingAmount ?? invoice.totalAmount ?? 0);
+    const outstanding = getInvoiceOutstandingAmount(invoice);
     const amount = Number(paymentModal.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setPaymentModal((prev) => ({ ...prev, error: 'Введите корректную сумму оплаты' }));
       return;
     }
-    if (amount > outstanding) {
+    if (Math.abs(amount - outstanding) > 0.009) {
       setPaymentModal((prev) => ({
         ...prev,
-        error: `Сумма оплаты не может быть больше остатка долга (${outstanding.toFixed(2)} TJS)`,
+        error: `Для продаж в долг нужно погасить весь остаток: ${outstanding.toFixed(2)} ${currencyCode}`,
       }));
       return;
     }
@@ -578,24 +651,14 @@ export const InvoicesView: React.FC<{
     }
   };
 
-  const fillPaymentAmount = useCallback((mode: 'HALF' | 'FULL') => {
-    const outstanding = Number(
-      paymentModal.invoice?.outstandingAmount
-        ?? paymentModal.invoice?.receivables?.[0]?.remainingAmount
-        ?? paymentModal.invoice?.totalAmount
-        ?? 0
-    );
-
-    const nextAmount = mode === 'HALF'
-      ? Math.max(0, outstanding / 2)
-      : Math.max(0, outstanding);
-
+  const fillPaymentAmount = useCallback(() => {
+    const outstanding = getInvoiceOutstandingAmount(paymentModal.invoice);
     setPaymentModal((prev) => ({
       ...prev,
-      amount: nextAmount.toFixed(2),
+      amount: Math.max(0, outstanding).toFixed(2),
       error: null,
     }));
-  }, [paymentModal.invoice]);
+  }, [getInvoiceOutstandingAmount, paymentModal.invoice]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -615,6 +678,54 @@ export const InvoicesView: React.FC<{
               className="w-64 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 transition-all shadow-sm"
             />
           </div>
+          <div className="flex items-center gap-2 rounded-2xl border border-[#5A5A40]/10 bg-white px-3 py-2 shadow-sm">
+            <button
+              onClick={() => setDateFilterMode('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateFilterMode === 'all' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/65 hover:bg-[#f5f5f0]'}`}
+            >
+              Все дни
+            </button>
+            <button
+              onClick={() => {
+                setDateFilterMode('today');
+                setDateFrom(todayIso);
+                setDateTo(todayIso);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateFilterMode === 'today' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/65 hover:bg-[#f5f5f0]'}`}
+            >
+              Сегодня
+            </button>
+            <button
+              onClick={() => setDateFilterMode('custom')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateFilterMode === 'custom' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/65 hover:bg-[#f5f5f0]'}`}
+            >
+              Период
+            </button>
+          </div>
+          {dateFilterMode === 'custom' && (
+            <div className="flex items-center gap-2 rounded-2xl border border-[#5A5A40]/10 bg-white px-3 py-2 shadow-sm">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="rounded-xl border border-[#5A5A40]/10 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+              />
+              <span className="text-xs text-[#5A5A40]/50">—</span>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="rounded-xl border border-[#5A5A40]/10 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+              />
+            </div>
+          )}
+          <button
+            onClick={() => setOnlyDebtors((prev) => !prev)}
+            className={`px-4 py-3 rounded-2xl font-medium border shadow-sm transition-all ${onlyDebtors ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-white text-[#5A5A40] border-[#5A5A40]/10 hover:bg-[#f5f5f0]'}`}
+          >
+            Только должники
+          </button>
           <button
             onClick={exportInvoicesReport}
             className="bg-white text-[#5A5A40] px-6 py-3 rounded-2xl font-medium border border-[#5A5A40]/10 shadow-sm hover:bg-[#f5f5f0] transition-all flex items-center gap-2"
@@ -655,9 +766,9 @@ export const InvoicesView: React.FC<{
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
-          { label: t('Total Revenue'), value: `${invoicesSummary.totalRevenue.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TJS`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: moneyLabel(t('Total Revenue')), value: `${invoicesSummary.totalRevenue.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
           { label: t('Total Invoices'), value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: t('Avg. Order Value'), value: `${invoicesSummary.averageOrder.toFixed(2)} TJS`, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
+          { label: moneyLabel(t('Avg. Order Value')), value: `${invoicesSummary.averageOrder.toFixed(2)} ${currencyCode}`, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
         ].map((stat, i) => (
           <div key={i} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 flex items-center gap-4">
             <div className={`w-12 h-12 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
@@ -688,9 +799,9 @@ export const InvoicesView: React.FC<{
                 <th className="px-6 py-3.5">{t('Date & Time')}</th>
                 <th className="px-6 py-3.5">{t('Payment')}</th>
                 <th className="px-4 py-3.5 text-right">Количество</th>
-                <th className="px-4 py-3.5 text-right">Сумма</th>
-                <th className="px-4 py-3.5 text-right">Оплачено</th>
-                <th className="px-4 py-3.5 text-right">Остаток</th>
+                <th className="px-4 py-3.5 text-right">{moneyLabel('Сумма')}</th>
+                <th className="px-4 py-3.5 text-right">{moneyLabel('Оплачено')}</th>
+                <th className="px-4 py-3.5 text-right">{moneyLabel('Остаток')}</th>
                 <th className="px-6 py-3.5 text-right">{t('Actions')}</th>
               </tr>
             </thead>
@@ -766,7 +877,7 @@ export const InvoicesView: React.FC<{
                     </div>
                     {shouldShowDebt && (
                       <p className="text-[9px] font-semibold text-rose-700 leading-none mt-1.5 bg-rose-50 border border-rose-100 rounded-full px-2 py-1 inline-flex items-center">
-                        Остаток: {outstandingAmount.toFixed(2)} TJS
+                        Остаток: {outstandingAmount.toFixed(2)} {currencyCode}
                       </p>
                     )}
                   </td>
@@ -775,17 +886,17 @@ export const InvoicesView: React.FC<{
                     <p className="text-[9px] text-[#5A5A40]/40 mt-1">{invoice.items.length} поз.</p>
                   </td>
                   <td className="px-4 py-3.5 text-right">
-                    <p className="text-[13px] font-bold text-[#5A5A40] leading-none">{netAmount.toFixed(2)} TJS</p>
+                    <p className="text-[13px] font-bold text-[#5A5A40] leading-none">{netAmount.toFixed(2)}</p>
                     {returnedAmount > 0 && (
-                      <p className="text-[9px] text-red-600 mt-1">Возврат {returnedAmount.toFixed(2)} TJS</p>
+                      <p className="text-[9px] text-red-600 mt-1">Возврат {returnedAmount.toFixed(2)}</p>
                     )}
-                    {taxAmount > 0 && <p className="text-[9px] text-[#5A5A40]/45 mt-1">Налог {taxAmount.toFixed(2)} TJS</p>}
+                    {taxAmount > 0 && <p className="text-[9px] text-[#5A5A40]/45 mt-1">Налог {taxAmount.toFixed(2)}</p>}
                   </td>
                   <td className="px-4 py-3.5 text-right">
-                    <p className="text-[13px] font-semibold text-emerald-700 leading-none">{paidAmount.toFixed(2)} TJS</p>
+                    <p className="text-[13px] font-semibold text-emerald-700 leading-none">{paidAmount.toFixed(2)}</p>
                   </td>
                   <td className="px-4 py-3.5 text-right">
-                    <p className={`text-[13px] font-semibold leading-none ${outstandingAmount > 0 ? 'text-rose-700' : 'text-[#5A5A40]/60'}`}>{outstandingAmount.toFixed(2)} TJS</p>
+                    <p className={`text-[13px] font-semibold leading-none ${outstandingAmount > 0 ? 'text-rose-700' : 'text-[#5A5A40]/60'}`}>{outstandingAmount.toFixed(2)}</p>
                   </td>
                   <td className="px-6 py-3.5 text-right">
                     <div className="ml-auto grid grid-cols-2 gap-1 w-fit justify-items-center">
@@ -881,8 +992,8 @@ export const InvoicesView: React.FC<{
                       <th className="px-3 py-2 text-left">№</th>
                       <th className="px-3 py-2 text-left">Товар</th>
                       <th className="px-3 py-2 text-right">Кол-во</th>
-                      <th className="px-3 py-2 text-right">Цена</th>
-                      <th className="px-3 py-2 text-right">Сумма</th>
+                      <th className="px-3 py-2 text-right">{moneyLabel('Цена')}</th>
+                      <th className="px-3 py-2 text-right">{moneyLabel('Сумма')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -891,8 +1002,8 @@ export const InvoicesView: React.FC<{
                         <td className="px-3 py-2">{idx + 1}</td>
                         <td className="px-3 py-2">{item.productName || '-'}</td>
                         <td className="px-3 py-2 text-right">{formatPackQuantity(Number(item.quantity || 0))}</td>
-                        <td className="px-3 py-2 text-right">{Number(item.unitPrice || 0).toFixed(2)} TJS</td>
-                        <td className="px-3 py-2 text-right">{Number(item.totalPrice || 0).toFixed(2)} TJS</td>
+                        <td className="px-3 py-2 text-right">{Number(item.unitPrice || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right">{Number(item.totalPrice || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -900,7 +1011,7 @@ export const InvoicesView: React.FC<{
               </div>
 
               <div className="flex items-center justify-end text-lg font-bold text-[#5A5A40]">
-                Итого: {Number(detailsInvoice.totalAmount || 0).toFixed(2)} TJS
+                {moneyLabel('Итого')}: {Number(detailsInvoice.totalAmount || 0).toFixed(2)} {currencyCode}
               </div>
             </div>
           </div>
@@ -942,7 +1053,7 @@ export const InvoicesView: React.FC<{
                             <p className="text-sm font-semibold text-[#5A5A40]">{item.productName}</p>
                             <p className="text-[11px] text-[#5A5A40]/55 mt-1">Продажа в единицах</p>
                           </div>
-                          <p className="text-sm font-bold text-[#5A5A40]">{(item.quantity * item.unitPrice).toFixed(2)} TJS</p>
+                          <p className="text-sm font-bold text-[#5A5A40]">{(item.quantity * item.unitPrice).toFixed(2)} {currencyCode}</p>
                         </div>
 
                         <div className="grid gap-3 grid-cols-1">
@@ -978,18 +1089,18 @@ export const InvoicesView: React.FC<{
               <div>
                 <div className={`grid gap-3 text-sm ${Number(editModal.taxAmount || 0) > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                   <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Подытог</p>
-                    <p className="font-semibold text-[#5A5A40]">{editModal.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0).toFixed(2)} TJS</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">{moneyLabel('Подытог')}</p>
+                    <p className="font-semibold text-[#5A5A40]">{editModal.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0).toFixed(2)} {currencyCode}</p>
                   </div>
                   {Number(editModal.taxAmount || 0) > 0 && (
                     <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Налог</p>
-                      <p className="font-semibold text-[#5A5A40]">{Number(editModal.taxAmount || 0).toFixed(2)} TJS</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">{moneyLabel('Налог')}</p>
+                      <p className="font-semibold text-[#5A5A40]">{Number(editModal.taxAmount || 0).toFixed(2)} {currencyCode}</p>
                     </div>
                   )}
                   <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Итого</p>
-                    <p className="font-semibold text-[#5A5A40]">{Number(editModal.totalAmount || 0).toFixed(2)} TJS</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">{moneyLabel('Итого')}</p>
+                    <p className="font-semibold text-[#5A5A40]">{Number(editModal.totalAmount || 0).toFixed(2)} {currencyCode}</p>
                   </div>
                 </div>
               </div>
@@ -1110,11 +1221,11 @@ export const InvoicesView: React.FC<{
                 Клиент: <span className="font-semibold text-[#5A5A40]">{paymentModal.invoice?.customer || '-'}</span>
               </div>
               <div className="text-sm text-[#5A5A40]/70">
-                Остаток долга: <span className="font-semibold text-rose-700">{Number(paymentModal.invoice?.outstandingAmount ?? paymentModal.invoice?.receivables?.[0]?.remainingAmount ?? paymentModal.invoice?.totalAmount ?? 0).toFixed(2)} TJS</span>
+                {moneyLabel('Остаток долга')}: <span className="font-semibold text-rose-700">{getInvoiceOutstandingAmount(paymentModal.invoice).toFixed(2)} {currencyCode}</span>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60 mb-1">Сумма оплаты</label>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60 mb-1">Полное погашение долга</label>
                 <div className="flex items-center gap-2">
                   <input
                     ref={paymentAmountInputRef}
@@ -1122,42 +1233,19 @@ export const InvoicesView: React.FC<{
                     min={0}
                     step="0.01"
                     value={paymentModal.amount}
-                    onChange={(e) => setPaymentModal((prev) => ({ ...prev, amount: e.target.value, error: null }))}
+                    readOnly
                     className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                    placeholder="Введите сумму или нажмите Все"
+                    placeholder="Сумма полного погашения"
                   />
                   <button
                     type="button"
-                    onClick={() => fillPaymentAmount('FULL')}
+                    onClick={fillPaymentAmount}
                     className="shrink-0 px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-xs font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
                   >
-                    Все
+                    Обновить
                   </button>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fillPaymentAmount('HALF')}
-                    className="px-3 py-1.5 rounded-xl border border-[#5A5A40]/15 text-xs font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
-                  >
-                    50%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fillPaymentAmount('FULL')}
-                    className="px-3 py-1.5 rounded-xl border border-[#5A5A40]/15 text-xs font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
-                  >
-                    100%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fillPaymentAmount('FULL')}
-                    className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
-                  >
-                    Остаток
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-[#5A5A40]/55">Поле открывается пустым, чтобы сумма не дописывалась к уже подставленному остатку.</p>
+                <p className="mt-2 text-xs text-[#5A5A40]/55">Для продаж в долг из истории продаж доступно только полное погашение остатка.</p>
               </div>
 
               <div>
