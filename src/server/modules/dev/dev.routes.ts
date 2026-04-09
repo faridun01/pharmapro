@@ -283,7 +283,7 @@ async function ensureDefaultWarehouse() {
   return warehouse;
 }
 
-const DEMO_CUSTOMERS = [
+const DEMO_DEBTOR_ACCOUNTS = [
   {
     code: 'CUST-001',
     name: 'City General Pharmacy',
@@ -340,32 +340,32 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
   let created = 0;
   let updated = 0;
 
-  for (const customer of DEMO_CUSTOMERS) {
+  for (const debtorAccount of DEMO_DEBTOR_ACCOUNTS) {
     await prisma.customer.upsert({
-      where: { code: customer.code },
+      where: { code: debtorAccount.code },
       update: {
-        name: customer.name,
-        legalName: customer.legalName,
-        phone: customer.phone,
-        email: customer.email,
-        address: customer.address,
-        managerName: customer.managerName,
-        creditLimit: customer.creditLimit,
-        defaultDiscount: customer.defaultDiscount,
-        paymentTermDays: customer.paymentTermDays,
+        name: debtorAccount.name,
+        legalName: debtorAccount.legalName,
+        phone: debtorAccount.phone,
+        email: debtorAccount.email,
+        address: debtorAccount.address,
+        managerName: debtorAccount.managerName,
+        creditLimit: debtorAccount.creditLimit,
+        defaultDiscount: debtorAccount.defaultDiscount,
+        paymentTermDays: debtorAccount.paymentTermDays,
         isActive: true,
       },
       create: {
-        code: customer.code,
-        name: customer.name,
-        legalName: customer.legalName,
-        phone: customer.phone,
-        email: customer.email,
-        address: customer.address,
-        managerName: customer.managerName,
-        creditLimit: customer.creditLimit,
-        defaultDiscount: customer.defaultDiscount,
-        paymentTermDays: customer.paymentTermDays,
+        code: debtorAccount.code,
+        name: debtorAccount.name,
+        legalName: debtorAccount.legalName,
+        phone: debtorAccount.phone,
+        email: debtorAccount.email,
+        address: debtorAccount.address,
+        managerName: debtorAccount.managerName,
+        creditLimit: debtorAccount.creditLimit,
+        defaultDiscount: debtorAccount.defaultDiscount,
+        paymentTermDays: debtorAccount.paymentTermDays,
         isActive: true,
       },
     });
@@ -506,21 +506,21 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
     }
   }
 
-  const cityCustomer = await prisma.customer.findUnique({
+  const primaryDebtorAccount = await prisma.customer.findUnique({
     where: { code: 'CUST-001' },
     select: { id: true },
   });
 
-  if (cityCustomer) {
+  if (primaryDebtorAccount) {
     const receivableExists = await prisma.receivable.findFirst({
-      where: { customerId: cityCustomer.id },
+      where: { customerId: primaryDebtorAccount.id },
       select: { id: true },
     });
 
     if (!receivableExists) {
       await prisma.receivable.create({
         data: {
-          customerId: cityCustomer.id,
+          customerId: primaryDebtorAccount.id,
           originalAmount: 2500000,
           paidAmount: 500000,
           remainingAmount: 2000000,
@@ -534,7 +534,7 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
   res.json({
     ok: true,
     supplierId: supplier.id,
-    customersSeeded: DEMO_CUSTOMERS.length,
+    debtorAccountsSeeded: DEMO_DEBTOR_ACCOUNTS.length,
     createdBatches: created,
     existingBatches: updated,
     productsCount: DEMO_PRODUCTS.length,

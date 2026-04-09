@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Product, User, Invoice, Supplier, Customer } from '../core/domain';
+import { Product, User, Invoice, Supplier } from '../core/domain';
 import { TransactionDTO } from '../application/services';
-import { ApiProductRepository, ApiInvoiceRepository, ApiSupplierRepository, ApiCustomerRepository, buildApiHeaders } from '../infrastructure/api';
+import { ApiProductRepository, ApiInvoiceRepository, ApiSupplierRepository, buildApiHeaders } from '../infrastructure/api';
 import { ConsoleLogger } from '../infrastructure/persistence';
 
 /**
@@ -14,16 +14,15 @@ interface CacheEntry<T> {
 
 /**
  * Dependency Injection Container / Context
- * Strategy: Separate operational data (products) from reference data (suppliers, customers)
+ * Strategy: Separate operational data (products) from slower-changing reference data (suppliers)
  * - products: fully cached, auto-refresh on user action
  * - invoices: lazy-loaded on demand (not cached in context)
- * - suppliers/customers: cached with 30min TTL
+ * - suppliers: cached with 30min TTL
  */
 interface PharmacyContextType {
   products: Product[];
   invoices: Invoice[]; // Only recent invoices; use API pagination for historical
   suppliers: Supplier[];
-  customers: Customer[];
   user: User | null;
   isLoading: boolean;
   error: string | null;
@@ -32,7 +31,6 @@ interface PharmacyContextType {
   refreshProducts: () => Promise<void>;
   refreshInvoices: () => Promise<void>;
   refreshSuppliers: (force?: boolean) => Promise<void>;
-  refreshCustomers: (force?: boolean) => Promise<void>;
   processTransaction: (transaction: TransactionDTO) => Promise<Invoice>;
   restockInventory: (payload: {
     productId: string;
@@ -71,7 +69,6 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [products, setProducts] = useState<Product[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]); // Only recent, not all-time
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [user, setUser] = useState<User | null>(() => {
     const saved = window.sessionStorage.getItem('pharmapro_user');
     if (!saved) return null;
@@ -84,14 +81,12 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Cache for reference data (suppliers, customers, settings)
-  // TTL: 30 minutes for suppliers, customers
+  // Cache for reference data (suppliers)
+  // TTL: 30 minutes for suppliers
   const cacheRef = React.useRef<{
     suppliers: CacheEntry<Supplier[]> | null;
-    customers: CacheEntry<Customer[]> | null;
   }>({
     suppliers: null,
-    customers: null,
   });
 
   const CACHE_TTL = 30 * 60 * 1000; // 30 minutes in milliseconds
@@ -100,7 +95,6 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
   const productRepository = new ApiProductRepository();
   const invoiceRepository = new ApiInvoiceRepository();
   const supplierRepository = new ApiSupplierRepository();
-  const customerRepository = new ApiCustomerRepository();
   const logger = new ConsoleLogger();
 
   const login = async (login: string, password: string) => {
@@ -165,31 +159,6 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       setSuppliers(data);
     } catch (err: any) {
       logger.error('Failed to fetch suppliers', err);
-    }
-  };
-
-  const refreshCustomers = async (force: boolean = false) => {
-    try {
-      const now = Date.now();
-      const cached = cacheRef.current.customers;
-
-      if (force) {
-        cacheRef.current.customers = null;
-      }
-
-      // Return cached data if valid and not forced
-      if (!force && cached && (now - cached.timestamp) < CACHE_TTL) {
-        setCustomers(cached.data);
-        return;
-      }
-
-      // Fetch fresh data
-      const data = await customerRepository.getAll();
-      const active = data.filter((customer) => customer.isActive);
-      cacheRef.current.customers = { data: active, timestamp: now };
-      setCustomers(active);
-    } catch (err: any) {
-      logger.error('Failed to fetch customers', err);
     }
   };
 
@@ -331,7 +300,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     const init = async () => {
       setIsLoading(true);
-      await Promise.all([refreshProducts(), refreshInvoices(), refreshSuppliers(), refreshCustomers()]);
+      await Promise.all([refreshProducts(), refreshInvoices(), refreshSuppliers()]);
       setIsLoading(false);
     };
     init();
@@ -342,7 +311,6 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       products, 
       invoices,
       suppliers,
-      customers,
       user,
       isLoading, 
       error,
@@ -351,7 +319,6 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       refreshProducts,
       refreshInvoices,
       refreshSuppliers,
-      refreshCustomers,
       processTransaction,
       restockInventory,
       importPurchaseInvoice,

@@ -4,6 +4,7 @@ import { Calendar, FileDown, FileSpreadsheet, AlertCircle, Eye } from 'lucide-re
 import { buildApiHeaders } from '../../infrastructure/api';
 import { loadPdfDependencies, loadXlsx } from '../../lib/lazyLoaders';
 import { defaultCompanyReportProfile, type CompanyReportProfile } from '../../lib/reportPreferences';
+import { useCurrencyCode } from '../../lib/useCurrencyCode';
 
 type ReportRangePreset = 'month' | 'q1' | 'q2' | 'q3' | 'q4' | 'year' | 'all';
 type ReportViewMode = 'summary' | 'detailed';
@@ -268,6 +269,7 @@ const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceReport => 
 
 export const ReportsView: React.FC = () => {
   const { t } = useTranslation();
+  const currencyCode = useCurrencyCode();
   const [preset, setPreset] = useState<ReportRangePreset>('month');
   const [viewMode, setViewMode] = useState<ReportViewMode>('summary');
   const [fromDate, setFromDate] = useState('');
@@ -359,7 +361,10 @@ export const ReportsView: React.FC = () => {
   }, []);
 
   const formatMoney = (value: number) =>
-    `${new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(toNumber(value))} TJS`;
+    `${new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(toNumber(value))} ${currencyCode}`;
+  const formatMoneyValue = (value: number) =>
+    new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(toNumber(value));
+  const moneyLabel = useCallback((label: string) => `${label} (${currencyCode})`, [currencyCode]);
 
   const reportTotals = useMemo(() => {
     if (!report) return null;
@@ -1054,8 +1059,8 @@ ${toolbar}
                   <th className="text-left px-4 py-2">Товар</th>
                   <th className="text-left px-4 py-2">SKU</th>
                   <th className="text-left px-4 py-2">Кол-во</th>
-                  <th className="text-left px-4 py-2">Цена</th>
-                  <th className="text-left px-4 py-2">Сумма</th>
+                  <th className="text-left px-4 py-2">{moneyLabel('Цена')}</th>
+                  <th className="text-left px-4 py-2">{moneyLabel('Сумма')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1064,8 +1069,8 @@ ${toolbar}
                     <td className="px-4 py-2 font-medium text-[#5A5A40]">{item.productName}</td>
                     <td className="px-4 py-2 text-[#5A5A40]/65">{item.sku}</td>
                     <td className="px-4 py-2">{item.quantity}</td>
-                    <td className="px-4 py-2">{formatMoney(item.unitPrice)}</td>
-                    <td className="px-4 py-2">{formatMoney(item.lineTotal)}</td>
+                    <td className="px-4 py-2">{formatMoneyValue(item.unitPrice)}</td>
+                    <td className="px-4 py-2">{formatMoneyValue(item.lineTotal)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -44,14 +44,15 @@ type ClosedShiftSummary = {
 
 export const POSView: React.FC = () => {
   const { t } = useTranslation();
-  const { products, customers, processTransaction, user } = usePharmacy();
+  const { products, processTransaction, user } = usePharmacy();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [paymentType, setPaymentType] = useState<'CASH' | 'CARD' | 'CREDIT'>('CASH');
   const [paidAmountInput, setPaidAmountInput] = useState('');
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [creditCustomerName, setCreditCustomerName] = useState('');
+  const [creditCustomerPhone, setCreditCustomerPhone] = useState('');
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -240,11 +241,19 @@ export const POSView: React.FC = () => {
 
   const subtotal = cart.reduce((acc, item) => acc + (item.sellingPrice * item.quantity), 0);
   const total = subtotal;
-  const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || null;
+  const enteredPaidAmountPreview = paidAmountInput.trim() === ''
+    ? paymentType === 'CREDIT' ? 0 : total
+    : Number(paidAmountInput);
+  const outstandingAmount = Number.isFinite(enteredPaidAmountPreview)
+    ? Math.max(0, total - Math.min(enteredPaidAmountPreview, total))
+    : total;
+  const needsDebtorDetails = outstandingAmount > 0.009;
 
   useEffect(() => {
     if (cart.length === 0) {
       setPaidAmountInput('');
+      setCreditCustomerName('');
+      setCreditCustomerPhone('');
     }
   }, [cart.length]);
 
@@ -265,8 +274,8 @@ export const POSView: React.FC = () => {
       return;
     }
 
-    if (enteredPaidAmount < total && !selectedCustomerId) {
-      setError('Для долга или частичной оплаты выберите клиента');
+    if (enteredPaidAmount < total && !creditCustomerName.trim()) {
+      setError('Для продажи в долг укажите имя покупателя');
       return;
     }
 
@@ -285,15 +294,16 @@ export const POSView: React.FC = () => {
         taxAmount: 0,
         total,
         paymentType,
-        customer: selectedCustomer?.name || 'Розничный покупатель',
-        customerId: selectedCustomer?.id,
+        customer: enteredPaidAmount < total ? creditCustomerName.trim() : undefined,
+        customerPhone: enteredPaidAmount < total ? creditCustomerPhone.trim() : undefined,
         paidAmount,
         userId: user?.id || '',
         date: new Date()
       });
       setSuccess(true);
       setCart([]);
-      setSelectedCustomerId('');
+      setCreditCustomerName('');
+      setCreditCustomerPhone('');
       setPaidAmountInput('');
       void loadActiveShift();
       setTimeout(() => setSuccess(false), 3000);
@@ -566,7 +576,7 @@ export const POSView: React.FC = () => {
             <p className="text-[11px] text-[#5A5A40]/60">
               {(() => {
                 const entered = Number(paidAmountInput || 0);
-                if (!Number.isFinite(entered) || entered <= 0) return 'Если не внесено - будет долг';
+                if (!Number.isFinite(entered) || entered <= 0) return '';
                 if (entered < total) return `Частичная оплата: остаток ${(total - entered).toFixed(2)} TJS`;
                 return 'Оплачено полностью';
               })()}
@@ -597,26 +607,27 @@ export const POSView: React.FC = () => {
             </button>
           </div>
 
-          <div className="relative group">
-            <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={16} />
-            <select
-              value={selectedCustomerId}
-              onChange={(e) => setSelectedCustomerId(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-[#5A5A40]/10 rounded-xl text-[12px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20 transition-all appearance-none"
-            >
-              <option value="">Розничный покупатель</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {selectedCustomer && (
-            <div className="p-2.5 bg-white text-[#5A5A40]/70 text-[11px] rounded-lg border border-[#5A5A40]/10 flex items-center justify-between gap-2">
-              <span>{selectedCustomer.managerName || selectedCustomer.phone || selectedCustomer.email || selectedCustomer.name}</span>
-              <span>Лимит: {selectedCustomer.creditLimit.toFixed(2)} TJS</span>
+          {needsDebtorDetails && (
+            <div className="bg-white p-2.5 rounded-xl border border-[#5A5A40]/10 space-y-2">
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#5A5A40]/55">
+                <UserIcon size={14} />
+                Покупатель для долга
+              </div>
+              <input
+                type="text"
+                value={creditCustomerName}
+                onChange={(e) => setCreditCustomerName(e.target.value)}
+                className="w-full px-3 py-2 border border-[#5A5A40]/15 rounded-lg text-[13px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                placeholder="Имя покупателя"
+              />
+              <input
+                type="text"
+                value={creditCustomerPhone}
+                onChange={(e) => setCreditCustomerPhone(e.target.value)}
+                className="w-full px-3 py-2 border border-[#5A5A40]/15 rounded-lg text-[13px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                placeholder="Телефон (необязательно)"
+              />
+              <p className="text-[11px] text-[#5A5A40]/55"></p>
             </div>
           )}
 

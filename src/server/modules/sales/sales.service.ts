@@ -18,6 +18,7 @@ export type CompleteSaleInput = {
   total: number;
   paymentType: 'CASH' | 'CARD' | 'CREDIT' | 'STORE_BALANCE';
   customer?: string;
+  customerPhone?: string;
   customerId?: string;
   paidAmount?: number;
   userId: string;
@@ -46,21 +47,63 @@ export class SalesService {
       throw new ValidationError('paidAmount cannot be negative');
     }
 
-    let resolvedCustomerName = input.customer || 'Walk-in customer';
-    if (input.customerId) {
-      const customer = await prisma.customer.findUnique({
-        where: { id: input.customerId },
-        select: { id: true, name: true },
-      });
-
-      if (!customer) {
-        throw new NotFoundError(`Customer ${input.customerId} not found`);
-      }
-
-      resolvedCustomerName = customer.name;
-    }
+    const hasOutstandingBalance = paidAmount < Number(input.total);
+    const requestedCustomerName = String(input.customer || '').trim();
+    const requestedCustomerPhone = String(input.customerPhone || '').trim();
+    let resolvedCustomerId = input.customerId;
+    let resolvedCustomerName: string | null = requestedCustomerName || null;
 
     const invoice = await prisma.$transaction(async (tx) => {
+      if (resolvedCustomerId) {
+        const customer = await tx.customer.findUnique({
+          where: { id: resolvedCustomerId },
+          select: { id: true, name: true },
+        });
+
+        if (!customer) {
+          throw new NotFoundError(`Customer ${resolvedCustomerId} not found`);
+        }
+
+        resolvedCustomerName = customer.name;
+      } else if (hasOutstandingBalance) {
+        if (!requestedCustomerName) {
+          throw new ValidationError('Customer name is required for credit sale');
+        }
+
+        const existingCustomer = requestedCustomerPhone
+          ? await tx.customer.findFirst({
+              where: {
+                isActive: true,
+                phone: requestedCustomerPhone,
+              },
+              select: { id: true, name: true },
+            })
+          : await tx.customer.findFirst({
+              where: {
+                isActive: true,
+                name: requestedCustomerName,
+              },
+              select: { id: true, name: true },
+            });
+
+        if (existingCustomer) {
+          resolvedCustomerId = existingCustomer.id;
+          resolvedCustomerName = existingCustomer.name;
+        } else {
+          const createdCustomer = await tx.customer.create({
+            data: {
+              name: requestedCustomerName,
+              phone: requestedCustomerPhone || null,
+              isActive: true,
+            },
+            select: { id: true, name: true },
+          });
+
+          resolvedCustomerId = createdCustomer.id;
+          resolvedCustomerName = createdCustomer.name;
+        }
+      }
+
       const activeShift = await tx.cashShift.findFirst({
         where: {
           cashierId: input.userId,
@@ -157,7 +200,7 @@ export class SalesService {
               batchId: batch.id,
               type: 'DISPATCH',
               quantity: deduct,
-              description: `POS sale for ${resolvedCustomerName}`,
+              description: `POS sale${resolvedCustomerName ? ` for ${resolvedCustomerName}` : ''}`,
               userId: input.userId,
             },
           });
@@ -189,7 +232,7 @@ export class SalesService {
         data: {
           invoiceNo: buildInvoiceNumber(),
           customer: resolvedCustomerName,
-          customerId: input.customerId,
+          customerId: resolvedCustomerId,
           totalAmount: Number(input.total),
           taxAmount: Number(input.taxAmount ?? 0),
           discount: Number(input.discountAmount ?? 0),
@@ -218,15 +261,15 @@ export class SalesService {
           totalAmount: createdInvoice.totalAmount,
           items: invoiceItems.length,
           paymentType: createdInvoice.paymentType,
-          customer: resolvedCustomerName,
+          customer: resolvedCustomerName || undefined,
         },
       }, tx);
 
-      if (input.customerId && paidAmount < Number(input.total)) {
-        const receivableDueDate = await resolveCustomerDueDate(tx, input.customerId, createdInvoice.createdAt);
+      if (resolvedCustomerId && hasOutstandingBalance) {
+        const receivableDueDate = await resolveCustomerDueDate(tx, resolvedCustomerId, createdInvoice.createdAt);
         await tx.receivable.create({
           data: {
-            customerId: input.customerId,
+            customerId: resolvedCustomerId,
             invoiceId: createdInvoice.id,
             originalAmount: Number(input.total),
             paidAmount,
@@ -241,8 +284,8 @@ export class SalesService {
         await tx.payment.create({
           data: {
             direction: 'IN',
-            counterpartyType: input.customerId ? 'CUSTOMER' : 'OTHER',
-            customerId: input.customerId,
+            counterpartyType: resolvedCustomerId ? 'CUSTOMER' : 'OTHER',
+            customerId: resolvedCustomerId,
             method:
               input.paymentType === 'CARD'
                 ? 'CARD'

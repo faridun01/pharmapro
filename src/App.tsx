@@ -89,7 +89,7 @@ class ViewErrorBoundary extends React.Component<{ children: React.ReactNode; onR
   }
 }
 
-type View = 'dashboard' | 'notifications' | 'pos' | 'inventory' | 'batches' | 'invoices' | 'suppliers' | 'customers' | 'reports' | 'settings' | 'returns' | 'writeoffs' | 'shifts';
+type View = 'dashboard' | 'notifications' | 'pos' | 'inventory' | 'batches' | 'invoices' | 'debtors' | 'suppliers' | 'reports' | 'settings' | 'returns' | 'writeoffs' | 'shifts';
 
 const LoginView = lazy(async () => ({ default: (await import('./presentation/components/LoginView')).LoginView }));
 const DashboardView = lazy(async () => ({ default: (await import('./presentation/components/DashboardView')).DashboardView }));
@@ -99,7 +99,6 @@ const InventoryView = lazy(async () => ({ default: (await import('./presentation
 const InvoicesView = lazy(async () => ({ default: (await import('./presentation/components/InvoicesView')).InvoicesView }));
 const BatchesView = lazy(async () => ({ default: (await import('./presentation/components/BatchesView')).BatchesView }));
 const SuppliersView = lazy(async () => ({ default: (await import('./presentation/components/SuppliersView')).SuppliersView }));
-const CustomersView = lazy(async () => ({ default: (await import('./presentation/components/CustomersView')).CustomersView }));
 const ReportsView = lazy(async () => ({ default: (await import('./presentation/components/ReportsView')).ReportsView }));
 const SettingsView = lazy(async () => ({ default: (await import('./presentation/components/SettingsView')).SettingsView }));
 const ImportInvoiceModal = lazy(async () => ({ default: (await import('./presentation/components/ImportInvoiceModal')).ImportInvoiceModal }));
@@ -109,7 +108,7 @@ const ShiftView = lazy(async () => ({ default: (await import('./presentation/com
 
 const App: React.FC = () => {
   const { t } = useTranslation();
-  const { user, logout, isLoading, error, customers, invoices, products } = usePharmacy();
+  const { user, logout, isLoading, error, invoices, products } = usePharmacy();
   const desktopControls = (window as Window & {
     pharmaproDesktop?: {
       controls?: {
@@ -146,9 +145,9 @@ const App: React.FC = () => {
     { id: 'pos', label: t('POS Terminal'), icon: ShoppingCart },
     { id: 'inventory', label: 'Товары и партии', icon: Package },
     { id: 'invoices', label: t('Sales History'), icon: Pill },
+    { id: 'debtors', label: 'Должники', icon: User },
     { id: 'shifts', label: t('Shifts'), icon: Clock },
     { id: 'suppliers', label: t('Suppliers'), icon: Truck },
-    { id: 'customers', label: 'Клиенты', icon: User },
     { id: 'returns', label: t('Returns'), icon: RotateCcw },
     { id: 'writeoffs', label: t('Write-Offs'), icon: Trash2 },
     { id: 'reports', label: t('Reports'), icon: BarChart3 },
@@ -177,13 +176,8 @@ const App: React.FC = () => {
     const paymentNotifications = invoices
       .filter((invoice) => Number(invoice.receivables?.[0]?.remainingAmount || 0) > 0)
       .map((invoice) => {
-        const customer = customers.find((item) => item.id === invoice.customerId || item.name === invoice.customer);
         const receivable = invoice.receivables?.[0];
-        const dueDate = receivable?.dueDate
-          ? new Date(receivable.dueDate)
-          : customer?.paymentTermDays
-            ? new Date(new Date(invoice.createdAt).getTime() + customer.paymentTermDays * 24 * 60 * 60 * 1000)
-            : null;
+        const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
 
         if (!dueDate || Number.isNaN(dueDate.getTime())) return null;
         const daysUntilDue = diffInDays(dueDate, now);
@@ -191,8 +185,8 @@ const App: React.FC = () => {
         if (daysUntilDue === 1) {
           return {
             id: `payment-due-${invoice.id}`,
-            title: 'Оплата по клиенту завтра',
-            description: `${invoice.customer || customer?.name || 'Клиент'}: счет ${invoice.invoiceNo} требует оплаты ${formatDueLabel(daysUntilDue)} на сумму ${Number(receivable?.remainingAmount || 0).toFixed(2)}.`,
+            title: 'Оплата от покупателя завтра',
+            description: `${invoice.customer || 'Покупатель'}: счет ${invoice.invoiceNo} требует оплаты ${formatDueLabel(daysUntilDue)} на сумму ${Number(receivable?.remainingAmount || 0).toFixed(2)}.`,
             type: 'PAYMENT_DUE' as const,
             time: '1 день',
             read: false,
@@ -202,8 +196,8 @@ const App: React.FC = () => {
         if (daysUntilDue < 0) {
           return {
             id: `payment-overdue-${invoice.id}`,
-            title: 'Просроченная оплата клиента',
-            description: `${invoice.customer || customer?.name || 'Клиент'}: счет ${invoice.invoiceNo} просрочен на ${Math.abs(daysUntilDue)} дн. Сумма долга ${Number(receivable?.remainingAmount || 0).toFixed(2)}.`,
+            title: 'Просроченная оплата покупателя',
+            description: `${invoice.customer || 'Покупатель'}: счет ${invoice.invoiceNo} просрочен на ${Math.abs(daysUntilDue)} дн. Сумма долга ${Number(receivable?.remainingAmount || 0).toFixed(2)}.`,
             type: 'OVERDUE_PAYMENT' as const,
             time: `${Math.abs(daysUntilDue)} дн.`,
             read: false,
@@ -246,20 +240,20 @@ const App: React.FC = () => {
       }));
 
     return [...systemNotifications, ...paymentNotifications, ...lowStockNotifications, ...expiryNotifications];
-  }, [customers, invoices, latestClosedShiftNotice, products, t]);
+  }, [invoices, latestClosedShiftNotice, products, t]);
 
   const notificationsCount = notifications.length;
 
   const openInvoicePaymentFlow = (invoiceId?: string) => {
     if (!invoiceId) {
-      setCurrentView('invoices');
+      setCurrentView('debtors');
       return;
     }
 
     const invoice = invoices.find((item) => item.id === invoiceId);
     setInvoiceSearchPrefill(invoice?.invoiceNo || '');
     setInvoicePaymentPrefillId(invoiceId);
-    setCurrentView('invoices');
+    setCurrentView('debtors');
   };
 
   const openInvoiceDetailsFlow = (invoiceId?: string, invoiceNo?: string) => {
@@ -309,9 +303,9 @@ const App: React.FC = () => {
       case 'pos': return <POSView />;
       case 'inventory': return <InventoryView initialSection={inventorySection} />;
       case 'batches': return <InventoryView initialSection="batches" />;
-      case 'invoices': return <InvoicesView initialSearchTerm={invoiceSearchPrefill} initialPaymentInvoiceId={invoicePaymentPrefillId} initialDetailsInvoiceId={invoiceDetailsPrefillId} onInitialPaymentInvoiceHandled={() => setInvoicePaymentPrefillId('')} onInitialDetailsInvoiceHandled={() => setInvoiceDetailsPrefillId('')} />;
+      case 'invoices': return <InvoicesView viewMode="history" initialSearchTerm={invoiceSearchPrefill} initialPaymentInvoiceId={invoicePaymentPrefillId} initialDetailsInvoiceId={invoiceDetailsPrefillId} onInitialPaymentInvoiceHandled={() => setInvoicePaymentPrefillId('')} onInitialDetailsInvoiceHandled={() => setInvoiceDetailsPrefillId('')} />;
+      case 'debtors': return <InvoicesView viewMode="debtors" initialSearchTerm={invoiceSearchPrefill} initialPaymentInvoiceId={invoicePaymentPrefillId} initialDetailsInvoiceId={invoiceDetailsPrefillId} onInitialPaymentInvoiceHandled={() => setInvoicePaymentPrefillId('')} onInitialDetailsInvoiceHandled={() => setInvoiceDetailsPrefillId('')} />;
       case 'suppliers': return <SuppliersView />;
-      case 'customers': return <CustomersView onOpenInvoiceHistory={openInvoiceDetailsFlow} />;
       case 'reports': return <ReportsView />;
       case 'returns': return <ReturnView />;
       case 'writeoffs': return <WriteOffView />;

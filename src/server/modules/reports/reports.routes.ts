@@ -279,6 +279,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
       select: {
         id: true,
         status: true,
+        paymentStatus: true,
         createdAt: true,
         totalAmount: true,
         taxAmount: true,
@@ -401,6 +402,8 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
           gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
           lte: new Date(),
         },
+        paymentStatus: 'PAID',
+        status: { not: 'CANCELLED' },
       },
       select: {
         id: true,
@@ -430,7 +433,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     }),
   ]);
 
-  const paidInvoices = invoices.filter((inv) => inv.status === 'PAID');
+  const paidInvoices = invoices.filter((inv) => inv.paymentStatus === 'PAID' && inv.status !== 'CANCELLED');
   const revenueGross = paidInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
 
   const customerReturnsAmount = returns.reduce((sum, ret) => {
@@ -572,12 +575,11 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     .sort((left, right) => right.retailValue - left.retailValue);
 
   const currentMonthSaleDetails: MonthlySaleDetailRow[] = monthlyInvoices
-    .filter((invoice) => invoice.status !== 'CANCELLED')
     .map((invoice) => ({
       invoiceId: invoice.id,
       invoiceNo: String(invoice.invoiceNo || invoice.id),
       createdAt: invoice.createdAt,
-      customer: String(invoice.customer || 'Розничный покупатель'),
+      customer: String(invoice.customer || '—'),
       paymentType: String(invoice.paymentType || 'CASH'),
       totalAmount: Number(invoice.totalAmount || 0),
       itemCount: invoice.items.length,
@@ -688,11 +690,11 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
       taxNet: taxSales - taxPurchases,
     },
     invoices: {
-      totalCount: invoices.length,
-      paidCount: invoices.filter((i) => i.status === 'PAID').length,
-      pendingCount: invoices.filter((i) => i.status === 'PENDING').length,
-      returnedCount: invoices.filter((i) => i.status === 'RETURNED').length,
-      cancelledCount: invoices.filter((i) => i.status === 'CANCELLED').length,
+      totalCount: paidInvoices.length,
+      paidCount: paidInvoices.length,
+      pendingCount: 0,
+      returnedCount: paidInvoices.filter((i) => i.status === 'RETURNED').length,
+      cancelledCount: 0,
       avgTicket: paidInvoices.length
         ? paidInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0) / paidInvoices.length
         : 0,

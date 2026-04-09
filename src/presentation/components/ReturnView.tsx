@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { buildApiHeaders } from '../../infrastructure/api';
+import { useCurrencyCode } from '../../lib/useCurrencyCode';
 import { Plus, CheckCircle2, XCircle, Clock, RefreshCw, ChevronDown, ChevronUp, Package, Printer } from 'lucide-react';
 import { AppModal } from './AppModal';
 
@@ -72,6 +73,7 @@ function CreateReturnModal({
 }) {
   const { t } = useTranslation();
   const { products, suppliers } = usePharmacy();
+  const currencyCode = useCurrencyCode();
   const [type, setType] = useState<'CUSTOMER' | 'SUPPLIER'>('CUSTOMER');
   const [customerName, setCustomerName] = useState('');
   const [supplierId, setSupplierId] = useState('');
@@ -352,7 +354,7 @@ function CreateReturnModal({
           <div className="rounded-2xl bg-[#f5f5f0] px-4 py-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-[#5A5A40]">
             <div>
               <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Тип операции</p>
-              <p className="font-bold mt-1">{type === 'CUSTOMER' ? 'Возврат клиента' : 'Возврат поставщику'}</p>
+              <p className="font-bold mt-1">{type === 'CUSTOMER' ? 'Возврат покупателя' : 'Возврат поставщику'}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Позиции</p>
@@ -360,7 +362,7 @@ function CreateReturnModal({
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Автоитог</p>
-              <p className="font-bold mt-1">{formTotal.toFixed(2)} TJS</p>
+              <p className="font-bold mt-1">{formTotal.toFixed(2)} {currencyCode}</p>
             </div>
           </div>
 
@@ -383,6 +385,7 @@ function CreateReturnModal({
 
 export const ReturnView: React.FC = () => {
   const { t } = useTranslation();
+  const currencyCode = useCurrencyCode();
   const [returns, setReturns] = useState<Return[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -433,13 +436,14 @@ export const ReturnView: React.FC = () => {
 
   const overallAmount = useMemo(() => filteredReturns.reduce((sum, ret) => sum + getReturnTotal(ret), 0), [filteredReturns]);
   const overallQuantity = useMemo(() => filteredReturns.reduce((sum, ret) => sum + ret.items.reduce((itemsSum, item) => itemsSum + Number(item.quantity || 0), 0), 0), [filteredReturns]);
+  const moneyLabel = useCallback((label: string) => `${label} (${currencyCode})`, [currencyCode]);
 
   const printReturn = (ret: Return) => {
     const html = `<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>${ret.type === 'SUPPLIER' ? 'Возврат поставщику' : 'Возврат клиента'} ${ret.returnNo}</title>
+  <title>${ret.type === 'SUPPLIER' ? 'Возврат поставщику' : 'Возврат покупателя'} ${ret.returnNo}</title>
   <style>
     body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #1f2937; }
     h1 { margin: 0 0 6px; font-size: 22px; }
@@ -452,7 +456,7 @@ export const ReturnView: React.FC = () => {
   </style>
 </head>
 <body>
-  <h1>${ret.type === 'SUPPLIER' ? 'Возврат поставщику' : 'Возврат клиента'}</h1>
+  <h1>${ret.type === 'SUPPLIER' ? 'Возврат поставщику' : 'Возврат покупателя'}</h1>
   <div class="muted">Номер: ${ret.returnNo} · Дата: ${new Date(ret.createdAt).toLocaleString('ru-RU')} · ${ret.supplier?.name || ret.customerName || '-'}</div>
   <table>
     <thead>
@@ -460,8 +464,8 @@ export const ReturnView: React.FC = () => {
         <th>Товар</th>
         <th>Партия</th>
         <th class="right">Кол-во</th>
-        <th class="right">Цена</th>
-        <th class="right">Сумма</th>
+        <th class="right">${moneyLabel('Цена')}</th>
+        <th class="right">${moneyLabel('Сумма')}</th>
       </tr>
     </thead>
     <tbody>
@@ -470,13 +474,13 @@ export const ReturnView: React.FC = () => {
           <td>${item.product?.name ?? '-'}</td>
           <td>${item.batch?.batchNumber ?? '—'}</td>
           <td class="right">${formatPackQuantity(item.quantity)}</td>
-          <td class="right">${Number(item.unitPrice || 0).toFixed(2)} TJS</td>
-          <td class="right">${getReturnItemTotal(item).toFixed(2)} TJS</td>
+          <td class="right">${Number(item.unitPrice || 0).toFixed(2)}</td>
+          <td class="right">${getReturnItemTotal(item).toFixed(2)}</td>
         </tr>
       `).join('')}
     </tbody>
   </table>
-  <div class="total">Итого: ${getReturnTotal(ret).toFixed(2)} TJS</div>
+  <div class="total">${moneyLabel('Итого')}: ${getReturnTotal(ret).toFixed(2)} ${currencyCode}</div>
 </body>
 </html>`;
 
@@ -517,7 +521,7 @@ export const ReturnView: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm">
           <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Общая сумма</p>
-          <p className="text-2xl font-bold text-[#5A5A40] mt-2">{overallAmount.toFixed(2)} TJS</p>
+          <p className="text-2xl font-bold text-[#5A5A40] mt-2">{overallAmount.toFixed(2)} {currencyCode}</p>
         </div>
         <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm">
           <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Итого возвратов</p>
@@ -535,7 +539,7 @@ export const ReturnView: React.FC = () => {
           <div className="flex gap-2 flex-wrap">
             {[
               { value: 'ALL', label: 'Все' },
-              { value: 'CUSTOMER', label: 'Клиентский' },
+              { value: 'CUSTOMER', label: 'От покупателя' },
               { value: 'SUPPLIER', label: 'Поставщику' },
             ].map((option) => (
               <button
@@ -602,8 +606,8 @@ export const ReturnView: React.FC = () => {
                   </div>
                   <div>
                     <p className="font-semibold text-[#151619]">{ret.returnNo}</p>
-                    <p className="text-xs text-[#5A5A40]/50 mt-0.5">
-                      {ret.type === 'CUSTOMER' ? t('Customer Return') : t('Supplier Return')}
+                      <p className="text-xs text-[#5A5A40]/50 mt-0.5">
+                      {ret.type === 'CUSTOMER' ? 'Возврат покупателя' : t('Supplier Return')}
                       {ret.customerName && ` · ${ret.customerName}`}
                       {ret.supplier?.name && ` · ${ret.supplier.name}`}
                     </p>
@@ -612,7 +616,7 @@ export const ReturnView: React.FC = () => {
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/40 font-bold">Сумма</p>
-                    <p className="text-sm font-bold text-[#5A5A40]">{returnTotal.toFixed(2)} TJS</p>
+                    <p className="text-sm font-bold text-[#5A5A40]">{returnTotal.toFixed(2)} {currencyCode}</p>
                   </div>
                   <div className="text-right min-w-16">
                     <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/40 font-bold">Итого</p>
@@ -663,8 +667,8 @@ export const ReturnView: React.FC = () => {
                         <th className="text-left py-2">{t('Product')}</th>
                         <th className="text-left py-2">{t('Batch')}</th>
                         <th className="text-right py-2">{t('Qty')}</th>
-                        <th className="text-right py-2">{t('Unit Price')}</th>
-                        <th className="text-right py-2">Сумма</th>
+                        <th className="text-right py-2">{moneyLabel(t('Unit Price'))}</th>
+                        <th className="text-right py-2">{moneyLabel('Сумма')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -673,15 +677,15 @@ export const ReturnView: React.FC = () => {
                           <td className="py-2 font-medium">{item.product?.name ?? t('Unknown')}</td>
                           <td className="py-2 text-[#5A5A40]/60">{item.batch?.batchNumber ?? '—'}</td>
                           <td className="py-2 text-right">{formatPackQuantity(item.quantity)}</td>
-                          <td className="py-2 text-right">{item.unitPrice ? `${item.unitPrice.toFixed(2)} TJS` : '—'}</td>
-                          <td className="py-2 text-right font-semibold text-[#5A5A40]">{getReturnItemTotal(item).toFixed(2)} TJS</td>
+                          <td className="py-2 text-right">{item.unitPrice ? item.unitPrice.toFixed(2) : '—'}</td>
+                          <td className="py-2 text-right font-semibold text-[#5A5A40]">{getReturnItemTotal(item).toFixed(2)}</td>
                         </tr>
                       ))}
                       <tr className="border-t border-[#5A5A40]/10 bg-[#f5f5f0]/35">
                         <td colSpan={2} className="py-3 text-xs uppercase tracking-widest font-bold text-[#5A5A40]/55">Итого</td>
                         <td className="py-3 text-right font-bold text-[#5A5A40]">{returnQuantity}</td>
                         <td className="py-3 text-right text-[#5A5A40]/50">—</td>
-                        <td className="py-3 text-right font-bold text-[#5A5A40]">{returnTotal.toFixed(2)} TJS</td>
+                        <td className="py-3 text-right font-bold text-[#5A5A40]">{returnTotal.toFixed(2)} {currencyCode}</td>
                       </tr>
                     </tbody>
                   </table>

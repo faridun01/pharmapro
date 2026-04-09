@@ -5,7 +5,6 @@ import {
   IInvoiceRepository, 
   Supplier, 
   ISupplierRepository,
-  Customer,
 } from '../core/domain';
 
 type DesktopBridge = {
@@ -185,41 +184,6 @@ export class ApiSupplierRepository extends BaseApi implements ISupplierRepositor
       method: 'POST',
       headers: await this.getHeaders(),
       body: JSON.stringify(supplier)
-    });
-    await this.handleResponse(response);
-  }
-}
-
-export class ApiCustomerRepository extends BaseApi {
-  private readonly baseUrl = '/api/customers';
-
-  async getAll(): Promise<Customer[]> {
-    const response = await fetch(this.baseUrl, { headers: await this.getHeaders() });
-    return this.handleResponse(response);
-  }
-
-  async create(payload: Partial<Customer> & { name: string }): Promise<Customer> {
-    const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: await this.getHeaders(),
-      body: JSON.stringify(payload),
-    });
-    return this.handleResponse(response);
-  }
-
-  async update(id: string, payload: Partial<Customer>): Promise<Customer> {
-    const response = await fetch(`${this.baseUrl}/${id}`, {
-      method: 'PUT',
-      headers: await this.getHeaders(),
-      body: JSON.stringify(payload),
-    });
-    return this.handleResponse(response);
-  }
-
-  async remove(id: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/${id}`, {
-      method: 'DELETE',
-      headers: await this.getHeaders(),
     });
     await this.handleResponse(response);
   }

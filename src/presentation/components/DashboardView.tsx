@@ -28,7 +28,7 @@ const diffInDays = (left: Date, right: Date) => {
 
 export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: string) => void }> = ({ onOpenInvoicePayment }) => {
   const { t } = useTranslation();
-  const { products, invoices, customers, user } = usePharmacy();
+  const { products, invoices, user } = usePharmacy();
   const [selectedPeriodPreset, setSelectedPeriodPreset] = useState<DashboardPeriodPreset>('month');
   const [showChart, setShowChart] = useState(false);
 
@@ -302,13 +302,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
         const remainingAmount = Number((invoice as any).outstandingAmount ?? receivable?.remainingAmount ?? 0);
         if (remainingAmount <= 0) return null;
 
-        const customer = customers.find((item) => item.id === invoice.customerId || item.name === invoice.customer);
-        const createdAt = new Date(invoice.createdAt as any);
-        const dueDate = receivable?.dueDate
-          ? new Date(receivable.dueDate)
-          : customer?.paymentTermDays && !Number.isNaN(createdAt.getTime())
-            ? new Date(createdAt.getTime() + customer.paymentTermDays * 24 * 60 * 60 * 1000)
-            : null;
+        const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
 
         if (!dueDate || Number.isNaN(dueDate.getTime())) return null;
 
@@ -318,8 +312,8 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
         return {
           invoiceId: invoice.id,
           invoiceNo: invoice.invoiceNo || invoice.id,
-          customerName: invoice.customer || customer?.name || 'Клиент',
-          customerKey: invoice.customerId || customer?.id || invoice.customer || invoice.id,
+          customerName: invoice.customer || 'Покупатель',
+          customerKey: invoice.customerId || invoice.customer || invoice.id,
           remainingAmount,
           daysOverdue: Math.abs(daysUntilDue),
         };
@@ -329,7 +323,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
         if (right.daysOverdue !== left.daysOverdue) return right.daysOverdue - left.daysOverdue;
         return right.remainingAmount - left.remainingAmount;
       });
-  }, [customers, invoices, now]);
+  }, [invoices, now]);
 
   const dueTomorrowReceivables = useMemo(() => {
     return invoices
@@ -338,13 +332,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
         const remainingAmount = Number((invoice as any).outstandingAmount ?? receivable?.remainingAmount ?? 0);
         if (remainingAmount <= 0) return null;
 
-        const customer = customers.find((item) => item.id === invoice.customerId || item.name === invoice.customer);
-        const createdAt = new Date(invoice.createdAt as any);
-        const dueDate = receivable?.dueDate
-          ? new Date(receivable.dueDate)
-          : customer?.paymentTermDays && !Number.isNaN(createdAt.getTime())
-            ? new Date(createdAt.getTime() + customer.paymentTermDays * 24 * 60 * 60 * 1000)
-            : null;
+        const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
 
         if (!dueDate || Number.isNaN(dueDate.getTime())) return null;
 
@@ -354,13 +342,13 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
         return {
           invoiceId: invoice.id,
           invoiceNo: invoice.invoiceNo || invoice.id,
-          customerName: invoice.customer || customer?.name || 'Клиент',
+          customerName: invoice.customer || 'Покупатель',
           remainingAmount,
         };
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item))
       .sort((left, right) => right.remainingAmount - left.remainingAmount);
-  }, [customers, invoices, now]);
+  }, [invoices, now]);
 
   const overdueAmountTotal = overdueReceivables.reduce((sum, item) => sum + item.remainingAmount, 0);
   const overdueCustomersCount = new Set(overdueReceivables.map((item) => item.customerKey)).size;
@@ -462,8 +450,8 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
                     <AlertTriangle size={14} />
                     Просроченные оплаты
                   </div>
-                  <h3 className="mt-3 text-2xl font-bold text-[#5A5A40]">Контроль клиентской дебиторки</h3>
-                  <p className="mt-1 text-sm text-[#5A5A40]/70">Здесь показываются только счета, по которым уже наступила просрочка оплаты.</p>
+                  <h3 className="mt-3 text-2xl font-bold text-[#5A5A40]">Просроченные долги покупателей</h3>
+                  <p className="mt-1 text-sm text-[#5A5A40]/70">Здесь показываются только долги, по которым срок оплаты уже прошел.</p>
                 </div>
                 <button
                   type="button"
@@ -485,7 +473,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
                   <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{overdueReceivables.length}</p>
                 </div>
                 <div className="rounded-2xl border border-red-100 bg-white/80 p-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Клиентов с просрочкой</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Покупателей с просрочкой</p>
                   <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{overdueCustomersCount}</p>
                 </div>
               </div>
@@ -493,7 +481,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
               <div className="mt-6 space-y-3">
                 {overdueReceivables.length === 0 && (
                   <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
-                    Сейчас нет клиентских счетов с просроченной оплатой.
+                    Сейчас нет покупателей с просроченными долгами.
                   </div>
                 )}
 
@@ -525,7 +513,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
                     К оплате завтра
                   </div>
                   <h3 className="mt-3 text-2xl font-bold text-[#5A5A40]">Счета на завтра</h3>
-                  <p className="mt-1 text-sm text-[#5A5A40]/70">Список клиентов, по которым оплата должна поступить завтра.</p>
+                  <p className="mt-1 text-sm text-[#5A5A40]/70">Список покупателей, по которым оплата должна поступить завтра.</p>
                 </div>
                 <button
                   type="button"

@@ -28,6 +28,7 @@ export interface TransactionDTO {
   total: number;
   paymentType: 'CASH' | 'CARD' | 'CREDIT';
   customer?: string;
+  customerPhone?: string;
   customerId?: string;
   paidAmount?: number;
   userId: string;

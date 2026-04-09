@@ -16,7 +16,7 @@ const mapPaymentType = (value: string | undefined): 'CASH' | 'CARD' | 'CREDIT' |
 
 salesRouter.post('/complete', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
-  const { items, discountAmount, taxAmount, total, paymentType, customer, customerId, paidAmount } = req.body ?? {};
+  const { items, discountAmount, taxAmount, total, paymentType, customer, customerPhone, customerId, paidAmount } = req.body ?? {};
 
   if (!Array.isArray(items) || items.length === 0) {
     throw new ValidationError('items array is required');
@@ -33,6 +33,7 @@ salesRouter.post('/complete', authenticate, asyncHandler(async (req, res) => {
     total: Number(total ?? 0),
     paymentType: mapPaymentType(paymentType),
     customer: typeof customer === 'string' ? customer : undefined,
+    customerPhone: typeof customerPhone === 'string' ? customerPhone : undefined,
     customerId: typeof customerId === 'string' ? customerId : undefined,
     paidAmount: paidAmount == null ? undefined : Number(paidAmount),
     userId: authedReq.user.id,

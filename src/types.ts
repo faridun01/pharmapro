@@ -142,7 +142,7 @@ export const RECENT_ACTIVITY = [
     id: 1,
     type: 'sale',
     title: 'Wholesale Order #4421 Processed',
-    description: 'Customer: City General Pharmacy • 12 line items',
+    description: 'Buyer: City General Pharmacy • 12 line items',
     amount: 2410.00,
     time: '2 mins ago',
     status: 'success'
@@ -169,7 +169,7 @@ export const RECENT_ACTIVITY = [
 
 export interface Invoice {
   id: string;
-  customer: string;
+  buyer: string;
   date: string;
   amount: number;
   status: 'Paid' | 'Pending' | 'Overdue';
@@ -177,10 +177,10 @@ export interface Invoice {
 }
 
 export const MOCK_INVOICES: Invoice[] = [
-  { id: 'INV-2023-001', customer: 'City General Pharmacy', date: '24 Oct 2023', amount: 2410.00, status: 'Paid', items: 12 },
-  { id: 'INV-2023-002', customer: 'HealthPlus Clinic', date: '23 Oct 2023', amount: 1250.50, status: 'Pending', items: 5 },
-  { id: 'INV-2023-003', customer: 'Green Valley Meds', date: '22 Oct 2023', amount: 3800.00, status: 'Overdue', items: 24 },
-  { id: 'INV-2023-004', customer: 'Metro Wellness', date: '21 Oct 2023', amount: 950.00, status: 'Paid', items: 3 },
+  { id: 'INV-2023-001', buyer: 'City General Pharmacy', date: '24 Oct 2023', amount: 2410.00, status: 'Paid', items: 12 },
+  { id: 'INV-2023-002', buyer: 'HealthPlus Clinic', date: '23 Oct 2023', amount: 1250.50, status: 'Pending', items: 5 },
+  { id: 'INV-2023-003', buyer: 'Green Valley Meds', date: '22 Oct 2023', amount: 3800.00, status: 'Overdue', items: 24 },
+  { id: 'INV-2023-004', buyer: 'Metro Wellness', date: '21 Oct 2023', amount: 950.00, status: 'Paid', items: 3 },
 ];
 
 export interface Supplier {

@@ -7,7 +7,6 @@ import { productsRouter } from '../modules/catalog/products.routes';
 import { invoicesRouter } from '../modules/sales/invoices.routes';
 import { salesRouter } from '../modules/sales/sales.routes';
 import { suppliersRouter } from '../modules/suppliers/suppliers.routes';
-import { customersRouter } from '../modules/customers/customers.routes';
 import { ocrRouter } from '../modules/ocr/ocr.routes';
 import { inventoryRouter } from '../modules/inventory/inventory.routes';
 import { returnsRouter } from '../modules/returns/returns.routes';
@@ -47,7 +46,6 @@ export const createApp = () => {
   app.use('/api/sales', salesRouter);
   app.use('/api/inventory', inventoryRouter);
   app.use('/api/suppliers', suppliersRouter);
-  app.use('/api/customers', customersRouter);
   app.use('/api/invoices/ocr', ocrRouter);
   app.use('/api/ocr/invoices', ocrRouter);
   app.use('/api/returns', returnsRouter);
