@@ -540,20 +540,6 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                 className="w-64 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 shadow-sm"
               />
             </div>
-            <button
-              onClick={() => setIsImportOpen(true)}
-              className="bg-[#5A5A40] text-white px-6 py-3 rounded-2xl font-medium shadow-lg hover:bg-[#4A4A30] transition-all flex items-center gap-2"
-            >
-              <Package size={20} />
-              {t('Import Stock')}
-            </button>
-            <button
-              onClick={openAdd}
-              className="bg-[#5A5A40] text-white px-6 py-3 rounded-2xl font-medium shadow-lg hover:bg-[#4A4A30] transition-all flex items-center gap-2"
-            >
-              <Plus size={20} />
-              {t('Add Product')}
-            </button>
           </div>
 
       <div className="flex items-center gap-4 overflow-x-auto pb-2 custom-scrollbar">
@@ -673,7 +659,13 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
         </>
       )}
 
-      {activeSection === 'batches' && <BatchesView embedded />}
+      {activeSection === 'batches' && (
+        <BatchesView
+          embedded
+          onOpenImportInvoice={() => setIsImportOpen(true)}
+          onOpenAddProduct={openAdd}
+        />
+      )}
 
       {isAddOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">

@@ -112,7 +112,11 @@ const BatchRow = React.memo(function BatchRow({ batch, isLowStock, busyBatchId, 
   );
 });
 
-export const BatchesView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+export const BatchesView: React.FC<{
+  embedded?: boolean;
+  onOpenImportInvoice?: () => void;
+  onOpenAddProduct?: () => void;
+}> = ({ embedded = false, onOpenImportInvoice, onOpenAddProduct }) => {
   const { t } = useTranslation();
   const { products, refreshProducts, restockInventory } = usePharmacy();
   const [searchTerm, setSearchTerm] = useState('');
@@ -358,13 +362,7 @@ export const BatchesView: React.FC<{ embedded?: boolean }> = ({ embedded = false
             </>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={openCreateBatchModal}
-            className="px-4 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2"
-          >
-            <Plus size={16} /> Добавить партию
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
             <input 
@@ -375,6 +373,28 @@ export const BatchesView: React.FC<{ embedded?: boolean }> = ({ embedded = false
               className="w-64 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 transition-all shadow-sm"
             />
           </div>
+          {onOpenImportInvoice && (
+            <button
+              onClick={onOpenImportInvoice}
+              className="px-4 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2"
+            >
+              <Package size={16} /> {t('Import Stock')}
+            </button>
+          )}
+          {onOpenAddProduct && (
+            <button
+              onClick={onOpenAddProduct}
+              className="px-4 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2"
+            >
+              <Plus size={16} /> {t('Add Product')}
+            </button>
+          )}
+          <button
+            onClick={openCreateBatchModal}
+            className="px-4 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2"
+          >
+            <Plus size={16} /> Добавить партию
+          </button>
         </div>
       </div>
 
