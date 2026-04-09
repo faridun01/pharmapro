@@ -25,7 +25,6 @@ type InventoryDetailRow = {
   name: string;
   sku: string;
   totalStock: number;
-  unitsPerPack: number | null;
   soldUnits: number;
   returnedUnits: number;
   writeOffUnits: number;
@@ -391,7 +390,6 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
         id: true,
         name: true,
         sku: true,
-        unitsPerPack: true,
         totalStock: true,
         costPrice: true,
         sellingPrice: true,
@@ -534,7 +532,6 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
       name: String(product.name || '-'),
       sku: String(product.sku || '-'),
       totalStock: Number(product.totalStock || 0),
-      unitsPerPack: product.unitsPerPack != null && Number(product.unitsPerPack) >= 2 ? Number(product.unitsPerPack) : null,
       soldUnits: 0,
       returnedUnits: 0,
       writeOffUnits: 0,

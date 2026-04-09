@@ -101,11 +101,6 @@ invoicesRouter.get('/', authenticate, asyncHandler(async (req, res) => {
             quantity: true,
             unitPrice: true,
             totalPrice: true,
-            product: {
-              select: {
-                unitsPerPack: true,
-              },
-            },
           },
         },
         receivables: {
@@ -500,13 +495,7 @@ invoicesRouter.patch('/:id', authenticate, asyncHandler(async (req, res) => {
       },
       include: {
         items: {
-          include: {
-            product: {
-              select: {
-                unitsPerPack: true,
-              },
-            },
-          },
+          include: {},
         },
         receivables: true,
       },

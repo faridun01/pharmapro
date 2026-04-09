@@ -6,6 +6,29 @@
 
 import type { OcrResult } from './ocr.types';
 
+type PdfParseResult = { text: string };
+type PdfParseInstance = {
+  getText: () => Promise<PdfParseResult>;
+  destroy?: () => Promise<void> | void;
+};
+type PdfParseCtor = new (options: { data: Buffer }) => PdfParseInstance;
+
+let pdfParseLoader: Promise<PdfParseCtor> | null = null;
+
+const loadPdfParse = async (): Promise<PdfParseCtor> => {
+  if (!pdfParseLoader) {
+    pdfParseLoader = import('pdf-parse').then((module) => {
+      const candidate = (module as { PDFParse?: unknown }).PDFParse;
+      if (typeof candidate !== 'function') {
+        throw new Error('pdf-parse module did not expose PDFParse class');
+      }
+      return candidate as PdfParseCtor;
+    });
+  }
+
+  return pdfParseLoader;
+};
+
 // ─── Date helpers (duplicated from tesseract.engine to keep modules independent) ──
 
 function normalizeDateStr(s: string): string | undefined {
@@ -156,12 +179,11 @@ function parseInvoiceLine(line: string): OcrResult['items'][0] | null {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function runPdfOcr(pdfBase64: string): Promise<OcrResult> {
-  // pdf-parse exports a default function: (buffer: Buffer) => Promise<{text: string}>
-  // Use require so esbuild can bundle it without dynamic-import complications.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
+  const PDFParse = await loadPdfParse();
   const buffer = Buffer.from(pdfBase64, 'base64');
-  const data = await pdfParse(buffer);
+  const parser = new PDFParse({ data: buffer });
+  const data = await parser.getText();
+  await parser.destroy?.();
 
   const rawText = (data.text || '').trim();
   if (!rawText) {

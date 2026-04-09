@@ -278,7 +278,6 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       barcode: payload.barcode || undefined,
       category: payload.category || 'Uncategorized',
       manufacturer: payload.manufacturer || 'Unknown',
-      unitsPerPack: Math.max(2, Number(payload.unitsPerPack ?? 10)),
       minStock: payload.minStock ?? 10,
       costPrice: payload.costPrice,
       sellingPrice: payload.sellingPrice,

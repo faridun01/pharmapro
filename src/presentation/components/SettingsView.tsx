@@ -597,7 +597,7 @@ export const SettingsView: React.FC = () => {
                 <p className="text-xs text-[#5A5A40]/55 mt-1">PNG, JPG или SVG до 1.5 MB. Используется в превью и PDF.</p>
               </div>
 
-              <div className="rounded-2xl bg-white border border-[#5A5A40]/10 min-h-[160px] flex items-center justify-center overflow-hidden">
+              <div className="rounded-2xl bg-white border border-[#5A5A40]/10 min-h-40 flex items-center justify-center overflow-hidden">
                 {companyProfile.logoDataUrl ? (
                   <img src={companyProfile.logoDataUrl} alt="Логотип компании" className="max-h-36 w-auto object-contain" />
                 ) : (

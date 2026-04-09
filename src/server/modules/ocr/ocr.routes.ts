@@ -139,62 +139,8 @@ const buildReviewStats = (
   return { total, high, medium, low, needsReview };
 };
 
-// --- Router ---
-
-export const ocrRouter = Router();
-
-/** GET /engines - tells the frontend which engines are available */
-ocrRouter.get('/engines', async (_req, res) => {
-  res.json({ ollama: await checkOllamaAvailability(), model: getOllamaModelName() });
-});
-
-/**
- * POST /
- * body: { imageBase64, mimeType?, engine?: 'ollama' }
- */
-ocrRouter.post('/', asyncHandler(async (req, res) => {
-  const { imageBase64, mimeType = 'image/png' } = req.body ?? {};
-
-  if (!imageBase64 || typeof imageBase64 !== 'string') {
-    throw new ValidationError('imageBase64 is required');
-  }
-
-  const products = await prisma.product.findMany({
-    select: { id: true, name: true, sku: true, costPrice: true },
-  });
-
-  const parsed = await runOllamaVisionOcr(imageBase64, mimeType);
-  if (!parsed.items.length) {
-    return res.status(422).json({
-      error: 'Ollama не смог распознать позиции накладной. Проверьте качество изображения или модель gemma3:4b.',
-    });
-  }
-  return res.json({
-    engine: 'ollama',
-    invoiceNumber: parsed.invoiceNumber,
-    supplierName: parsed.supplierName,
-    invoiceDate: parsed.invoiceDate,
-    items: buildNormalizedItems(parsed.items, products),
-  });
-}));
-
-/**
- * POST /drafts
- * Runs OCR and creates a persisted review draft with OcrDocument/OcrRow/OcrImportDraft.
- */
-ocrRouter.post('/drafts', authenticate, asyncHandler(async (req, res) => {
-  const authedReq = req as AuthedRequest;
-  const { imageBase64, mimeType = 'image/png' } = req.body ?? {};
-
-  if (!imageBase64 || typeof imageBase64 !== 'string') {
-    throw new ValidationError('imageBase64 is required');
-  }
-
+const readInvoiceWithOcr = async (imageBase64: string, mimeType: string) => {
   const isPdf = mimeType === 'application/pdf' || mimeType === 'pdf';
-
-  const products = await prisma.product.findMany({
-    select: { id: true, name: true, sku: true, costPrice: true },
-  });
 
   let parsedHeader: { invoiceNumber?: string; supplierName?: string; invoiceDate?: string; items?: ParsedInvoiceItem[]; rawText?: string };
   let resolvedEngine: 'ollama' | 'pdf+ollama';
@@ -211,6 +157,79 @@ ocrRouter.post('/drafts', authenticate, asyncHandler(async (req, res) => {
     parsedHeader = await runOllamaVisionOcr(imageBase64, mimeType);
     resolvedEngine = 'ollama';
   }
+
+  return { parsedHeader, resolvedEngine };
+};
+
+// --- Router ---
+
+export const ocrRouter = Router();
+
+/** GET /engines - tells the frontend which engines are available */
+ocrRouter.get('/engines', async (_req, res) => {
+  res.json({ ollama: await checkOllamaAvailability(), model: getOllamaModelName() });
+});
+
+/**
+ * POST /
+ * body: { imageBase64, mimeType? }
+ */
+ocrRouter.post('/', asyncHandler(async (req, res) => {
+  const { imageBase64, mimeType = 'image/png' } = req.body ?? {};
+
+  if (!imageBase64 || typeof imageBase64 !== 'string') {
+    throw new ValidationError('imageBase64 is required');
+  }
+
+  const products = await prisma.product.findMany({
+    select: { id: true, name: true, sku: true, costPrice: true },
+  });
+
+  const { parsedHeader, resolvedEngine } = await readInvoiceWithOcr(imageBase64, mimeType);
+  const normalizedItems = buildNormalizedItems(parsedHeader.items || [], products);
+  const review = buildReviewStats(normalizedItems);
+
+  if (!normalizedItems.length) {
+    return res.status(200).json({
+      engine: resolvedEngine,
+      invoiceNumber: parsedHeader.invoiceNumber?.trim() || '',
+      supplierName: parsedHeader.supplierName?.trim() || '',
+      invoiceDate: normalizeDateString(parsedHeader.invoiceDate) || new Date().toISOString().split('T')[0],
+      rawText: parsedHeader.rawText || '',
+      review,
+      items: [],
+      warning: 'Не удалось распознать позиции накладной. Проверьте качество изображения или введите данные вручную.',
+    });
+  }
+
+  return res.json({
+    engine: resolvedEngine,
+    invoiceNumber: parsedHeader.invoiceNumber?.trim() || '',
+    supplierName: parsedHeader.supplierName?.trim() || '',
+    invoiceDate: normalizeDateString(parsedHeader.invoiceDate) || new Date().toISOString().split('T')[0],
+    rawText: parsedHeader.rawText || '',
+    review,
+    items: normalizedItems,
+  });
+}));
+
+/**
+ * POST /drafts
+ * Runs OCR and creates a persisted review draft with OcrDocument/OcrRow/OcrImportDraft.
+ */
+ocrRouter.post('/drafts', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const { imageBase64, mimeType = 'image/png' } = req.body ?? {};
+
+  if (!imageBase64 || typeof imageBase64 !== 'string') {
+    throw new ValidationError('imageBase64 is required');
+  }
+
+  const products = await prisma.product.findMany({
+    select: { id: true, name: true, sku: true, costPrice: true },
+  });
+
+  const { parsedHeader, resolvedEngine } = await readInvoiceWithOcr(imageBase64, mimeType);
 
   const normalizedItems = buildNormalizedItems(parsedHeader.items || [], products);
   if (!normalizedItems.length) {

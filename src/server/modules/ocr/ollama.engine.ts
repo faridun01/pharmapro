@@ -1,8 +1,14 @@
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+
 import type { OcrResult } from './ocr.types';
 
 const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
 const OLLAMA_MODEL = process.env.OLLAMA_OCR_MODEL || 'gemma3:4b';
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 90000);
+const OCR_PREPROCESS_TIMEOUT_MS = Number(process.env.OCR_PREPROCESS_TIMEOUT_MS || 20000);
+const PYTHON_EXECUTABLE = process.env.PYTHON_EXECUTABLE || 'c:/python313/python.exe';
+const OCR_PREPROCESS_SCRIPT = path.join(process.cwd(), 'scripts', 'ocr_preprocess.py');
 
 type OllamaChatResponse = {
   message?: {
@@ -11,6 +17,15 @@ type OllamaChatResponse = {
 };
 
 type ParsedInvoiceItem = OcrResult['items'][number];
+type PreprocessResult = {
+  imageBase64: string;
+  mimeType?: string;
+};
+
+const normalizeDateParts = (day: string, month: string, year: string) => {
+  const normalizedYear = year.length === 2 ? `20${year}` : year;
+  return `${normalizedYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+};
 
 const normalizeNumber = (value: unknown) => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -41,7 +56,18 @@ const firstNumber = (record: Record<string, unknown>, keys: string[]) => {
 
 const normalizeDateString = (value?: string) => {
   if (!value) return '';
-  const parsed = new Date(value);
+  const source = String(value).trim();
+  if (!source) return '';
+  const fullDate = source.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
+  if (fullDate) {
+    return normalizeDateParts(fullDate[1], fullDate[2], fullDate[3]);
+  }
+  const monthDate = source.match(/^(\d{1,2})[.\/-](\d{4})$/);
+  if (monthDate) {
+    return `${monthDate[2]}-${monthDate[1].padStart(2, '0')}-01`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(source)) return source;
+  const parsed = new Date(source);
   if (Number.isNaN(parsed.getTime())) return '';
   return parsed.toISOString().split('T')[0];
 };
@@ -57,6 +83,78 @@ const safeJsonFromText = <T,>(raw: string): T | null => {
   } catch {
     return null;
   }
+};
+
+const stripCodeFence = (raw: string) => {
+  const match = raw.match(/```(?:text|txt|markdown|md|json)?\s*([\s\S]*?)```/i);
+  return (match?.[1] ?? raw).trim();
+};
+
+const extractTranscriptText = (raw: string) => {
+  const source = stripCodeFence(raw);
+  const parsed = safeJsonFromText<Record<string, unknown>>(source);
+  if (parsed) {
+    const transcript = [parsed.rawText, parsed.text, parsed.transcript, parsed.content]
+      .map((value) => String(value || '').trim())
+      .find(Boolean);
+    if (transcript) return transcript;
+  }
+  return source;
+};
+
+const preprocessImageWithPillow = (imageBase64: string): Promise<PreprocessResult> => {
+  return new Promise((resolve, reject) => {
+    const child = spawn(PYTHON_EXECUTABLE, [OCR_PREPROCESS_SCRIPT], {
+      cwd: process.cwd(),
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error('Pillow preprocessing timed out'));
+    }, OCR_PREPROCESS_TIMEOUT_MS);
+
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `Pillow preprocessing failed with code ${code}`));
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(stdout) as PreprocessResult;
+        if (!parsed?.imageBase64) {
+          reject(new Error('Pillow preprocessing returned empty output'));
+          return;
+        }
+        resolve(parsed);
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error('Failed to parse Pillow preprocessing output'));
+      }
+    });
+
+    child.stdin.write(JSON.stringify({ imageBase64 }));
+    child.stdin.end();
+  });
 };
 
 const normalizeItems = (items: unknown): ParsedInvoiceItem[] => {
@@ -84,7 +182,21 @@ const normalizeItems = (items: unknown): ParsedInvoiceItem[] => {
   return normalized;
 };
 
-const buildImagePrompt = () => [
+const buildVisionTranscriptionPrompt = () => [
+  'Ты делаешь только первый этап OCR для приходной накладной.',
+  'Нельзя сразу строить JSON или интерпретировать значения.',
+  'Нужно максимально точно переписать текст и таблицу с изображения в обычный текст.',
+  'Сохраняй порядок строк документа сверху вниз.',
+  'Для строк таблицы выводи по одной строке на товар, разделяя колонки через символ |.',
+  'Используй формат: СЕРИЯ | НАЗВАНИЕ | СРОК | КОЛИЧЕСТВО | ЕДИНИЦА | ЦЕНА | СУММА.',
+  'Если какой-то колонки нет или она плохо читается, оставь пустое место между разделителями.',
+  'Не выдумывай значения и не исправляй текст по смыслу.',
+  'Игнорируй рукописные пометки на полях, подписи, печати и декоративные линии внизу документа.',
+  'Верхние служебные строки с номером накладной, поставщиком и получателем тоже перепиши текстом.',
+  'Верни только чистый текст без пояснений.',
+].join('\n');
+
+const buildLegacyImagePrompt = () => [
   'Ты распознаешь приходные накладные аптеки.',
   'Чаще всего в накладной есть номер, название товара, срок годности, количество, цена и сумма.',
   'Игнорируй номер строки, внутренний код товара, отметки ручкой, подписи и печати.',
@@ -117,6 +229,8 @@ const buildTextPrompt = (rawText: string) => [
   'Ты приводишь текст аптечной накладной к строгому JSON.',
   'На входе уже извлеченный текст документа.',
   'Чаще всего в тексте есть номер, название товара, срок годности, количество, цена и сумма.',
+  'Текст может содержать строки таблицы в формате: серия | название | срок | количество | единица | цена | сумма.',
+  'Также возможны заголовки на русском и таджикском: Номгу, Мухлат, Миқдор, Нарх, Ҳамагӣ.',
   'Игнорируй номер строки, служебные коды, подписи, печати, блоки с подписями и общие итоги документа.',
   'Партию не выдумывай: если ее нет явно, верни пустую строку.',
   'Если есть quantity и lineTotal/sum, но нет costPrice, вычисли costPrice = lineTotal / quantity.',
@@ -212,9 +326,34 @@ export const checkOllamaAvailability = async () => {
 };
 
 export async function runOllamaVisionOcr(imageBase64: string, _mimeType: string): Promise<OcrResult> {
-  const response = await callOllama(buildImagePrompt(), [imageBase64]);
-  const content = response.message?.content || '';
-  return normalizeOllamaResult(content);
+  let preparedImageBase64 = imageBase64;
+  try {
+    const preprocessed = await preprocessImageWithPillow(imageBase64);
+    preparedImageBase64 = preprocessed.imageBase64;
+  } catch {
+    preparedImageBase64 = imageBase64;
+  }
+
+  const transcriptResponse = await callOllama(buildVisionTranscriptionPrompt(), [preparedImageBase64]);
+  const transcript = extractTranscriptText(transcriptResponse.message?.content || '');
+
+  if (transcript) {
+    const normalized = await runOllamaTextNormalization(transcript);
+    if (normalized.items.length > 0 || normalized.invoiceNumber || normalized.supplierName) {
+      return {
+        ...normalized,
+        rawText: transcript,
+      };
+    }
+  }
+
+  const fallbackResponse = await callOllama(buildLegacyImagePrompt(), [preparedImageBase64]);
+  const fallbackContent = fallbackResponse.message?.content || '';
+  const fallback = normalizeOllamaResult(fallbackContent, transcript);
+  return {
+    ...fallback,
+    rawText: transcript || fallback.rawText,
+  };
 }
 
 export async function runOllamaTextNormalization(rawText: string): Promise<OcrResult> {

@@ -7,6 +7,89 @@ import { auditService } from '../../services/audit.service';
 
 export const customersRouter = Router();
 
+const hydrateInvoicesWithPaymentsAndReturns = <T extends {
+  id: string;
+  invoiceNo: string;
+  customerId?: string | null;
+  createdAt: Date;
+  totalAmount: number | null;
+  paymentStatus?: string | null;
+  status: string;
+  items: Array<{
+    id: string;
+    productId: string;
+    batchId?: string | null;
+    productName: string;
+    batchNo?: string | null;
+    quantity: number | null;
+    unitPrice: number | null;
+    totalPrice: number | null;
+  }>;
+  payments: Array<{ amount: number | null }>;
+  returns: Array<{
+    id: string;
+    totalAmount: number | null;
+    items: Array<{
+      productId: string;
+      batchId?: string | null;
+      quantity: number | null;
+      unitPrice: number | null;
+      lineTotal: number | null;
+    }>;
+  }>;
+}>(invoices: T[]) => {
+  return invoices.map((invoice) => {
+    const actualPaidAmount = invoice.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const outstandingAmount = Math.max(0, Number(invoice.totalAmount || 0) - actualPaidAmount);
+    const returnedTotals = new Map<string, number>();
+    const returnedAmountTotal = invoice.returns.reduce((sum, ret) => {
+      const itemsTotal = ret.items.reduce((itemSum, item) => {
+        const lineTotal = Number(item.lineTotal || 0);
+        if (lineTotal > 0) return itemSum + lineTotal;
+        return itemSum + Number(item.quantity || 0) * Number(item.unitPrice || 0);
+      }, 0);
+      return sum + Math.max(Number(ret.totalAmount || 0), itemsTotal);
+    }, 0);
+
+    for (const ret of invoice.returns) {
+      for (const item of ret.items) {
+        const key = `${item.productId}:${item.batchId || ''}`;
+        returnedTotals.set(key, Number(returnedTotals.get(key) || 0) + Number(item.quantity || 0));
+      }
+    }
+
+    const hasCompletedReturns = invoice.returns.length > 0;
+    const fullyReturned = hasCompletedReturns && invoice.items.every((item) => {
+      const key = `${item.productId}:${item.batchId || ''}`;
+      return Number(returnedTotals.get(key) || 0) >= Number(item.quantity || 0);
+    });
+
+    const normalizedPaymentStatus = outstandingAmount <= 0
+      ? 'PAID'
+      : actualPaidAmount > 0
+        ? 'PARTIALLY_PAID'
+        : 'UNPAID';
+
+    return {
+      ...invoice,
+      createdAt: invoice.createdAt.toISOString(),
+      totalAmount: Number(invoice.totalAmount || 0),
+      outstandingAmount,
+      paidAmountTotal: actualPaidAmount,
+      returnedAmountTotal,
+      paymentStatus: normalizedPaymentStatus,
+      status: fullyReturned ? 'RETURNED' : hasCompletedReturns ? 'PARTIALLY_RETURNED' : invoice.status,
+      itemCount: invoice.items.length,
+      items: invoice.items.map((item) => ({
+        ...item,
+        quantity: Number(item.quantity || 0),
+        unitPrice: Number(item.unitPrice || 0),
+        totalPrice: Number(item.totalPrice || 0),
+      })),
+    };
+  });
+};
+
 const buildNextCustomerCode = async () => {
   const customersWithCodes = await prisma.customer.findMany({
     where: {
@@ -231,6 +314,88 @@ customersRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
   });
 
   res.json(enrichedCustomers);
+}));
+
+customersRouter.get('/:id/history', authenticate, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const pageRaw = Number(req.query.page ?? 1);
+  const pageSizeRaw = Number(req.query.pageSize ?? 10);
+  const page = Math.max(1, Number.isFinite(pageRaw) ? Math.floor(pageRaw) : 1);
+  const pageSize = Math.min(100, Math.max(1, Number.isFinite(pageSizeRaw) ? Math.floor(pageSizeRaw) : 10));
+
+  const customer = await prisma.customer.findUnique({
+    where: { id },
+    select: { id: true, isActive: true },
+  });
+
+  if (!customer || !customer.isActive) {
+    return res.status(404).json({ error: 'Customer not found' });
+  }
+
+  const [invoices, totalCount] = await Promise.all([
+    prisma.invoice.findMany({
+      where: { customerId: id },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        invoiceNo: true,
+        customerId: true,
+        customer: true,
+        createdAt: true,
+        totalAmount: true,
+        paymentType: true,
+        paymentStatus: true,
+        status: true,
+        comment: true,
+        items: {
+          select: {
+            id: true,
+            productId: true,
+            batchId: true,
+            productName: true,
+            batchNo: true,
+            quantity: true,
+            unitPrice: true,
+            totalPrice: true,
+          },
+        },
+        payments: {
+          select: {
+            amount: true,
+          },
+        },
+        returns: {
+          where: { status: 'COMPLETED' },
+          select: {
+            id: true,
+            totalAmount: true,
+            items: {
+              select: {
+                productId: true,
+                batchId: true,
+                quantity: true,
+                unitPrice: true,
+                lineTotal: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.invoice.count({ where: { customerId: id } }),
+  ]);
+
+  const hydratedInvoices = hydrateInvoicesWithPaymentsAndReturns(invoices);
+
+  res.json({
+    page,
+    pageSize,
+    totalCount,
+    pageCount: Math.max(1, Math.ceil(totalCount / pageSize)),
+    invoices: hydratedInvoices,
+  });
 }));
 
 customersRouter.post('/', authenticate, asyncHandler(async (req, res) => {

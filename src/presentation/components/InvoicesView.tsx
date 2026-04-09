@@ -24,7 +24,6 @@ type EditableInvoiceItem = {
   productName: string;
   quantity: number;
   unitPrice: number;
-  unitsPerPack?: number | null;
 };
 
 type ReturnInvoiceItem = {
@@ -33,14 +32,15 @@ type ReturnInvoiceItem = {
   batchNo: string;
   soldQuantity: number;
   quantity: number;
-  unitsPerPack?: number | null;
 };
 
 export const InvoicesView: React.FC<{
   initialSearchTerm?: string;
   initialPaymentInvoiceId?: string;
+  initialDetailsInvoiceId?: string;
   onInitialPaymentInvoiceHandled?: () => void;
-}> = ({ initialSearchTerm = '', initialPaymentInvoiceId = '', onInitialPaymentInvoiceHandled }) => {
+  onInitialDetailsInvoiceHandled?: () => void;
+}> = ({ initialSearchTerm = '', initialPaymentInvoiceId = '', initialDetailsInvoiceId = '', onInitialPaymentInvoiceHandled, onInitialDetailsInvoiceHandled }) => {
   const { t } = useTranslation();
   const { invoices, isLoading, refreshInvoices, refreshProducts } = usePharmacy();
   const [searchTerm, setSearchTerm] = useState('');
@@ -155,28 +155,13 @@ export const InvoicesView: React.FC<{
   const isReturnLocked = (status: string) => status === 'RETURNED';
   const isEditLocked = (status: string) => status === 'RETURNED' || status === 'PARTIALLY_RETURNED';
 
-  const getUnitsPerPack = (value: number | null | undefined) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed >= 2 ? parsed : null;
-  };
-
   const formatMoney = (value: number) => `${Number(value || 0).toFixed(2)} TJS`;
 
   const formatMoneyCompact = (value: number) => `${Number(value || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TJS`;
 
-  const formatPackQuantity = (quantity: number, unitsPerPack?: number | null) => {
-    const safeUnitsPerPack = getUnitsPerPack(unitsPerPack);
-    if (!safeUnitsPerPack) {
-      return `${Number(quantity || 0)} ед.`;
-    }
-
+  const formatPackQuantity = (quantity: number) => {
     const wholeQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
-    const boxes = Math.floor(wholeQuantity / safeUnitsPerPack);
-    const units = wholeQuantity % safeUnitsPerPack;
-
-    if (boxes > 0 && units > 0) return `${boxes} кор. ${units} ед.`;
-    if (boxes > 0) return `${boxes} кор.`;
-    return `${units} ед.`;
+    return `${wholeQuantity} ед.`;
   };
 
   const computeInvoiceModalTotal = (items: EditableInvoiceItem[], taxAmount: number, discount: number) => {
@@ -185,25 +170,8 @@ export const InvoicesView: React.FC<{
   };
 
   const formatInvoiceQuantitySummary = (items: any[] = []) => {
-    const totals = items.reduce(
-      (acc, item) => {
-        const quantity = Math.max(0, Math.floor(Number(item?.quantity || 0)));
-        const unitsPerPack = getUnitsPerPack(item?.product?.unitsPerPack);
-        if (!unitsPerPack) {
-          acc.units += quantity;
-          return acc;
-        }
-
-        acc.boxes += Math.floor(quantity / unitsPerPack);
-        acc.units += quantity % unitsPerPack;
-        return acc;
-      },
-      { boxes: 0, units: 0 },
-    );
-
-    if (totals.boxes > 0 && totals.units > 0) return `${totals.boxes} кор. ${totals.units} шт.`;
-    if (totals.boxes > 0) return `${totals.boxes} кор.`;
-    return `${totals.units} шт.`;
+    const totalUnits = items.reduce((sum, item) => sum + Math.max(0, Math.floor(Number(item?.quantity || 0))), 0);
+    return `${totalUnits} ед.`;
   };
 
   const closeEditModal = () => setEditModal({ open: false, invoiceId: '', customer: '', taxAmount: 0, discount: 0, totalAmount: '', items: [], error: null });
@@ -227,7 +195,6 @@ export const InvoicesView: React.FC<{
           batchNo: item.batchNo || '—',
           soldQuantity: remainingQuantity,
           quantity: remainingQuantity,
-          unitsPerPack: item.product?.unitsPerPack ?? null,
         };
       }),
       error: null,
@@ -246,23 +213,9 @@ export const InvoicesView: React.FC<{
         items: prev.items.map((item) => {
           if (item.id !== itemId) return item;
 
-          const unitsPerPack = getUnitsPerPack(item.unitsPerPack);
-          if (!unitsPerPack) {
-            return {
-              ...item,
-              quantity: Math.max(0, Math.min(item.soldQuantity, Math.floor(Number(unitsValue) || 0))),
-            };
-          }
-
-          const boxes = Math.max(0, Math.floor(Number(boxesValue) || 0));
-          const units = Math.max(0, Math.floor(Number(unitsValue) || 0));
-          const normalizedBoxes = boxes + Math.floor(units / unitsPerPack);
-          const normalizedUnits = units % unitsPerPack;
-          const totalUnits = normalizedBoxes * unitsPerPack + normalizedUnits;
-
           return {
             ...item,
-            quantity: Math.max(0, Math.min(item.soldQuantity, totalUnits)),
+            quantity: Math.max(0, Math.min(item.soldQuantity, Math.floor(Number(unitsValue) || 0))),
           };
         }),
       };
@@ -285,17 +238,7 @@ export const InvoicesView: React.FC<{
       const items = prev.items.map((item) => {
         if (item.id !== itemId) return item;
 
-        const unitsPerPack = getUnitsPerPack(item.unitsPerPack);
-        if (!unitsPerPack) {
-          const quantity = Math.max(1, Math.floor(Number(unitsValue) || 0));
-          return { ...item, quantity };
-        }
-
-        const boxes = Math.max(0, Math.floor(Number(boxesValue) || 0));
-        const units = Math.max(0, Math.floor(Number(unitsValue) || 0));
-        const normalizedBoxes = boxes + Math.floor(units / unitsPerPack);
-        const normalizedUnits = units % unitsPerPack;
-        const quantity = Math.max(1, normalizedBoxes * unitsPerPack + normalizedUnits);
+        const quantity = Math.max(1, Math.floor(Number(unitsValue) || 0));
 
         return { ...item, quantity };
       });
@@ -351,7 +294,6 @@ export const InvoicesView: React.FC<{
       productName: item.productName || '-',
       quantity: Number(item.quantity || 0),
       unitPrice: Number(item.unitPrice || 0),
-      unitsPerPack: item.product?.unitsPerPack ?? null,
     }));
 
     setEditModal({
@@ -440,13 +382,14 @@ export const InvoicesView: React.FC<{
   };
 
   const printInvoice = (invoice: any) => {
+    const displayInvoiceNo = invoice.invoiceNo || invoice.id;
     const createdAt = new Date(invoice.createdAt);
-    const formatQuantityLabel = (item: any) => `${Number(item?.quantity || 0)} шт. (${formatPackQuantity(Number(item?.quantity || 0), item?.product?.unitsPerPack)})`;
+    const formatQuantityLabel = (item: any) => formatPackQuantity(Number(item?.quantity || 0));
 
     const receiptHtml = `
       <html>
         <head>
-          <title>Накладная ${invoice.id}</title>
+          <title>Накладная ${displayInvoiceNo}</title>
           <style>
             body { font-family: Segoe UI, Arial, sans-serif; margin: 0; padding: 20px; color: #2d2d2d; background: #f3f4f6; }
             .toolbar { max-width: 900px; margin: 0 auto 12px; display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 10px 14px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
@@ -474,7 +417,7 @@ export const InvoicesView: React.FC<{
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = 'invoice-${invoice.id}.html';
+              a.download = 'invoice-${displayInvoiceNo}.html';
               a.click();
               URL.revokeObjectURL(url);
             }
@@ -490,7 +433,7 @@ export const InvoicesView: React.FC<{
             </div>
           </div>
           <div class="sheet">
-            <h1>Накладная ${invoice.id}</h1>
+            <h1>Накладная ${displayInvoiceNo}</h1>
             <div class="muted">Клиент: ${invoice.customer || '-'} | Дата: ${createdAt.toLocaleString('ru-RU')} | Статус: ${invoice.status}</div>
             <table>
               <thead>
@@ -579,6 +522,16 @@ export const InvoicesView: React.FC<{
     addInvoicePayment(targetInvoice);
     onInitialPaymentInvoiceHandled?.();
   }, [addInvoicePayment, initialPaymentInvoiceId, invoices, onInitialPaymentInvoiceHandled]);
+
+  useEffect(() => {
+    if (!initialDetailsInvoiceId) return;
+
+    const targetInvoice = invoices.find((invoice) => invoice.id === initialDetailsInvoiceId);
+    if (!targetInvoice) return;
+
+    setDetailsInvoice(targetInvoice);
+    onInitialDetailsInvoiceHandled?.();
+  }, [initialDetailsInvoiceId, invoices, onInitialDetailsInvoiceHandled]);
 
   const submitInvoicePayment = async () => {
     const invoice = paymentModal.invoice;
@@ -729,7 +682,8 @@ export const InvoicesView: React.FC<{
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#f5f5f0]/50 text-[9px] uppercase tracking-[0.2em] text-[#5A5A40]/45 font-bold">
-                <th className="px-6 py-3.5">{t('Invoice ID')}</th>
+                <th className="px-4 py-3.5 text-center">№</th>
+                <th className="px-6 py-3.5">Номер чека</th>
                 <th className="px-6 py-3.5">{t('Customer')}</th>
                 <th className="px-6 py-3.5">{t('Date & Time')}</th>
                 <th className="px-6 py-3.5">{t('Payment')}</th>
@@ -743,10 +697,11 @@ export const InvoicesView: React.FC<{
             <tbody className="divide-y divide-[#5A5A40]/5">
               {invoiceTopSpacerHeight > 0 && (
                 <tr>
-                  <td colSpan={9} style={{ height: invoiceTopSpacerHeight }} />
+                  <td colSpan={10} style={{ height: invoiceTopSpacerHeight }} />
                 </tr>
               )}
-              {visibleInvoices.map((invoice) => {
+              {visibleInvoices.map((invoice, index) => {
+                const rowNumber = invoiceStartIndex + index + 1;
                 const totalAmount = Number(invoice.totalAmount || 0);
                 const returnedAmount = Number((invoice as any).returnedAmountTotal || 0);
                 const netAmount = totalAmount - returnedAmount;
@@ -768,12 +723,17 @@ export const InvoicesView: React.FC<{
 
                 return (
                 <tr key={invoice.id} className="hover:bg-[#f5f5f0]/30 transition-colors group align-top">
+                  <td className="px-4 py-3.5 text-center">
+                    <span className="inline-flex min-w-7 h-7 items-center justify-center rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-[12px] font-bold">
+                      {rowNumber}
+                    </span>
+                  </td>
                   <td className="px-6 py-3.5">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 bg-[#f5f5f0] rounded-lg flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
                         <FileText size={14} />
                       </div>
-                      <span className="font-mono font-bold text-[#5A5A40] text-[13px] leading-none">{invoice.id}</span>
+                      <span className="font-mono font-bold text-[#5A5A40] text-[13px] leading-none">{invoice.invoiceNo || invoice.id}</span>
                     </div>
                   </td>
                   <td className="px-6 py-3.5">
@@ -828,7 +788,14 @@ export const InvoicesView: React.FC<{
                     <p className={`text-[13px] font-semibold leading-none ${outstandingAmount > 0 ? 'text-rose-700' : 'text-[#5A5A40]/60'}`}>{outstandingAmount.toFixed(2)} TJS</p>
                   </td>
                   <td className="px-6 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="ml-auto grid grid-cols-2 gap-1 w-fit justify-items-center">
+                      <button
+                        onClick={() => setDetailsInvoice(invoice)}
+                        className="p-1 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
+                        title="Сверка: детали и суммы"
+                      >
+                        <ChevronRight size={14} />
+                      </button>
                       <button
                         onClick={() => printInvoice(invoice)}
                         className="p-1 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
@@ -870,13 +837,6 @@ export const InvoicesView: React.FC<{
                       >
                         <Trash2 size={14} />
                       </button>
-                      <button
-                        onClick={() => setDetailsInvoice(invoice)}
-                        className="p-1 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
-                        title="Сверка: детали и суммы"
-                      >
-                        <ChevronRight size={14} />
-                      </button>
                     </div>
                   </td>
                 </tr>
@@ -884,7 +844,7 @@ export const InvoicesView: React.FC<{
               })}
               {invoiceBottomSpacerHeight > 0 && (
                 <tr>
-                  <td colSpan={9} style={{ height: invoiceBottomSpacerHeight }} />
+                  <td colSpan={10} style={{ height: invoiceBottomSpacerHeight }} />
                 </tr>
               )}
             </tbody>
@@ -930,7 +890,7 @@ export const InvoicesView: React.FC<{
                       <tr key={item.id || idx} className="border-t border-[#5A5A40]/10">
                         <td className="px-3 py-2">{idx + 1}</td>
                         <td className="px-3 py-2">{item.productName || '-'}</td>
-                        <td className="px-3 py-2 text-right">{formatPackQuantity(Number(item.quantity || 0), item.product?.unitsPerPack)}</td>
+                        <td className="px-3 py-2 text-right">{formatPackQuantity(Number(item.quantity || 0))}</td>
                         <td className="px-3 py-2 text-right">{Number(item.unitPrice || 0).toFixed(2)} TJS</td>
                         <td className="px-3 py-2 text-right">{Number(item.totalPrice || 0).toFixed(2)} TJS</td>
                       </tr>
@@ -975,61 +935,28 @@ export const InvoicesView: React.FC<{
                 </div>
                 <div className="overflow-auto divide-y divide-[#5A5A40]/10" style={{ maxHeight: 320 }}>
                   {editModal.items.map((item) => {
-                    const unitsPerPack = getUnitsPerPack(item.unitsPerPack);
-                    const boxes = unitsPerPack ? Math.floor(item.quantity / unitsPerPack) : 0;
-                    const units = unitsPerPack ? item.quantity % unitsPerPack : item.quantity;
-
                     return (
                       <div key={item.id} className="p-4 space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-semibold text-[#5A5A40]">{item.productName}</p>
-                            <p className="text-[11px] text-[#5A5A40]/55 mt-1">
-                              {unitsPerPack ? `1 кор. = ${unitsPerPack} ед.` : 'Продажа поштучно'}
-                            </p>
+                            <p className="text-[11px] text-[#5A5A40]/55 mt-1">Продажа в единицах</p>
                           </div>
                           <p className="text-sm font-bold text-[#5A5A40]">{(item.quantity * item.unitPrice).toFixed(2)} TJS</p>
                         </div>
 
-                        <div className={`grid gap-3 ${unitsPerPack ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                          {unitsPerPack ? (
-                            <>
-                              <label>
-                                <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Коробки</span>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step={1}
-                                  value={boxes}
-                                  onChange={(e) => updateEditItemPackaging(item.id, e.target.value, String(units))}
-                                  className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                                />
-                              </label>
-                              <label>
-                                <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step={1}
-                                  value={units}
-                                  onChange={(e) => updateEditItemPackaging(item.id, String(boxes), e.target.value)}
-                                  className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                                />
-                              </label>
-                            </>
-                          ) : (
-                            <label>
-                              <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
-                              <input
-                                type="number"
-                                min={1}
-                                step={1}
-                                value={item.quantity}
-                                onChange={(e) => updateEditItemPackaging(item.id, '0', e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                              />
-                            </label>
-                          )}
+                        <div className="grid gap-3 grid-cols-1">
+                          <label>
+                            <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
+                            <input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={item.quantity}
+                              onChange={(e) => updateEditItemPackaging(item.id, '0', e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                            />
+                          </label>
                         </div>
 
                         <div>
@@ -1103,58 +1030,27 @@ export const InvoicesView: React.FC<{
               <p className="text-sm text-[#5A5A40]/80">Укажите, сколько вернуть по накладной <span className="font-semibold">{returnInvoiceTarget.invoice.invoiceNo || returnInvoiceTarget.invoice.id}</span>.</p>
               <div className="space-y-3 max-h-96 overflow-auto">
                 {returnInvoiceTarget.items.map((item) => {
-                  const unitsPerPack = getUnitsPerPack(item.unitsPerPack);
-                  const boxes = unitsPerPack ? Math.floor(item.quantity / unitsPerPack) : 0;
-                  const units = unitsPerPack ? item.quantity % unitsPerPack : item.quantity;
-
                   return (
                     <div key={item.id} className="rounded-2xl border border-[#5A5A40]/10 p-4 space-y-3 bg-[#f5f5f0]/35">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-[#5A5A40]">{item.productName}</p>
-                          <p className="text-[11px] text-[#5A5A40]/55 mt-1">Партия: {item.batchNo} • Продано: {formatPackQuantity(item.soldQuantity, item.unitsPerPack)}</p>
+                          <p className="text-[11px] text-[#5A5A40]/55 mt-1">Партия: {item.batchNo} • Продано: {formatPackQuantity(item.soldQuantity)}</p>
                         </div>
-                        <p className="text-[11px] font-semibold text-[#5A5A40]/60">Макс: {formatPackQuantity(item.soldQuantity, item.unitsPerPack)}</p>
+                        <p className="text-[11px] font-semibold text-[#5A5A40]/60">Макс: {formatPackQuantity(item.soldQuantity)}</p>
                       </div>
-                      <div className={`grid gap-3 ${unitsPerPack ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                        {unitsPerPack ? (
-                          <>
-                            <label>
-                              <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Коробки</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step={1}
-                                value={boxes}
-                                onChange={(e) => updateReturnItemPackaging(item.id, e.target.value, String(units))}
-                                className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                              />
-                            </label>
-                            <label>
-                              <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step={1}
-                                value={units}
-                                onChange={(e) => updateReturnItemPackaging(item.id, String(boxes), e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                              />
-                            </label>
-                          </>
-                        ) : (
-                          <label>
-                            <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step={1}
-                              value={item.quantity}
-                              onChange={(e) => updateReturnItemPackaging(item.id, '0', e.target.value)}
-                              className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                            />
-                          </label>
-                        )}
+                      <div className="grid gap-3 grid-cols-1">
+                        <label>
+                          <span className="block text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единицы</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={item.quantity}
+                            onChange={(e) => updateReturnItemPackaging(item.id, '0', e.target.value)}
+                            className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                          />
+                        </label>
                       </div>
                     </div>
                   );

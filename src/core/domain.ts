@@ -38,7 +38,6 @@ export interface Product {
   barcode?: string;
   category: string;
   manufacturer: string;
-  unitsPerPack?: number;
   totalStock: number;
   minStock: number;
   costPrice: number;
@@ -128,9 +127,6 @@ export interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
-  product?: {
-    unitsPerPack?: number | null;
-  };
 }
 
 export interface Invoice {

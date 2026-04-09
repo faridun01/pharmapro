@@ -124,6 +124,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [invoiceSearchPrefill, setInvoiceSearchPrefill] = useState('');
   const [invoicePaymentPrefillId, setInvoicePaymentPrefillId] = useState('');
+  const [invoiceDetailsPrefillId, setInvoiceDetailsPrefillId] = useState('');
   const [shiftReportPrefillId, setShiftReportPrefillId] = useState('');
   const [latestClosedShiftNotice, setLatestClosedShiftNotice] = useState(loadLatestClosedShiftNotice());
 
@@ -261,6 +262,17 @@ const App: React.FC = () => {
     setCurrentView('invoices');
   };
 
+  const openInvoiceDetailsFlow = (invoiceId?: string, invoiceNo?: string) => {
+    if (!invoiceId) {
+      setCurrentView('invoices');
+      return;
+    }
+
+    setInvoiceSearchPrefill(invoiceNo || '');
+    setInvoiceDetailsPrefillId(invoiceId);
+    setCurrentView('invoices');
+  };
+
   const handleNotificationClick = (notification: AppNotification) => {
     if (notification.type === 'PAYMENT_DUE' || notification.type === 'OVERDUE_PAYMENT') {
       const invoiceId = notification.id.replace('payment-due-', '').replace('payment-overdue-', '');
@@ -297,9 +309,9 @@ const App: React.FC = () => {
       case 'pos': return <POSView />;
       case 'inventory': return <InventoryView initialSection={inventorySection} />;
       case 'batches': return <InventoryView initialSection="batches" />;
-      case 'invoices': return <InvoicesView initialSearchTerm={invoiceSearchPrefill} initialPaymentInvoiceId={invoicePaymentPrefillId} onInitialPaymentInvoiceHandled={() => setInvoicePaymentPrefillId('')} />;
+      case 'invoices': return <InvoicesView initialSearchTerm={invoiceSearchPrefill} initialPaymentInvoiceId={invoicePaymentPrefillId} initialDetailsInvoiceId={invoiceDetailsPrefillId} onInitialPaymentInvoiceHandled={() => setInvoicePaymentPrefillId('')} onInitialDetailsInvoiceHandled={() => setInvoiceDetailsPrefillId('')} />;
       case 'suppliers': return <SuppliersView />;
-      case 'customers': return <CustomersView />;
+      case 'customers': return <CustomersView onOpenInvoiceHistory={openInvoiceDetailsFlow} />;
       case 'reports': return <ReportsView />;
       case 'returns': return <ReturnView />;
       case 'writeoffs': return <WriteOffView />;

@@ -199,7 +199,6 @@ model Product {
   form              ProductForm?        @relation(fields: [formId], references: [id])
   packageTypeId     String?
   packageType       PackageType?        @relation(fields: [packageTypeId], references: [id])
-  unitsPerPack      Int?
   totalStock        Int                 @default(0)
   minStock          Int                 @default(10)
   costPrice         Float

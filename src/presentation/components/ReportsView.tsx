@@ -68,7 +68,6 @@ type FinanceReport = {
       name: string;
       sku: string;
       totalStock: number;
-      unitsPerPack: number | null;
       soldUnits: number;
       returnedUnits: number;
       writeOffUnits: number;
@@ -203,7 +202,6 @@ const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceReport => 
           name: String(row?.name || '-'),
           sku: String(row?.sku || '-'),
           totalStock: toNumber(row?.totalStock),
-          unitsPerPack: row?.unitsPerPack != null ? toNumber(row?.unitsPerPack) : null,
           soldUnits: toNumber(row?.soldUnits),
           returnedUnits: toNumber(row?.returnedUnits),
           writeOffUnits: toNumber(row?.writeOffUnits),
@@ -375,18 +373,9 @@ export const ReportsView: React.FC = () => {
     };
   }, [report]);
 
-  const formatPackQuantity = (quantity: number, unitsPerPack?: number | null) => {
-    const safeUnitsPerPack = Number(unitsPerPack);
+  const formatPackQuantity = (quantity: number) => {
     const wholeQuantity = Math.max(0, Math.floor(toNumber(quantity)));
-    if (!Number.isFinite(safeUnitsPerPack) || safeUnitsPerPack < 2) {
-      return `${wholeQuantity} ед.`;
-    }
-
-    const boxes = Math.floor(wholeQuantity / safeUnitsPerPack);
-    const units = wholeQuantity % safeUnitsPerPack;
-    if (boxes > 0 && units > 0) return `${boxes} кор. ${units} ед.`;
-    if (boxes > 0) return `${boxes} кор.`;
-    return `${units} ед.`;
+    return `${wholeQuantity} ед.`;
   };
 
   const kpiCards = useMemo(() => {
@@ -428,20 +417,19 @@ export const ReportsView: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, trendSheet, 'Тренды');
 
       const detailRows = [
-        ['№', 'Товар', 'SKU', 'Упаковка', 'Остаток', 'Продано', 'Возврат', 'Списание', 'Себестоимость', 'Розничная стоимость'],
+        ['№', 'Товар', 'SKU', 'Остаток', 'Продано', 'Возврат', 'Списание', 'Себестоимость', 'Розничная стоимость'],
         ...(report.inventory.details || []).map((row, index) => ([
           index + 1,
           row.name,
           row.sku,
-          row.unitsPerPack ? `1 кор. = ${row.unitsPerPack} ед.` : 'Поштучно',
-          formatPackQuantity(row.totalStock, row.unitsPerPack),
-          formatPackQuantity(row.soldUnits, row.unitsPerPack),
-          formatPackQuantity(row.returnedUnits, row.unitsPerPack),
-          formatPackQuantity(row.writeOffUnits, row.unitsPerPack),
+          formatPackQuantity(row.totalStock),
+          formatPackQuantity(row.soldUnits),
+          formatPackQuantity(row.returnedUnits),
+          formatPackQuantity(row.writeOffUnits),
           row.costValue,
           row.retailValue,
         ])),
-        ['ИТОГО', '', '', '', reportTotals?.totalStock ?? 0, reportTotals?.totalSold ?? 0, reportTotals?.totalReturned ?? 0, reportTotals?.totalWriteOff ?? 0, reportTotals?.totalCostValue ?? 0, reportTotals?.totalRetailValue ?? 0],
+        ['ИТОГО', '', '', reportTotals?.totalStock ?? 0, reportTotals?.totalSold ?? 0, reportTotals?.totalReturned ?? 0, reportTotals?.totalWriteOff ?? 0, reportTotals?.totalCostValue ?? 0, reportTotals?.totalRetailValue ?? 0],
       ];
       const detailSheet = XLSX.utils.aoa_to_sheet(detailRows);
       XLSX.utils.book_append_sheet(wb, detailSheet, 'Товары');
@@ -891,7 +879,7 @@ ${toolbar}
     return (
     <div className="bg-white rounded-2xl border border-[#5A5A40]/10 p-5 overflow-x-auto">
       <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h4 className="text-base font-bold text-[#5A5A40]">8. Остатки и движение по упаковкам</h4>
+        <h4 className="text-base font-bold text-[#5A5A40]">8. Остатки и движение товара</h4>
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
           <input
             type="text"
@@ -925,7 +913,6 @@ ${toolbar}
           <tr>
             <th className="text-left px-3 py-2">Товар</th>
             <th className="text-left px-3 py-2">SKU</th>
-            <th className="text-left px-3 py-2">Упаковка</th>
             <th className="text-left px-3 py-2">Остаток</th>
             <th className="text-left px-3 py-2">Продано</th>
             <th className="text-left px-3 py-2">Возврат</th>
@@ -939,11 +926,10 @@ ${toolbar}
             <tr key={row.productId} className="border-t border-[#5A5A40]/10">
               <td className="px-3 py-2 font-medium text-[#5A5A40]">{row.name}</td>
               <td className="px-3 py-2 text-[#5A5A40]/65">{row.sku}</td>
-              <td className="px-3 py-2 text-[#5A5A40]/65">{row.unitsPerPack ? `1 кор. = ${row.unitsPerPack} ед.` : 'Поштучно'}</td>
-              <td className="px-3 py-2">{formatPackQuantity(row.totalStock, row.unitsPerPack)}</td>
-              <td className="px-3 py-2">{formatPackQuantity(row.soldUnits, row.unitsPerPack)}</td>
-              <td className="px-3 py-2">{formatPackQuantity(row.returnedUnits, row.unitsPerPack)}</td>
-              <td className="px-3 py-2">{formatPackQuantity(row.writeOffUnits, row.unitsPerPack)}</td>
+              <td className="px-3 py-2">{formatPackQuantity(row.totalStock)}</td>
+              <td className="px-3 py-2">{formatPackQuantity(row.soldUnits)}</td>
+              <td className="px-3 py-2">{formatPackQuantity(row.returnedUnits)}</td>
+              <td className="px-3 py-2">{formatPackQuantity(row.writeOffUnits)}</td>
               <td className="px-3 py-2">{formatMoney(row.costValue)}</td>
               <td className="px-3 py-2">{formatMoney(row.retailValue)}</td>
             </tr>

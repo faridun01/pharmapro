@@ -3,7 +3,6 @@ import path from 'path';
 import express from 'express';
 import { createApp } from './app/createApp';
 import { ensureAdminUser } from './common/auth';
-import { ensureProductPackagingBackfill } from './services/packaging.service';
 
 const app = createApp();
 const PORT = Number(process.env.PORT || 3921);
@@ -31,13 +30,5 @@ app.listen(PORT, '127.0.0.1', async () => {
     await ensureAdminUser();
   } catch (err) {
     console.error('[startup] ensureAdminUser failed:', err instanceof Error ? err.message : err);
-  }
-  try {
-    const packagingBackfill = await ensureProductPackagingBackfill();
-    if (packagingBackfill.updated > 0) {
-      console.log(`Backfilled unitsPerPack for ${packagingBackfill.updated} products`);
-    }
-  } catch (err) {
-    console.error('[startup] packagingBackfill failed:', err instanceof Error ? err.message : err);
   }
 });

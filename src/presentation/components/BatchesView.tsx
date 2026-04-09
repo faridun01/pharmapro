@@ -20,12 +20,11 @@ import { Batch, BatchStatus } from '../../core/domain';
 
 type BatchSortMode = 'name' | 'quantity_desc' | 'quantity_asc';
 
-type BatchWithProductName = Batch & { productName: string; productId: string; unitsPerPack?: number | null; minStock?: number };
+type BatchWithProductName = Batch & { productName: string; productId: string; minStock?: number };
 type BatchGroup = {
   key: string;
   productName: string;
   productId: string;
-  unitsPerPack?: number | null;
   minStock: number;
   batches: BatchWithProductName[];
   totalQuantity: number;
@@ -41,7 +40,7 @@ type BatchRowProps = {
   isLowStock: boolean;
   busyBatchId: string | null;
   getStatusColor: (status: BatchStatus) => string;
-  formatPackQuantity: (quantity: number, unitsPerPack?: number | null) => string;
+  formatPackQuantity: (quantity: number) => string;
   onHistory: (batch: BatchWithProductName) => void;
   onRestock: (batch: BatchWithProductName) => void;
   onDelete: (batch: BatchWithProductName) => void;
@@ -63,9 +62,9 @@ const BatchRow = React.memo(function BatchRow({ batch, isLowStock, busyBatchId, 
         <p className="text-sm font-medium text-[#5A5A40]">{batch.supplierName || '—'}</p>
       </td>
       <td className="px-6 py-4">
-        <p className={`text-sm font-bold ${isLowStock ? 'text-amber-700' : 'text-[#5A5A40]'}`}>{formatPackQuantity(batch.quantity, batch.unitsPerPack)}</p>
+        <p className={`text-sm font-bold ${isLowStock ? 'text-amber-700' : 'text-[#5A5A40]'}`}>{formatPackQuantity(batch.quantity)}</p>
         <p className="text-[10px] text-[#5A5A40]/40 mt-0.5">
-          {batch.unitsPerPack && batch.unitsPerPack >= 2 ? `1 кор. = ${batch.unitsPerPack} шт.` : `${t('Unit')}: ${batch.unit}`}
+          {`${t('Unit')}: ${batch.unit}`}
         </p>
         {isLowStock && (
           <p className="text-[10px] text-amber-700 font-bold mt-1">Низкий остаток</p>
@@ -138,23 +137,13 @@ export const BatchesView: React.FC<{ embedded?: boolean }> = ({ embedded = false
   // Debounce search to 300ms to avoid filtering on every keystroke
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const allBatches = useMemo(() => products.flatMap((p) => p.batches.map((b) => ({ ...b, productName: p.name, productId: p.id, unitsPerPack: p.unitsPerPack ?? null, minStock: Number(p.minStock || 0) }))), [products]);
+  const allBatches = useMemo(() => products.flatMap((p) => p.batches.map((b) => ({ ...b, productName: p.name, productId: p.id, minStock: Number(p.minStock || 0) }))), [products]);
 
   const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
 
-  const formatPackQuantity = (quantity: number, unitsPerPack?: number | null) => {
-    const safeUnitsPerPack = Number(unitsPerPack);
+  const formatPackQuantity = (quantity: number) => {
     const wholeQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
-    if (!Number.isFinite(safeUnitsPerPack) || safeUnitsPerPack < 2) {
-      return `${wholeQuantity} шт.`;
-    }
-
-    const boxes = Math.floor(wholeQuantity / safeUnitsPerPack);
-    const units = wholeQuantity % safeUnitsPerPack;
-
-    if (boxes > 0 && units > 0) return `${boxes} кор. ${units} шт.`;
-    if (boxes > 0) return `${boxes} кор.`;
-    return `${units} шт.`;
+    return `${wholeQuantity} ед.`;
   };
 
   const formatMoney = (value: number) => `${Number(value || 0).toFixed(2)} TJS`;
@@ -235,7 +224,6 @@ export const BatchesView: React.FC<{ embedded?: boolean }> = ({ embedded = false
         key,
         productName: firstBatch?.productName || '',
         productId: firstBatch?.productId || '',
-        unitsPerPack: firstBatch?.unitsPerPack ?? null,
         minStock: Number(firstBatch?.minStock || 0),
         batches: orderedBatches,
         totalQuantity,
@@ -482,7 +470,7 @@ export const BatchesView: React.FC<{ embedded?: boolean }> = ({ embedded = false
                       <td className="px-8 py-5 text-sm font-semibold text-[#5A5A40]">{group.batches.length}</td>
                       <td className="px-8 py-5 text-sm font-semibold text-[#5A5A40]">
                         <span className={`inline-flex items-center rounded-full px-3 py-1 ${isLowStock ? 'bg-amber-100 text-amber-800' : 'bg-[#f5f5f0] text-[#5A5A40]'}`}>
-                          {formatPackQuantity(group.totalQuantity, group.unitsPerPack)}
+                          {formatPackQuantity(group.totalQuantity)}
                         </span>
                       </td>
                       <td className="px-8 py-5">

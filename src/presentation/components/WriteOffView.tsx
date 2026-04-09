@@ -12,7 +12,7 @@ interface WriteOffItem {
   productId: string;
   batchId?: string;
   quantity: number;
-  product?: { name: string; sku: string; unitsPerPack?: number | null };
+  product?: { name: string; sku: string };
   batch?: { batchNumber: string };
 }
 
@@ -33,24 +33,8 @@ type FormItem = {
   quantity: number;
 };
 
-const getUnitsPerPack = (value: number | null | undefined) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 2 ? parsed : null;
-};
-
-const formatPackQuantity = (quantity: number, unitsPerPack?: number | null) => {
-  const safeUnitsPerPack = getUnitsPerPack(unitsPerPack);
-  if (!safeUnitsPerPack) {
-    return `${Math.max(0, Math.floor(Number(quantity || 0)))} ед.`;
-  }
-
-  const wholeQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
-  const boxes = Math.floor(wholeQuantity / safeUnitsPerPack);
-  const units = wholeQuantity % safeUnitsPerPack;
-
-  if (boxes > 0 && units > 0) return `${boxes} кор. ${units} ед.`;
-  if (boxes > 0) return `${boxes} кор.`;
-  return `${units} ед.`;
+const formatPackQuantity = (quantity: number) => {
+  return `${Math.max(0, Math.floor(Number(quantity || 0)))} ед.`;
 };
 
 function authHeaders() {
@@ -105,25 +89,9 @@ function CreateWriteOffModal({
   const updateItemPackaging = (idx: number, boxesValue: string, unitsValue: string) => {
     setFormItems((prev) => {
       const next = [...prev];
-      const selectedProduct = products.find((product) => product.id === next[idx].productId);
-      const unitsPerPack = getUnitsPerPack(selectedProduct?.unitsPerPack);
-
-      if (!unitsPerPack) {
-        next[idx] = {
-          ...next[idx],
-          quantity: Math.max(1, Math.floor(Number(unitsValue) || 0)),
-        };
-        return next;
-      }
-
-      const boxes = Math.max(0, Math.floor(Number(boxesValue) || 0));
-      const units = Math.max(0, Math.floor(Number(unitsValue) || 0));
-      const normalizedBoxes = boxes + Math.floor(units / unitsPerPack);
-      const normalizedUnits = units % unitsPerPack;
-
       next[idx] = {
         ...next[idx],
-        quantity: Math.max(1, normalizedBoxes * unitsPerPack + normalizedUnits),
+        quantity: Math.max(1, Math.floor(Number(unitsValue) || 0)),
       };
       return next;
     });
@@ -226,9 +194,6 @@ function CreateWriteOffModal({
             <div className="space-y-3">
               {formItems.map((item, idx) => {
                 const selProd = products.find((p) => p.id === item.productId);
-                const unitsPerPack = getUnitsPerPack(selProd?.unitsPerPack);
-                const boxes = unitsPerPack ? Math.floor(item.quantity / unitsPerPack) : 0;
-                const units = unitsPerPack ? item.quantity % unitsPerPack : item.quantity;
                 return (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-[#f5f5f0] rounded-xl p-3">
                     <div className="col-span-5">
@@ -252,44 +217,20 @@ function CreateWriteOffModal({
                       >
                         <option value="">{t('Batch (opt.)')}</option>
                         {selProd?.batches?.map((b) => (
-                          <option key={b.id} value={b.id}>{b.batchNumber} ({formatPackQuantity(b.quantity, selProd?.unitsPerPack)})</option>
+                          <option key={b.id} value={b.id}>{b.batchNumber} ({formatPackQuantity(b.quantity)})</option>
                         ))}
                       </select>
                     </div>
                     <div className="col-span-2 space-y-1">
-                      {unitsPerPack ? (
-                        <>
-                          <input
-                            type="number"
-                            min={0}
-                            className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none"
-                            value={boxes}
-                            onChange={(e) => updateItemPackaging(idx, e.target.value, String(units))}
-                            placeholder="Кор."
-                          />
-                          <input
-                            type="number"
-                            min={0}
-                            className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none"
-                            value={units}
-                            onChange={(e) => updateItemPackaging(idx, String(boxes), e.target.value)}
-                            placeholder="Ед."
-                          />
-                          <p className="text-[10px] text-[#5A5A40]/55 leading-tight">1 кор. = {unitsPerPack} ед.</p>
-                        </>
-                      ) : (
-                        <>
-                          <input
-                            type="number"
-                            min={1}
-                            className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none"
-                            value={item.quantity}
-                            onChange={(e) => updateItemPackaging(idx, '0', e.target.value)}
-                            placeholder={t('Qty')}
-                          />
-                          <p className="text-[10px] text-[#5A5A40]/55 leading-tight">Поштучно</p>
-                        </>
-                      )}
+                      <input
+                        type="number"
+                        min={1}
+                        className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none"
+                        value={item.quantity}
+                        onChange={(e) => updateItemPackaging(idx, '0', e.target.value)}
+                        placeholder={t('Qty')}
+                      />
+                      <p className="text-[10px] text-[#5A5A40]/55 leading-tight">Количество в единицах</p>
                     </div>
                     <div className="col-span-1 flex justify-center">
                       {formItems.length > 1 && (
@@ -414,7 +355,7 @@ export const WriteOffView: React.FC = () => {
                         <tr key={item.id} className="border-t border-[#5A5A40]/5">
                           <td className="py-2 font-medium">{item.product?.name ?? t('Unknown')}</td>
                           <td className="py-2 text-[#5A5A40]/60">{item.batch?.batchNumber ?? '—'}</td>
-                          <td className="py-2 text-right text-red-600 font-semibold">−{formatPackQuantity(item.quantity, item.product?.unitsPerPack)}</td>
+                          <td className="py-2 text-right text-red-600 font-semibold">−{formatPackQuantity(item.quantity)}</td>
                         </tr>
                       ))}
                     </tbody>

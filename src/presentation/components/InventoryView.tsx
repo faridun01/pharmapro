@@ -15,7 +15,6 @@ type NewProductForm = {
   barcode: string;
   category: string;
   manufacturer: string;
-  unitsPerPack: number;
   minStock: number;
   costPrice: number;
   sellingPrice: number;
@@ -23,7 +22,6 @@ type NewProductForm = {
   markingRequired: boolean;
   batchNumber: string;
   expiryDate: string;
-  initialBoxes: number;
   initialUnits: number;
 };
 
@@ -33,7 +31,6 @@ const DEFAULT_FORM: NewProductForm = {
   barcode: '',
   category: '',
   manufacturer: '',
-  unitsPerPack: 10,
   minStock: 10,
   costPrice: 0,
   sellingPrice: 0,
@@ -41,14 +38,12 @@ const DEFAULT_FORM: NewProductForm = {
   markingRequired: false,
   batchNumber: '',
   expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  initialBoxes: 0,
   initialUnits: 0,
 };
 
 type InventoryRowProps = {
   product: any;
   stockLabel: string;
-  unitsPerPack: number;
   submitting: boolean;
   selected: boolean;
   onToggleSelect: (productId: string) => void;
@@ -57,7 +52,7 @@ type InventoryRowProps = {
   t: (key: string) => string;
 };
 
-const InventoryRow = React.memo(function InventoryRow({ product, stockLabel, unitsPerPack, submitting, selected, onToggleSelect, onEditPrices, onDelete, t }: InventoryRowProps) {
+const InventoryRow = React.memo(function InventoryRow({ product, stockLabel, submitting, selected, onToggleSelect, onEditPrices, onDelete, t }: InventoryRowProps) {
   const isLowStock = product.totalStock < (product.minStock || 10);
   return (
     <tr className="hover:bg-[#f5f5f0]/30 transition-colors group">
@@ -96,9 +91,6 @@ const InventoryRow = React.memo(function InventoryRow({ product, stockLabel, uni
             </div>
             <p className={`text-[10px] font-bold mt-1.5 uppercase tracking-wider ${isLowStock ? 'text-amber-600' : 'text-emerald-600'}`}>
               {stockLabel}
-            </p>
-            <p className="text-[10px] text-[#5A5A40]/40 mt-0.5 uppercase tracking-wider">
-              1 кор. = {unitsPerPack} ед.
             </p>
           </div>
           {isLowStock && <AlertTriangle size={16} className="text-amber-500 animate-pulse" />}
@@ -325,26 +317,9 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     });
   }, []);
 
-  const getAutoUnitsPerPack = (product: { id?: string; sku?: string; name?: string }) => {
-    const seed = `${product.sku || product.id || product.name || 'default'}`;
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-      hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-    }
-    return 5 + (hash % 26); // 5..30
-  };
-
-  const resolveUnitsPerPack = (product: { unitsPerPack?: number; id?: string; sku?: string; name?: string }) => {
-    const raw = Number(product.unitsPerPack || 0);
-    return raw >= 2 ? raw : getAutoUnitsPerPack(product);
-  };
-
-  const formatStock = (totalStock: number, unitsPerPack: number) => {
-    const pack = Math.max(2, Number(unitsPerPack || 2));
+  const formatStock = (totalStock: number) => {
     const qty = Math.max(0, Number(totalStock || 0));
-    const boxes = Math.floor(qty / pack);
-    const units = qty % pack;
-    return `${boxes} кор. ${units} ед.`;
+    return `${qty} ед.`;
   };
 
   const openAdd = () => {
@@ -380,13 +355,7 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
       return;
     }
 
-    if (Number(form.unitsPerPack) < 2) {
-      setFormError('Единиц в коробке должно быть не меньше 2');
-      return;
-    }
-
-    const initialTotalUnits = (Number(form.initialBoxes) || 0) * (Number(form.unitsPerPack) || 1) + (Number(form.initialUnits) || 0);
-
+    const initialTotalUnits = Math.max(0, Math.floor(Number(form.initialUnits) || 0));
     setSubmitting(true);
     setFormError('');
     try {
@@ -397,7 +366,6 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
         barcode: form.barcode.trim() || undefined,
         category: form.category.trim() || 'Uncategorized',
         manufacturer: form.manufacturer.trim() || 'Unknown',
-        unitsPerPack: Number(form.unitsPerPack) || 1,
         costPrice: Number(form.costPrice),
         sellingPrice: Number(form.sellingPrice),
         image: '',
@@ -671,13 +639,11 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                 </tr>
               )}
               {visibleProducts.map((product) => {
-                const unitsPerPack = resolveUnitsPerPack(product);
                 return (
                   <InventoryRow
                     key={product.id}
                     product={product}
-                    stockLabel={formatStock(product.totalStock, unitsPerPack)}
-                    unitsPerPack={unitsPerPack}
+                    stockLabel={formatStock(product.totalStock)}
                     submitting={submitting}
                     selected={selectedProductIds.includes(product.id)}
                     onToggleSelect={toggleProductSelection}
@@ -787,16 +753,10 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                     />
                   </div>
 
-                  {/* Units Per Pack */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">Единиц в коробке *</label>
-                    <input
-                      type="number"
-                      min={2}
-                      className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm focus:ring-2 focus:ring-[#5A5A40]/20 outline-none"
-                      value={form.unitsPerPack}
-                      onChange={(e) => setForm((s) => ({ ...s, unitsPerPack: Math.max(2, Number(e.target.value) || 2) }))}
-                    />
+                  <div className="space-y-1.5 rounded-xl border border-[#5A5A40]/10 bg-[#f5f5f0]/50 px-4 py-3">
+                    <p className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">Внутренняя фасовка</p>
+                    <p className="text-sm font-semibold text-[#5A5A40] mt-1">Рассчитывается автоматически</p>
+                    <p className="text-[11px] text-[#5A5A40]/55 mt-1">Система сохранит служебную фасовку автоматически по SKU и названию. В продаже и остатках используется поштучный режим.</p>
                   </div>
 
                   {/* Cost Price */}
@@ -850,20 +810,8 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                     />
                   </div>
 
-                  {/* Initial Boxes */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">Начальные коробки</label>
-                    <input 
-                      type="number"
-                      className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm focus:ring-2 focus:ring-[#5A5A40]/20 outline-none" 
-                      value={form.initialBoxes}
-                      onChange={(e) => setForm((s) => ({ ...s, initialBoxes: Number(e.target.value) || 0 }))}
-                    />
-                  </div>
-
-                  {/* Initial Loose Units */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">Начальные ед.</label>
+                    <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">Начальный остаток, ед.</label>
                     <input
                       type="number"
                       className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm focus:ring-2 focus:ring-[#5A5A40]/20 outline-none"
@@ -873,7 +821,7 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                   </div>
                 </div>
                 <p className="text-xs text-[#5A5A40]/60 font-medium">
-                  Текущий ввод: {(Number(form.initialBoxes) || 0)} кор. + {(Number(form.initialUnits) || 0)} ед. = {((Number(form.initialBoxes) || 0) * (Number(form.unitsPerPack) || 1)) + (Number(form.initialUnits) || 0)} ед.
+                  Начальный остаток: {(Number(form.initialUnits) || 0)} ед.
                 </p>
                 <p className="text-xs text-red-500 font-medium">{t('Expiry date is mandatory for pharmacy products')}</p>
               </div>

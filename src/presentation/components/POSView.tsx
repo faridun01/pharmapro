@@ -48,7 +48,6 @@ export const POSView: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [quickFilter, setQuickFilter] = useState<'ALL' | 'LOW_STOCK' | 'PRESCRIPTION' | 'MARKED'>('ALL');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [paymentType, setPaymentType] = useState<'CASH' | 'CARD' | 'CREDIT'>('CASH');
   const [paidAmountInput, setPaidAmountInput] = useState('');
@@ -72,9 +71,6 @@ export const POSView: React.FC = () => {
     if (cartProductIds.has(p.id)) return false;
     if (p.totalStock <= 0) return false;
     if (categoryFilter !== 'ALL' && p.category !== categoryFilter) return false;
-    if (quickFilter === 'LOW_STOCK' && p.totalStock >= (p.minStock || 10)) return false;
-    if (quickFilter === 'PRESCRIPTION' && !p.prescription) return false;
-    if (quickFilter === 'MARKED' && !p.markingRequired) return false;
     return (
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -83,29 +79,9 @@ export const POSView: React.FC = () => {
     );
   });
 
-  const getUnitsPerPack = (product: Pick<Product, 'unitsPerPack'>) => {
-    const value = Number(product.unitsPerPack);
-    return Number.isFinite(value) && value >= 2 ? value : null;
-  };
-
-  const formatPackQuantity = (quantity: number, unitsPerPack?: number) => {
-    const safeUnitsPerPack = Number(unitsPerPack);
-    if (!Number.isFinite(safeUnitsPerPack) || safeUnitsPerPack < 2) {
-      return `${quantity} ед.`;
-    }
-
-    const boxes = Math.floor(quantity / safeUnitsPerPack);
-    const units = quantity % safeUnitsPerPack;
-
-    if (boxes > 0 && units > 0) {
-      return `${boxes} кор. ${units} ед.`;
-    }
-
-    if (boxes > 0) {
-      return `${boxes} кор.`;
-    }
-
-    return `${units} ед.`;
+  const formatUnitQuantity = (quantity: number) => {
+    const safeQuantity = Math.max(0, Math.floor(Number(quantity) || 0));
+    return `${safeQuantity} ед.`;
   };
 
   const getCartItemKey = (item: Pick<CartItem, 'id' | 'markingCode'>) => `${item.id}:${item.markingCode || 'default'}`;
@@ -244,34 +220,20 @@ export const POSView: React.FC = () => {
     }));
   };
 
-  const updateQuantityFromPackaging = (cartItemKey: string, boxesValue: string, unitsValue: string) => {
+  const updateQuantityFromInput = (cartItemKey: string, unitsValue: string) => {
     setCart(cart.map((item) => {
       if (getCartItemKey(item) !== cartItemKey) {
         return item;
       }
 
-      const unitsPerPack = getUnitsPerPack(item);
-      if (!unitsPerPack) {
-        const parsedUnits = Number(unitsValue);
-        if (!Number.isFinite(parsedUnits)) {
-          return item;
-        }
-
-        return {
-          ...item,
-          quantity: Math.max(1, Math.min(item.totalStock, Math.floor(parsedUnits))),
-        };
+      const parsedUnits = Number(unitsValue);
+      if (!Number.isFinite(parsedUnits)) {
+        return item;
       }
-
-      const parsedBoxes = Math.max(0, Math.floor(Number(boxesValue) || 0));
-      const parsedUnits = Math.max(0, Math.floor(Number(unitsValue) || 0));
-      const normalizedBoxes = parsedBoxes + Math.floor(parsedUnits / unitsPerPack);
-      const normalizedUnits = parsedUnits % unitsPerPack;
-      const totalUnits = normalizedBoxes * unitsPerPack + normalizedUnits;
 
       return {
         ...item,
-        quantity: Math.max(1, Math.min(item.totalStock, totalUnits)),
+        quantity: Math.max(1, Math.min(item.totalStock, Math.floor(parsedUnits))),
       };
     }));
   };
@@ -441,22 +403,7 @@ export const POSView: React.FC = () => {
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              {[
-                { value: 'ALL', label: 'Все' },
-                { value: 'LOW_STOCK', label: 'Низкий остаток' },
-                { value: 'PRESCRIPTION', label: 'Rx' },
-                { value: 'MARKED', label: 'Маркировка' },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setQuickFilter(option.value as typeof quickFilter)}
-                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-colors ${quickFilter === option.value ? 'bg-[#5A5A40] text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/70 hover:text-[#5A5A40]'}`}
-                >
-                  {option.label}
-                </button>
-              ))}
-              <span className="ml-auto text-[11px] text-[#5A5A40]/55">Найдено: {filteredProducts.length}</span>
+              <span className="text-[11px] text-[#5A5A40]/55">Найдено: {filteredProducts.length}</span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -478,8 +425,7 @@ export const POSView: React.FC = () => {
           <div className="space-y-2">
             {filteredProducts.map((product, index) => (
               (() => {
-                const unitsPerPack = getUnitsPerPack(product);
-                const stockLabel = formatPackQuantity(product.totalStock, unitsPerPack ?? undefined);
+                const stockLabel = formatUnitQuantity(product.totalStock);
                 const lowStock = product.totalStock < (product.minStock || 10);
 
                 return (
@@ -493,24 +439,16 @@ export const POSView: React.FC = () => {
                     <span className="text-xs font-bold">{index + 1}</span>
                   </div>
 
-                  <div className="min-w-0 flex-1 grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_auto] items-center gap-3">
+                  <div className="min-w-0 flex-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <h3 className="text-[15px] font-bold text-[#5A5A40] truncate">{product.name}</h3>
-                        {product.prescription && (
-                          <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest shrink-0">Rx</span>
-                        )}
                       </div>
                       <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-widest mt-0.5">{product.sku}</p>
+                      <p className={`text-[10px] font-bold mt-1.5 px-2 py-1 rounded-lg w-fit ${lowStock ? 'bg-amber-100 text-amber-700' : 'bg-[#f5f5f0] text-[#5A5A40]/60'}`}>
+                        Остаток: {stockLabel}
+                      </p>
                     </div>
-
-                    <p className="text-[11px] text-[#5A5A40]/60 text-left truncate">
-                      {unitsPerPack ? `1 кор. = ${unitsPerPack} ед.` : 'Поштучно'}
-                    </p>
-
-                    <p className={`text-[10px] font-bold px-2 py-1 rounded-lg text-center w-fit ${lowStock ? 'bg-amber-100 text-amber-700' : 'bg-[#f5f5f0] text-[#5A5A40]/60'}`}>
-                      {stockLabel}
-                    </p>
 
                     <p className="text-[16px] font-bold text-[#5A5A40] leading-none text-right">{product.sellingPrice.toFixed(2)} TJS</p>
                   </div>
@@ -539,9 +477,6 @@ export const POSView: React.FC = () => {
           {cart.length > 0 ? (
             cart.map((item) => {
               const cartItemKey = getCartItemKey(item);
-              const unitsPerPack = getUnitsPerPack(item);
-              const boxes = unitsPerPack ? Math.floor(item.quantity / unitsPerPack) : 0;
-              const units = unitsPerPack ? item.quantity % unitsPerPack : item.quantity;
 
               return (
               <div key={cartItemKey} className="p-2 bg-[#f5f5f0]/50 rounded-xl border border-[#5A5A40]/5 group space-y-1.5">
@@ -549,7 +484,7 @@ export const POSView: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <h4 className="text-[12px] font-bold text-[#5A5A40] truncate leading-tight">{item.name}</h4>
                     <p className="text-[10px] text-[#5A5A40]/55 mt-0.5 leading-tight">
-                      {item.sellingPrice.toFixed(2)} TJS / ед. • Остаток: {formatPackQuantity(item.totalStock, unitsPerPack ?? undefined)}
+                      {item.sellingPrice.toFixed(2)} TJS / ед. • Остаток: {formatUnitQuantity(item.totalStock)}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -570,7 +505,7 @@ export const POSView: React.FC = () => {
                   >
                     <Minus size={11} />
                   </button>
-                  <span className="text-[11px] font-bold text-[#5A5A40] min-w-14 text-center">{formatPackQuantity(item.quantity, unitsPerPack ?? undefined)}</span>
+                  <span className="text-[11px] font-bold text-[#5A5A40] min-w-14 text-center">{formatUnitQuantity(item.quantity)}</span>
                   <button 
                     onClick={() => updateQuantity(cartItemKey, 1)}
                     className="w-5 h-5 bg-white rounded-md flex items-center justify-center text-[#5A5A40] hover:bg-[#5A5A40] hover:text-white transition-colors shadow-sm"
@@ -578,41 +513,16 @@ export const POSView: React.FC = () => {
                     <Plus size={11} />
                   </button>
 
-                  {unitsPerPack ? (
-                    <>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={boxes}
-                        onChange={(e) => updateQuantityFromPackaging(cartItemKey, e.target.value, String(units))}
-                        className="w-16 px-2 py-1 bg-white border border-[#5A5A40]/10 rounded-lg text-[11px] outline-none focus:ring-2 focus:ring-[#5A5A40]/15"
-                        placeholder="кор."
-                        aria-label="Коробки"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={units}
-                        onChange={(e) => updateQuantityFromPackaging(cartItemKey, String(boxes), e.target.value)}
-                        className="w-16 px-2 py-1 bg-white border border-[#5A5A40]/10 rounded-lg text-[11px] outline-none focus:ring-2 focus:ring-[#5A5A40]/15"
-                        placeholder="ед."
-                        aria-label="Единицы"
-                      />
-                    </>
-                  ) : (
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={item.quantity}
-                      onChange={(e) => updateQuantityFromPackaging(cartItemKey, '0', e.target.value)}
-                      className="w-20 px-2 py-1 bg-white border border-[#5A5A40]/10 rounded-lg text-[11px] outline-none focus:ring-2 focus:ring-[#5A5A40]/15"
-                      placeholder="ед."
-                      aria-label="Единицы"
-                    />
-                  )}
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={item.quantity}
+                    onChange={(e) => updateQuantityFromInput(cartItemKey, e.target.value)}
+                    className="w-20 px-2 py-1 bg-white border border-[#5A5A40]/10 rounded-lg text-[11px] outline-none focus:ring-2 focus:ring-[#5A5A40]/15"
+                    placeholder="ед."
+                    aria-label="Единицы"
+                  />
                 </div>
               </div>
               );
