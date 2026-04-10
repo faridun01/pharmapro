@@ -1,8 +1,8 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
-import { Search, Plus, Trash2, AlertTriangle, Pill, Package, X, PencilLine } from 'lucide-react';
+import { Search, Plus, Trash2, AlertTriangle, Pill, Package, X, PencilLine, Layers } from 'lucide-react';
 import { Product } from '../../core/domain';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { BatchesView } from './BatchesView';
@@ -49,11 +49,12 @@ type InventoryRowProps = {
   selected: boolean;
   onToggleSelect: (productId: string) => void;
   onEditPrices: (product: Product) => void;
+  onAddBarcode: (product: Product) => void;
   onDelete: (id: string, name: string) => void;
   t: (key: string) => string;
 };
 
-const InventoryRow = React.memo(function InventoryRow({ product, stockLabel, submitting, selected, onToggleSelect, onEditPrices, onDelete, t }: InventoryRowProps) {
+const InventoryRow = React.memo(function InventoryRow({ product, stockLabel, submitting, selected, onToggleSelect, onEditPrices, onAddBarcode, onDelete, t }: InventoryRowProps) {
   const isLowStock = product.totalStock < (product.minStock || 10);
   return (
     <tr className="hover:bg-[#f5f5f0]/30 transition-colors group">
@@ -75,6 +76,11 @@ const InventoryRow = React.memo(function InventoryRow({ product, stockLabel, sub
           <div>
             <p className="font-bold text-[#5A5A40]">{product.name}</p>
             <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest mt-0.5">{product.sku}</p>
+            {!product.barcode && (
+              <span className="inline-flex mt-2 items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-700 border border-amber-100">
+                Без штрихкода
+              </span>
+            )}
           </div>
         </div>
       </td>
@@ -114,6 +120,17 @@ const InventoryRow = React.memo(function InventoryRow({ product, stockLabel, sub
       </td>
       <td className="px-8 py-5 text-right">
         <div className="flex items-center justify-end gap-2">
+          {!product.barcode && (
+            <button
+              onClick={() => onAddBarcode(product)}
+              disabled={submitting}
+              className="px-3 py-2 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all disabled:opacity-50 inline-flex items-center gap-2 text-sm"
+              title="Добавить штрихкод"
+            >
+              <PencilLine size={16} />
+              Баркод
+            </button>
+          )}
           <button
             onClick={() => onEditPrices(product)}
             disabled={submitting}
@@ -158,6 +175,11 @@ type PriceHistoryEntry = {
   sellingPrice: { old: number | null; new: number | null };
 };
 
+type BarcodeEditModalState = {
+  product: Product;
+  barcode: string;
+};
+
 type InventorySection = 'catalog' | 'batches';
 
 export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({ initialSection = 'catalog' }) => {
@@ -183,6 +205,9 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
   const [bulkPriceModal, setBulkPriceModal] = useState<BulkPriceModalState | null>(null);
   const [priceHistory, setPriceHistory] = useState<PriceHistoryEntry[]>([]);
   const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
+  const [openCreateBatchSignal, setOpenCreateBatchSignal] = useState(0);
+  const [barcodeEditModal, setBarcodeEditModal] = useState<BarcodeEditModalState | null>(null);
+  const barcodeInputRef = useRef<HTMLInputElement | null>(null);
 
   const [productsScrollTop, setProductsScrollTop] = useState(0);
 
@@ -190,14 +215,12 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     setActiveSection(initialSection);
   }, [initialSection]);
 
-  // Debounce search to 300ms to avoid filtering on every keystroke
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const PRODUCT_ROW_HEIGHT = 92;
   const PRODUCT_VIEWPORT_HEIGHT = 560;
   const PRODUCT_OVERSCAN = 8;
 
-  // Generate batch number automatically from SKU and date
   const generateBatchNumber = (sku: string): string => {
     if (!sku.trim()) return '';
     const date = new Date();
@@ -207,9 +230,19 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     return `#${skuPrefix}-${dateStr}-${randomId}`;
   };
 
+  const generateSku = (name: string): string => {
+    const base = name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 16);
+    const timePart = Date.now().toString().slice(-6);
+    const randomPart = Math.random().toString(36).slice(2, 5).toUpperCase();
+    return `${base || 'ITEM'}-${timePart}-${randomPart}`;
+  };
+
   const handleSkuChange = (newSku: string) => {
     const newForm = { ...form, sku: newSku };
-    // Auto-generate batch number if SKU changes
     if (!form.batchNumber || form.batchNumber.startsWith('#')) {
       newForm.batchNumber = generateBatchNumber(newSku);
     }
@@ -295,28 +328,24 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     })();
   }, []);
 
-  const applyQuickChangeToSingle = useCallback((percent: number) => {
-    setPriceEditModal((prev) => {
-      if (!prev) return prev;
-      const base = Number(prev.sellingPrice || 0);
-      const nextSellingPrice = base + (base * percent / 100);
-      return {
-        ...prev,
-        sellingPrice: nextSellingPrice.toFixed(2),
-      };
+  const openBarcodeEditor = useCallback((product: Product) => {
+    setBarcodeEditModal({
+      product,
+      barcode: product.barcode || '',
     });
+    setFormError('');
   }, []);
 
-  const applyQuickChangeToBulk = useCallback((percent: number) => {
-    setBulkPriceModal((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        sellingMode: 'percent',
-        sellingValue: String(percent),
-      };
-    });
-  }, []);
+  useEffect(() => {
+    if (!barcodeEditModal) return;
+
+    const timeoutId = window.setTimeout(() => {
+      barcodeInputRef.current?.focus();
+      barcodeInputRef.current?.select();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [barcodeEditModal]);
 
   const formatStock = (totalStock: number) => {
     const qty = Math.max(0, Number(totalStock || 0));
@@ -336,11 +365,6 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
       return;
     }
     
-    if (!form.sku.trim()) {
-      setFormError(t('SKU is required'));
-      return;
-    }
-    
     if (!form.expiryDate) {
       setFormError(t('Expiry date is required'));
       return;
@@ -357,13 +381,14 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     }
 
     const initialTotalUnits = Math.max(0, Math.floor(Number(form.initialUnits) || 0));
+    const resolvedSku = form.sku.trim() || generateSku(form.name);
     setSubmitting(true);
     setFormError('');
     try {
       await createProduct({
         id: '',
         name: form.name.trim(),
-        sku: form.sku.trim(),
+        sku: resolvedSku,
         barcode: form.barcode.trim() || undefined,
         category: form.category.trim() || 'Uncategorized',
         manufacturer: form.manufacturer.trim() || 'Unknown',
@@ -374,7 +399,7 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
         markingRequired: form.markingRequired,
         minStock: Number(form.minStock) || 10,
         batchData: {
-          batchNumber: form.batchNumber.trim() || generateBatchNumber(form.sku),
+          batchNumber: form.batchNumber.trim() || generateBatchNumber(resolvedSku),
           expiryDate: form.expiryDate,
           initialQuantity: initialTotalUnits,
         }
@@ -447,6 +472,36 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     }
   };
 
+  const saveBarcode = async () => {
+    if (!barcodeEditModal) return;
+
+    const barcode = barcodeEditModal.barcode.trim().replace(/\s+/g, '');
+    if (!barcode) {
+      setFormError('Укажите штрихкод');
+      return;
+    }
+
+    setSubmitting(true);
+    setFormError('');
+    try {
+      await updateProduct({
+        ...barcodeEditModal.product,
+        barcode,
+      });
+      setFeedbackModal({
+        open: true,
+        title: 'Штрихкод добавлен',
+        message: `Для товара ${barcodeEditModal.product.name} сохранен штрихкод ${barcode}.`,
+        tone: 'success',
+      });
+      setBarcodeEditModal(null);
+    } catch (e: any) {
+      setFormError(e?.message || 'Не удалось сохранить штрихкод');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const applyBulkPrice = (baseValue: number, mode: BulkPriceModalState['costMode'], rawValue: string) => {
     if (mode === 'keep') return baseValue;
 
@@ -503,160 +558,188 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">Товары и партии</h2>
-          <p className="text-[#5A5A40]/60 mt-1 italic">Один рабочий раздел для карточек товаров, цен, остатков и контроля партий.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex items-center gap-2 bg-white border border-[#5A5A40]/10 rounded-2xl p-1.5 shadow-sm">
-            <button
-              onClick={() => setActiveSection('catalog')}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeSection === 'catalog' ? 'bg-[#5A5A40] text-white shadow-sm' : 'text-[#5A5A40]/65 hover:bg-[#f5f5f0]'}`}
-            >
-              Каталог товаров
-            </button>
-            <button
-              onClick={() => setActiveSection('batches')}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeSection === 'batches' ? 'bg-[#5A5A40] text-white shadow-sm' : 'text-[#5A5A40]/65 hover:bg-[#f5f5f0]'}`}
-            >
-              Учет партий
-            </button>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center gap-2 rounded-2xl border border-[#5A5A40]/10 bg-[#f8f6ef] p-1.5 shadow-sm">
+              <button
+                onClick={() => setActiveSection('catalog')}
+                className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeSection === 'catalog' ? 'bg-[#5A5A40] text-white shadow-sm' : 'text-[#5A5A40]/65 hover:bg-white'}`}
+              >
+                Каталог товаров
+              </button>
+              <button
+                onClick={() => setActiveSection('batches')}
+                className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeSection === 'batches' ? 'bg-[#5A5A40] text-white shadow-sm' : 'text-[#5A5A40]/65 hover:bg-white'}`}
+              >
+                Учет партий
+              </button>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
+              Живые остатки и цены
+            </span>
           </div>
-        </div>
-      </div>
 
+          {activeSection === 'batches' && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+              <button
+                onClick={() => setIsImportOpen(true)}
+                className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+              >
+                <Package size={16} /> Импорт прихода
+              </button>
+              <button
+                onClick={openAdd}
+                className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+              >
+                <Plus size={16} /> Добавить товар
+              </button>
+              <button
+                onClick={() => setOpenCreateBatchSignal((value) => value + 1)}
+                className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+              >
+                <Layers size={16} /> Добавить партию
+              </button>
+            </div>
+          )}
+        </div>
+
+        {activeSection === 'catalog' && (
+          <div className="mt-4 rounded-[26px] border border-[#5A5A40]/10 bg-[#fcfbf7] p-4 shadow-sm">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="relative group w-full xl:w-[320px]">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={t('Search products...')}
+                  className="w-full rounded-2xl border border-[#5A5A40]/10 bg-white pl-12 pr-4 py-3 text-sm outline-none shadow-sm transition-all focus:ring-2 focus:ring-[#5A5A40]/20"
+                />
+              </div>
+
+              <div className="flex items-center gap-4 overflow-x-auto pb-1 custom-scrollbar">
+                {[
+                  { id: 'all', label: t('All Products'), count: productCounts.all },
+                  { id: 'low', label: t('Low Stock'), count: productCounts.low },
+                  { id: 'prescription', label: t('Prescription Only'), count: productCounts.prescription },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setFilter(item.id as 'all' | 'low' | 'prescription')}
+                    className={`px-6 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+                      filter === item.id
+                        ? 'bg-[#5A5A40] text-white border-[#5A5A40] shadow-md'
+                        : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
+                    }`}
+                  >
+                    {item.label}
+                    <span className={`ml-2 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${filter === item.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
+                      {item.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {activeSection === 'catalog' && (
         <>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={t('Search products...')}
-                className="w-64 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 shadow-sm"
-              />
+          {selectedProducts.length > 0 && (
+            <div className="bg-[#f5f5f0] border border-[#5A5A40]/10 rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-[#5A5A40]">Выбрано товаров: {selectedProducts.length}</p>
+                <p className="text-xs text-[#5A5A40]/60 mt-1">Можно массово изменить себестоимость и цену продажи сразу для выбранных позиций.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setFormError('');
+                    setBulkPriceModal({
+                      costMode: 'keep',
+                      sellingMode: 'delta',
+                      costValue: '0',
+                      sellingValue: '0',
+                    });
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-[#5A5A40] text-white text-sm hover:bg-[#4A4A30] transition-all"
+                >
+                  Массово изменить цены
+                </button>
+                <button
+                  onClick={() => setSelectedProductIds([])}
+                  className="px-4 py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm text-[#5A5A40] hover:bg-white transition-all"
+                >
+                  Снять выбор
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+            <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: PRODUCT_VIEWPORT_HEIGHT }} onScroll={onProductsScroll}>
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/50 font-bold">
+                    <th className="px-4 py-5">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleVisibleSelection}
+                        className="w-4 h-4 rounded border-[#5A5A40]/20 text-[#5A5A40] focus:ring-[#5A5A40]/20"
+                        title="Выбрать все видимые товары"
+                      />
+                    </th>
+                    <th className="px-8 py-5">{t('Product Info')}</th>
+                    <th className="px-8 py-5">{t('Category')}</th>
+                    <th className="px-8 py-5">{t('Stock Status')}</th>
+                    <th className="px-8 py-5">{t('Price')}</th>
+                    <th className="px-8 py-5">{t('Prescription')}</th>
+                    <th className="px-8 py-5 text-right">{t('Actions')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#5A5A40]/5">
+                  {productTopSpacerHeight > 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ height: productTopSpacerHeight }} />
+                    </tr>
+                  )}
+                  {visibleProducts.map((product) => {
+                    return (
+                      <InventoryRow
+                        key={product.id}
+                        product={product}
+                        stockLabel={formatStock(product.totalStock)}
+                        submitting={submitting}
+                        selected={selectedProductIds.includes(product.id)}
+                        onToggleSelect={toggleProductSelection}
+                        onEditPrices={openPriceEditor}
+                        onAddBarcode={openBarcodeEditor}
+                        onDelete={openDeleteTarget}
+                        t={t}
+                      />
+                    );
+                  })}
+                  {productBottomSpacerHeight > 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ height: productBottomSpacerHeight }} />
+                    </tr>
+                  )}
+                  {filteredProducts.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-8 py-16 text-center text-[#5A5A40]/40">
+                        <Package size={36} className="mx-auto mb-3 opacity-40" />
+                        {isLoading ? t('Loading...') : t('No products yet')}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-
-      <div className="flex items-center gap-4 overflow-x-auto pb-2 custom-scrollbar">
-        {[
-          { id: 'all', label: t('All Products'), count: productCounts.all },
-          { id: 'low', label: t('Low Stock'), count: productCounts.low },
-          { id: 'prescription', label: t('Prescription Only'), count: productCounts.prescription },
-        ].map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setFilter(item.id as 'all' | 'low' | 'prescription')}
-            className={`px-6 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
-              filter === item.id
-                ? 'bg-[#5A5A40] text-white border-[#5A5A40] shadow-md'
-                : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
-            }`}
-          >
-            {item.label}
-            <span className={`ml-2 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${filter === item.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
-              {item.count}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {selectedProducts.length > 0 && (
-        <div className="bg-[#f5f5f0] border border-[#5A5A40]/10 rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-[#5A5A40]">Выбрано товаров: {selectedProducts.length}</p>
-            <p className="text-xs text-[#5A5A40]/60 mt-1">Можно массово изменить себестоимость и цену продажи сразу для выбранных позиций.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setFormError('');
-                setBulkPriceModal({
-                  costMode: 'keep',
-                  sellingMode: 'delta',
-                  costValue: '0',
-                  sellingValue: '0',
-                });
-              }}
-              className="px-4 py-2.5 rounded-xl bg-[#5A5A40] text-white text-sm hover:bg-[#4A4A30] transition-all"
-            >
-              Массово изменить цены
-            </button>
-            <button
-              onClick={() => setSelectedProductIds([])}
-              className="px-4 py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm text-[#5A5A40] hover:bg-white transition-all"
-            >
-              Снять выбор
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
-        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: PRODUCT_VIEWPORT_HEIGHT }} onScroll={onProductsScroll}>
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/50 font-bold">
-                <th className="px-4 py-5">
-                  <input
-                    type="checkbox"
-                    checked={allVisibleSelected}
-                    onChange={toggleVisibleSelection}
-                    className="w-4 h-4 rounded border-[#5A5A40]/20 text-[#5A5A40] focus:ring-[#5A5A40]/20"
-                    title="Выбрать все видимые товары"
-                  />
-                </th>
-                <th className="px-8 py-5">{t('Product Info')}</th>
-                <th className="px-8 py-5">{t('Category')}</th>
-                <th className="px-8 py-5">{t('Stock Status')}</th>
-                <th className="px-8 py-5">{t('Price')}</th>
-                <th className="px-8 py-5">{t('Prescription')}</th>
-                <th className="px-8 py-5 text-right">{t('Actions')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#5A5A40]/5">
-              {productTopSpacerHeight > 0 && (
-                <tr>
-                  <td colSpan={7} style={{ height: productTopSpacerHeight }} />
-                </tr>
-              )}
-              {visibleProducts.map((product) => {
-                return (
-                  <InventoryRow
-                    key={product.id}
-                    product={product}
-                    stockLabel={formatStock(product.totalStock)}
-                    submitting={submitting}
-                    selected={selectedProductIds.includes(product.id)}
-                    onToggleSelect={toggleProductSelection}
-                    onEditPrices={openPriceEditor}
-                    onDelete={openDeleteTarget}
-                    t={t}
-                  />
-                );
-              })}
-              {productBottomSpacerHeight > 0 && (
-                <tr>
-                  <td colSpan={7} style={{ height: productBottomSpacerHeight }} />
-                </tr>
-              )}
-              {filteredProducts.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-8 py-16 text-center text-[#5A5A40]/40">
-                    <Package size={36} className="mx-auto mb-3 opacity-40" />
-                    {isLoading ? t('Loading...') : t('No products yet')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
         </>
       )}
 
@@ -665,6 +748,8 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
           embedded
           onOpenImportInvoice={() => setIsImportOpen(true)}
           onOpenAddProduct={openAdd}
+          showActionBlock={false}
+          openCreateBatchSignal={openCreateBatchSignal}
         />
       )}
 
@@ -693,13 +778,15 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
 
                   {/* SKU */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">SKU *</label>
+                    <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">SKU</label>
                     <input 
                       type="text"
                       className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm focus:ring-2 focus:ring-[#5A5A40]/20 outline-none" 
                       value={form.sku}
                       onChange={(e) => handleSkuChange(e.target.value)}
+                      placeholder="Можно оставить пустым"
                     />
+                    <p className="text-[11px] text-[#5A5A40]/55">Если поле пустое, система сгенерирует SKU автоматически.</p>
                   </div>
 
                   {/* Barcode */}
@@ -905,19 +992,6 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {[5, 10, -5].map((percent) => (
-                  <button
-                    key={percent}
-                    type="button"
-                    onClick={() => applyQuickChangeToSingle(percent)}
-                    className="px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm text-[#5A5A40] hover:bg-white transition-all"
-                  >
-                    {percent > 0 ? `+${percent}%` : `${percent}%`}
-                  </button>
-                ))}
-              </div>
-
               <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#f5f5f0]/60 p-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-[#5A5A40]">
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Текущая цена</p>
@@ -994,6 +1068,63 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
         </div>
       )}
 
+      {barcodeEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#5A5A40]/10">
+            <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-[#5A5A40]">Добавить штрихкод</h3>
+                <p className="text-sm text-[#5A5A40]/60 mt-1">{barcodeEditModal.product.name}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setBarcodeEditModal(null);
+                  setFormError('');
+                }}
+                className="text-[#5A5A40]/50 hover:text-[#5A5A40]"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">Штрихкод</label>
+                <input
+                  ref={barcodeInputRef}
+                  type="text"
+                  value={barcodeEditModal.barcode}
+                  onChange={(e) => setBarcodeEditModal((prev) => prev ? { ...prev, barcode: e.target.value.replace(/\s+/g, '') } : prev)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void saveBarcode();
+                    }
+                  }}
+                  className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm focus:ring-2 focus:ring-[#5A5A40]/20 outline-none"
+                  placeholder="Сканируйте или введите штрихкод"
+                  autoFocus
+                />
+                <p className="text-xs text-[#5A5A40]/55">Можно сразу считать код сканером. После сканирования нажмите Enter или дождитесь автоматической отправки сканера.</p>
+              </div>
+
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 text-sm font-semibold">{formError}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-[#5A5A40]/10 flex justify-end gap-3">
+              <button onClick={() => setBarcodeEditModal(null)} className="px-5 py-2.5 border border-[#5A5A40]/20 rounded-xl">Отмена</button>
+              <button onClick={saveBarcode} disabled={submitting} className="px-5 py-2.5 bg-[#5A5A40] text-white rounded-xl disabled:opacity-50">
+                {submitting ? 'Сохранение...' : 'Сохранить штрихкод'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {bulkPriceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-[#5A5A40]/10">
@@ -1060,19 +1191,6 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                     placeholder="Например: 12 или -3 или 5"
                   />
                 </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {[5, 10, -5].map((percent) => (
-                  <button
-                    key={percent}
-                    type="button"
-                    onClick={() => applyQuickChangeToBulk(percent)}
-                    className="px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm text-[#5A5A40] hover:bg-white transition-all"
-                  >
-                    Цена продажи {percent > 0 ? `+${percent}%` : `${percent}%`}
-                  </button>
-                ))}
               </div>
 
               <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#f5f5f0]/60 p-4 text-sm text-[#5A5A40]">

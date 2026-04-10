@@ -1,4 +1,9 @@
-﻿import { Router } from 'express';
+﻿import { existsSync, promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { Prisma } from '@prisma/client';
+import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { authenticate, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
@@ -6,8 +11,8 @@ import { ValidationError } from '../../common/errors';
 import { findExistingProductByName } from '../../common/productName';
 import { prisma } from '../../infrastructure/prisma';
 import { inventoryService } from '../inventory/inventory.service';
-import { checkOllamaAvailability, getOllamaModelName, runOllamaTextNormalization, runOllamaVisionOcr } from './ollama.engine';
-import { runPdfOcr } from './pdf.engine';
+import { checkOllamaAvailability, getOllamaModelName, runOllamaVisionOcr } from './ollama.engine';
+import { processPdfDocument } from './pdf.hybrid';
 
 // --- Types ---
 
@@ -39,6 +44,22 @@ const getBatchStatus = (expiryDate: Date): 'CRITICAL' | 'STABLE' | 'NEAR_EXPIRY'
 // --- Shared helpers ---
 
 const normalizeCode = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const buildGeneratedSku = (name: string) => {
+  const base = String(name || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 16);
+
+  return `${base || 'ITEM'}-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+};
+
+const isSkuConflictError = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError
+  && error.code === 'P2002'
+  && Array.isArray((error.meta as { target?: unknown } | undefined)?.target)
+  && ((error.meta as { target?: unknown[] }).target || []).includes('sku');
 
 const normalizeDateString = (value?: string) => {
   if (!value) return undefined;
@@ -75,14 +96,16 @@ const buildNormalizedItems = (
     .map((item, index) => {
       const matched = findBestProductMatch(item, products);
       const warnings: string[] = [];
+      if (item.warnings) warnings.push(String(item.warnings));
       if (!matched) warnings.push('No product match');
       if (!item.quantity || Number(item.quantity) <= 0) warnings.push('Missing quantity');
       if (!item.costPrice || Number(item.costPrice) <= 0) warnings.push('Missing price');
-      const confidence: 'HIGH' | 'MEDIUM' | 'LOW' = matched && warnings.length === 0
-        ? 'HIGH'
-        : matched || warnings.length <= 1
-          ? 'MEDIUM'
-          : 'LOW';
+      const confidence: 'HIGH' | 'MEDIUM' | 'LOW' = item.confidence
+        || (matched && warnings.length === 0
+          ? 'HIGH'
+          : matched || warnings.length <= 1
+            ? 'MEDIUM'
+            : 'LOW');
       return {
         lineId: `ocr-${Date.now()}-${index}`,
         productId: matched?.id || null,
@@ -97,7 +120,7 @@ const buildNormalizedItems = (
           new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         confidence,
         warnings: warnings.join('; '),
-        needsReview: !matched || confidence === 'LOW',
+        needsReview: !!item.needsReview || !matched || confidence !== 'HIGH',
       };
     });
 
@@ -143,16 +166,12 @@ const readInvoiceWithOcr = async (imageBase64: string, mimeType: string) => {
   const isPdf = mimeType === 'application/pdf' || mimeType === 'pdf';
 
   let parsedHeader: { invoiceNumber?: string; supplierName?: string; invoiceDate?: string; items?: ParsedInvoiceItem[]; rawText?: string };
-  let resolvedEngine: 'ollama' | 'pdf+ollama';
+  let resolvedEngine: 'ollama' | 'pdf+ollama' | 'pdf+camelot' | 'pdf+vision+ollama' | 'pdf+legacy';
 
   if (isPdf) {
-    const pdfParsed = await runPdfOcr(imageBase64);
-    parsedHeader = await runOllamaTextNormalization(pdfParsed.rawText || '');
-    if (!parsedHeader.invoiceNumber) parsedHeader.invoiceNumber = pdfParsed.invoiceNumber;
-    if (!parsedHeader.supplierName) parsedHeader.supplierName = pdfParsed.supplierName;
-    if (!parsedHeader.invoiceDate) parsedHeader.invoiceDate = pdfParsed.invoiceDate;
-    if (!parsedHeader.rawText) parsedHeader.rawText = pdfParsed.rawText;
-    resolvedEngine = 'pdf+ollama';
+    const processed = await processPdfDocument(imageBase64);
+    parsedHeader = processed.result;
+    resolvedEngine = processed.engine;
   } else {
     parsedHeader = await runOllamaVisionOcr(imageBase64, mimeType);
     resolvedEngine = 'ollama';
@@ -165,10 +184,167 @@ const readInvoiceWithOcr = async (imageBase64: string, mimeType: string) => {
 
 export const ocrRouter = Router();
 
+const DOCUMENT_IMPORT_SCRIPT = path.join(process.cwd(), 'scripts', 'document_import_pipeline.py');
+const STRUCTURED_IMPORT_TIMEOUT_MS = Number(process.env.STRUCTURED_IMPORT_TIMEOUT_MS || 120000);
+
+const resolvePythonExecutable = () => {
+  if (process.env.PYTHON_EXECUTABLE) {
+    return process.env.PYTHON_EXECUTABLE;
+  }
+
+  const workspaceVenvPython = process.platform === 'win32'
+    ? path.join(process.cwd(), '.venv', 'Scripts', 'python.exe')
+    : path.join(process.cwd(), '.venv', 'bin', 'python');
+
+  if (existsSync(workspaceVenvPython)) {
+    return workspaceVenvPython;
+  }
+
+  return process.platform === 'win32' ? 'python' : 'python3';
+};
+
+type StructuredImportRow = {
+  name: string;
+  sku?: string;
+  barcode?: string;
+  quantity: number;
+  costPrice: number;
+  unit?: string;
+  boxQuantity?: number;
+  boxPrice?: number;
+  expiryDate?: string;
+  batchNumber?: string;
+  status?: string;
+  needsReview?: boolean;
+  warnings?: string[];
+};
+
+type StructuredImportPreview = {
+  invoiceNumber: string;
+  supplierName: string;
+  invoiceDate: string;
+  items: StructuredImportRow[];
+  warnings?: Array<{ message: string; row_index?: number | null; field_name?: string | null }>;
+};
+
+const getStructuredFileExtension = (fileName?: string, mimeType?: string) => {
+  const normalizedName = String(fileName || '').toLowerCase();
+  if (normalizedName.endsWith('.xlsx')) return '.xlsx';
+  if (normalizedName.endsWith('.xls')) return '.xls';
+  if (normalizedName.endsWith('.pdf')) return '.pdf';
+  if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return '.xlsx';
+  if (mimeType === 'application/vnd.ms-excel') return '.xls';
+  return '.pdf';
+};
+
+const runStructuredImportPreview = async (fileBase64: string, fileName?: string, mimeType?: string): Promise<StructuredImportPreview> => {
+  const extension = getStructuredFileExtension(fileName, mimeType);
+  const tempFilePath = path.join(os.tmpdir(), `pharmapro-import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`);
+  await fs.writeFile(tempFilePath, Buffer.from(fileBase64, 'base64'));
+
+  try {
+    return await new Promise<StructuredImportPreview>((resolve, reject) => {
+      const pythonExecutable = resolvePythonExecutable();
+      const child = spawn(pythonExecutable, [DOCUMENT_IMPORT_SCRIPT, tempFilePath, '--json-output'], {
+        cwd: process.cwd(),
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: 'utf-8',
+          PYTHONUTF8: '1',
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(new Error('Structured document import timed out'));
+      }, STRUCTURED_IMPORT_TIMEOUT_MS);
+
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk;
+      });
+      child.on('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (code !== 0) {
+          reject(new Error(stderr.trim() || `Structured import parser exited with code ${code}`));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(stdout) as StructuredImportPreview);
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error('Failed to parse structured import JSON output'));
+        }
+      });
+    });
+  } finally {
+    await fs.unlink(tempFilePath).catch(() => undefined);
+  }
+};
+
 /** GET /engines - tells the frontend which engines are available */
 ocrRouter.get('/engines', async (_req, res) => {
   res.json({ ollama: await checkOllamaAvailability(), model: getOllamaModelName() });
 });
+
+ocrRouter.post('/structured-preview', authenticate, asyncHandler(async (req, res) => {
+  const { fileBase64, fileName, mimeType } = req.body ?? {};
+
+  if (!fileBase64 || typeof fileBase64 !== 'string') {
+    throw new ValidationError('fileBase64 is required');
+  }
+
+  const products = await prisma.product.findMany({
+    select: { id: true, name: true, sku: true, costPrice: true },
+  });
+
+  const preview = await runStructuredImportPreview(fileBase64, typeof fileName === 'string' ? fileName : undefined, typeof mimeType === 'string' ? mimeType : undefined);
+  const normalizedItems = buildNormalizedItems(
+    (preview.items || []).map((item) => ({
+      name: item.name,
+      sku: item.sku,
+      barcode: item.barcode,
+      quantity: item.quantity,
+      costPrice: item.costPrice,
+      batchNumber: item.batchNumber,
+      expiryDate: item.expiryDate,
+      confidence: item.needsReview ? 'MEDIUM' : 'HIGH',
+      warnings: [
+        ...(item.warnings || []),
+        ...(item.status === 'CHECK' ? ['Structured parser marked row as CHECK'] : []),
+      ].filter(Boolean).join('; '),
+      needsReview: !!item.needsReview,
+    })),
+    products,
+  );
+
+  const review = buildReviewStats(normalizedItems);
+  const warningText = (preview.warnings || []).map((warning) => warning.message).filter(Boolean).join('; ');
+
+  res.json({
+    engine: mimeType === 'application/pdf' ? 'python-pdf-parser' : 'python-excel-parser',
+    invoiceNumber: preview.invoiceNumber || '',
+    supplierName: preview.supplierName || '',
+    invoiceDate: normalizeDateString(preview.invoiceDate) || new Date().toISOString().split('T')[0],
+    rawText: '',
+    review,
+    confidenceSummary: review,
+    items: normalizedItems,
+    warning: warningText || undefined,
+  });
+}));
 
 /**
  * POST /
@@ -190,6 +366,7 @@ ocrRouter.post('/', asyncHandler(async (req, res) => {
   const review = buildReviewStats(normalizedItems);
 
   if (!normalizedItems.length) {
+    const confidenceSummary = review;
     return res.status(200).json({
       engine: resolvedEngine,
       invoiceNumber: parsedHeader.invoiceNumber?.trim() || '',
@@ -197,11 +374,13 @@ ocrRouter.post('/', asyncHandler(async (req, res) => {
       invoiceDate: normalizeDateString(parsedHeader.invoiceDate) || new Date().toISOString().split('T')[0],
       rawText: parsedHeader.rawText || '',
       review,
+      confidenceSummary,
       items: [],
       warning: 'Не удалось распознать позиции накладной. Проверьте качество изображения или введите данные вручную.',
     });
   }
 
+  const confidenceSummary = review;
   return res.json({
     engine: resolvedEngine,
     invoiceNumber: parsedHeader.invoiceNumber?.trim() || '',
@@ -209,6 +388,7 @@ ocrRouter.post('/', asyncHandler(async (req, res) => {
     invoiceDate: normalizeDateString(parsedHeader.invoiceDate) || new Date().toISOString().split('T')[0],
     rawText: parsedHeader.rawText || '',
     review,
+    confidenceSummary,
     items: normalizedItems,
   });
 }));
@@ -243,6 +423,7 @@ ocrRouter.post('/drafts', authenticate, asyncHandler(async (req, res) => {
       invoiceDate: normalizeDateString(parsedHeader.invoiceDate) || new Date().toISOString().split('T')[0],
       rawText: parsedHeader.rawText || '',
       review: { total: 0, high: 0, medium: 0, low: 0, needsReview: 0 },
+      confidenceSummary: { total: 0, high: 0, medium: 0, low: 0, needsReview: 0 },
       items: [],
       warning: 'Не удалось распознать позиции накладной. Проверьте качество изображения или введите данные вручную.',
     });
@@ -322,6 +503,7 @@ ocrRouter.post('/drafts', authenticate, asyncHandler(async (req, res) => {
     invoiceDate: invoiceDateIso,
     rawText: parsedHeader.rawText || '',
     review: buildReviewStats(normalizedItems),
+    confidenceSummary: buildReviewStats(normalizedItems),
     items: normalizedItems,
   });
 }));
@@ -424,24 +606,77 @@ ocrRouter.post('/drafts/:id/import', authenticate, asyncHandler(async (req, res)
       if (existingProduct) {
         productId = existingProduct.id;
       } else {
-        const createdProduct = await prisma.product.create({
-          data: {
-            name: item.name,
-            sku: item.sku || `${item.name.slice(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '')}-${Date.now().toString().slice(-5)}`,
-            barcode: item.barcode || null,
-            category: 'Imported',
-            manufacturer: draft.document.supplier?.name || 'Invoice Import',
-            minStock: 10,
-            costPrice: item.costPrice || 0,
-            sellingPrice: Number((item.costPrice * 1.35).toFixed(2)),
-            status: 'ACTIVE',
-            image: null,
-            prescription: false,
-            markingRequired: false,
-          },
-          select: { id: true },
-        });
-        productId = createdProduct.id;
+        const normalizedSku = String(item.sku || '').trim();
+        if (normalizedSku) {
+          const existingBySku = await prisma.product.findFirst({
+            where: {
+              sku: normalizedSku,
+            },
+            select: { id: true, isActive: true },
+          });
+
+          if (existingBySku) {
+            if (!existingBySku.isActive) {
+              const reactivatedProduct = await prisma.product.update({
+                where: { id: existingBySku.id },
+                data: { isActive: true },
+                select: { id: true },
+              });
+              productId = reactivatedProduct.id;
+            } else {
+              productId = existingBySku.id;
+            }
+          }
+        }
+
+        if (!productId) {
+        const resolvedSku = normalizedSku || buildGeneratedSku(item.name);
+
+        try {
+          const createdProduct = await prisma.product.create({
+            data: {
+              name: item.name,
+              sku: resolvedSku,
+              barcode: item.barcode || null,
+              category: 'Imported',
+              manufacturer: draft.document.supplier?.name || 'Invoice Import',
+              minStock: 10,
+              costPrice: item.costPrice || 0,
+              sellingPrice: Number((item.costPrice * 1.35).toFixed(2)),
+              status: 'ACTIVE',
+              image: null,
+              prescription: false,
+              markingRequired: false,
+            },
+            select: { id: true },
+          });
+          productId = createdProduct.id;
+        } catch (error) {
+          if (!isSkuConflictError(error)) {
+            throw error;
+          }
+
+          const existingBySku = await prisma.product.findFirst({
+            where: { sku: resolvedSku },
+            select: { id: true, isActive: true },
+          });
+
+          if (!existingBySku) {
+            throw error;
+          }
+
+          if (!existingBySku.isActive) {
+            const reactivatedProduct = await prisma.product.update({
+              where: { id: existingBySku.id },
+              data: { isActive: true },
+              select: { id: true },
+            });
+            productId = reactivatedProduct.id;
+          } else {
+            productId = existingBySku.id;
+          }
+        }
+        }
       }
     }
 

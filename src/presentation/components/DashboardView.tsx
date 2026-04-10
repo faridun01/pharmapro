@@ -81,7 +81,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
   }, [now, selectedPeriodPreset]);
 
   const paidInvoices = invoices.filter(
-    (inv) => inv.status === 'PAID' || inv.paymentStatus === 'PAID'
+    (inv) => inv.paymentType !== 'CREDIT' && (inv.status === 'PAID' || inv.paymentStatus === 'PAID')
   );
 
   const paidInvoicesInPeriod = paidInvoices.filter((inv) => {
@@ -92,9 +92,11 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
 
   const unpaidInvoices = invoices.filter(
     (inv) =>
+      inv.paymentType !== 'CREDIT' && (
       inv.status === 'PENDING' ||
       inv.paymentStatus === 'UNPAID' ||
       inv.paymentStatus === 'PARTIALLY_PAID'
+      )
   );
 
   const outstandingAmount = unpaidInvoices.reduce(
@@ -368,7 +370,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
 
   const adminCards = [
     {
-      label: t('Outstanding Amount'),
+      label: 'Неоплаченные обычные продажи',
       value: formatMoney(outstandingAmount),
       icon: Receipt,
       tone: 'bg-amber-100 text-amber-700',

@@ -514,15 +514,23 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
   }, [initialReportShiftId, onInitialReportHandled]);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-end justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">{t('Cash Shifts')}</h2>
-          <p className="text-[#5A5A40]/60 mt-1 italic">{t('Manage cashier shifts, X/Z reports and cash movements')}</p>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
+              {activeShift ? `Активная смена ${activeShift.shiftNo}` : 'Смена не открыта'}
+            </span>
+            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
+              X/Z-отчеты и касса
+            </span>
+          </div>
+
+          <button onClick={load} className="inline-flex items-center gap-2 px-4 py-3 bg-white rounded-2xl border border-[#5A5A40]/10 text-[#5A5A40]/60 hover:text-[#5A5A40] transition-all shadow-sm self-start md:self-auto">
+            <RefreshCw size={18} />
+            Обновить
+          </button>
         </div>
-        <button onClick={load} className="p-3 bg-white rounded-2xl border border-[#5A5A40]/10 text-[#5A5A40]/60 hover:text-[#5A5A40] transition-all shadow-sm">
-          <RefreshCw size={18} />
-        </button>
       </div>
 
       {/* Active shift banner */}

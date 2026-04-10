@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
@@ -116,7 +116,9 @@ export const BatchesView: React.FC<{
   embedded?: boolean;
   onOpenImportInvoice?: () => void;
   onOpenAddProduct?: () => void;
-}> = ({ embedded = false, onOpenImportInvoice, onOpenAddProduct }) => {
+  showActionBlock?: boolean;
+  openCreateBatchSignal?: number;
+}> = ({ embedded = false, onOpenImportInvoice, onOpenAddProduct, showActionBlock = true, openCreateBatchSignal = 0 }) => {
   const { t } = useTranslation();
   const { products, refreshProducts, restockInventory } = usePharmacy();
   const [searchTerm, setSearchTerm] = useState('');
@@ -166,6 +168,14 @@ export const BatchesView: React.FC<{
     CRITICAL: allBatches.filter((b) => b.status === 'CRITICAL').length,
     EXPIRED: allBatches.filter((b) => b.status === 'EXPIRED').length,
   }), [allBatches]);
+
+  const statusOptions: Array<{ id: BatchStatus | 'ALL'; label: string }> = [
+    { id: 'ALL', label: 'Все партии' },
+    { id: 'STABLE', label: 'Стабильные' },
+    { id: 'NEAR_EXPIRY', label: 'Скоро истекают' },
+    { id: 'CRITICAL', label: 'Критические' },
+    { id: 'EXPIRED', label: 'Просроченные' },
+  ];
 
   const openHistoryModal = useCallback((batch: BatchWithProductName) => setHistoryBatch(batch), []);
 
@@ -303,6 +313,12 @@ export const BatchesView: React.FC<{
     setActionError(null);
   };
 
+  useEffect(() => {
+    if (openCreateBatchSignal > 0) {
+      openCreateBatchModal();
+    }
+  }, [openCreateBatchSignal]);
+
   const submitRestock = async () => {
     const quantity = Number(restockModal.quantity);
     const costBasis = Number(restockModal.costBasis);
@@ -353,86 +369,94 @@ export const BatchesView: React.FC<{
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          {embedded ? null : (
-            <>
-              <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">{t('Batch Tracking')}</h2>
-              <p className="text-[#5A5A40]/60 mt-1 italic">{t('Monitor expiry dates and batch movements')}</p>
-            </>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
-            <input 
-              type="text" 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={t('Search batches...')} 
-              className="w-64 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 transition-all shadow-sm"
-            />
-          </div>
+      <div>
+        {embedded ? null : (
+          <>
+            <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">{t('Batch Tracking')}</h2>
+            <p className="text-[#5A5A40]/60 mt-1 italic">{t('Monitor expiry dates and batch movements')}</p>
+          </>
+        )}
+      </div>
+
+      {showActionBlock && (
+      <div className="rounded-[28px] border border-[#5A5A40]/10 bg-white px-4 py-4 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
           {onOpenImportInvoice && (
             <button
               onClick={onOpenImportInvoice}
-              className="px-4 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2"
+              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
             >
-              <Package size={16} /> {t('Import Stock')}
+              <Package size={16} /> Импорт прихода
             </button>
           )}
           {onOpenAddProduct && (
             <button
               onClick={onOpenAddProduct}
-              className="px-4 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2"
+              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
             >
-              <Plus size={16} /> {t('Add Product')}
+              <Plus size={16} /> Добавить товар
             </button>
           )}
           <button
             onClick={openCreateBatchModal}
-            className="px-4 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2"
+            className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
           >
-            <Plus size={16} /> Добавить партию
+            <Layers size={16} /> Добавить партию
           </button>
         </div>
       </div>
+      )}
 
-      <div className="flex items-center gap-4 overflow-x-auto pb-2 custom-scrollbar">
-        {['ALL', 'STABLE', 'NEAR_EXPIRY', 'CRITICAL', 'EXPIRED'].map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s as any)}
-            className={`px-6 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
-              statusFilter === s 
-                ? 'bg-[#5A5A40] text-white border-[#5A5A40] shadow-md' 
-                : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
-            }`}
-          >
-            {s === 'ALL' ? t('All Batches') : t(s.replace('_', ' '))}
-            <span className={`ml-2 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${statusFilter === s ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
-              {statusCounts[s as keyof typeof statusCounts]}
-            </span>
-          </button>
-        ))}
+      <div className="space-y-4 bg-white rounded-2xl border border-[#5A5A40]/10 px-4 py-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/45">Сортировка и фильтр</p>
+            <p className="text-xs text-[#5A5A40]/60 mt-1">Сначала выберите порядок, затем отфильтруйте партии по статусу.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <ArrowDownUp size={16} className="text-[#5A5A40]/40" />
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as BatchSortMode)}
+              className="px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm text-[#5A5A40] bg-white outline-none"
+            >
+              <option value="name">По названию</option>
+              <option value="quantity_desc">Сначала больше количество</option>
+              <option value="quantity_asc">Сначала меньше количество</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 overflow-x-auto pb-1 custom-scrollbar">
+          {statusOptions.map((option) => (
+            <button
+              key={option.id}
+              onClick={() => setStatusFilter(option.id)}
+              className={`px-6 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+                statusFilter === option.id
+                  ? 'bg-[#5A5A40] text-white border-[#5A5A40] shadow-md'
+                  : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
+              }`}
+            >
+              {option.label}
+              <span className={`ml-2 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${statusFilter === option.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
+                {statusCounts[option.id]}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 bg-white rounded-2xl border border-[#5A5A40]/10 px-4 py-3 shadow-sm">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/45">Сортировка</p>
-          <p className="text-xs text-[#5A5A40]/60 mt-1">Можно отсортировать группы партий по общему количеству.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ArrowDownUp size={16} className="text-[#5A5A40]/40" />
-          <select
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as BatchSortMode)}
-            className="px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm text-[#5A5A40] bg-white outline-none"
-          >
-            <option value="name">По названию</option>
-            <option value="quantity_desc">Сначала больше количество</option>
-            <option value="quantity_asc">Сначала меньше количество</option>
-          </select>
+      <div className="flex items-center justify-start gap-3">
+        <div className="relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
+          <input 
+            type="text" 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Поиск по товару или партии"
+            className="w-64 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 transition-all shadow-sm"
+          />
         </div>
       </div>
 

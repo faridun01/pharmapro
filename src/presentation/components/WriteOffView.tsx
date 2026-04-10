@@ -287,13 +287,19 @@ export const WriteOffView: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-end justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">{t('Write-Offs')}</h2>
-          <p className="text-[#5A5A40]/60 mt-1 italic">{t('Record stock write-offs for expired, damaged or lost items')}</p>
-        </div>
-        <div className="flex items-center gap-3">
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-[#f9ebe7] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-red-600/80">
+              Контроль потерь
+            </span>
+            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
+              Просрочка, брак и расхождения
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
           <button onClick={load} className="p-3 bg-white rounded-2xl border border-[#5A5A40]/10 text-[#5A5A40]/60 hover:text-[#5A5A40] transition-all shadow-sm">
             <RefreshCw size={18} />
           </button>
@@ -303,6 +309,7 @@ export const WriteOffView: React.FC = () => {
           >
             <Plus size={20} /> {t('New Write-Off')}
           </button>
+        </div>
         </div>
       </div>
 

@@ -241,13 +241,14 @@ export const POSView: React.FC = () => {
 
   const subtotal = cart.reduce((acc, item) => acc + (item.sellingPrice * item.quantity), 0);
   const total = subtotal;
+  const isCreditSale = paymentType === 'CREDIT';
   const enteredPaidAmountPreview = paidAmountInput.trim() === ''
-    ? paymentType === 'CREDIT' ? 0 : total
+    ? isCreditSale ? 0 : total
     : Number(paidAmountInput);
   const outstandingAmount = Number.isFinite(enteredPaidAmountPreview)
     ? Math.max(0, total - Math.min(enteredPaidAmountPreview, total))
     : total;
-  const needsDebtorDetails = outstandingAmount > 0.009;
+  const needsDebtorDetails = isCreditSale || outstandingAmount > 0.009;
 
   useEffect(() => {
     if (cart.length === 0) {
@@ -266,7 +267,7 @@ export const POSView: React.FC = () => {
     }
 
     const enteredPaidAmount = paidAmountInput.trim() === ''
-      ? paymentType === 'CREDIT' ? 0 : total
+      ? isCreditSale ? 0 : total
       : Number(paidAmountInput);
 
     if (!Number.isFinite(enteredPaidAmount) || enteredPaidAmount < 0) {
@@ -316,12 +317,11 @@ export const POSView: React.FC = () => {
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-3 h-[calc(100vh-12rem)] animate-in fade-in duration-500">
+      <div className="grid w-full grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(360px,32vw)] gap-4 h-[calc(100vh-12rem)] animate-in fade-in duration-500">
       {/* Left: Product Selection */}
-      <div className="flex flex-col gap-4 overflow-hidden min-w-0">
-        <div className="bg-white p-5 rounded-3xl shadow-sm border border-[#5A5A40]/5 flex flex-col gap-4 shrink-0">
+      <div className="bg-white rounded-3xl shadow-xl border border-[#5A5A40]/5 flex flex-col overflow-hidden min-w-0 h-full">
+        <div className="p-5 border-b border-[#5A5A40]/5 flex flex-col gap-4 shrink-0">
           <div className="flex items-center justify-between">
-            <h2 className="text-[28px] font-bold text-[#5A5A40] leading-none">Кассовый терминал</h2>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest">
                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
@@ -431,7 +431,7 @@ export const POSView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
           <div className="space-y-2">
             {filteredProducts.map((product, index) => (
               (() => {
@@ -625,9 +625,11 @@ export const POSView: React.FC = () => {
                 value={creditCustomerPhone}
                 onChange={(e) => setCreditCustomerPhone(e.target.value)}
                 className="w-full px-3 py-2 border border-[#5A5A40]/15 rounded-lg text-[13px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                placeholder="Телефон (необязательно)"
+                placeholder="Номер телефона (необязательно)"
               />
-              <p className="text-[11px] text-[#5A5A40]/55"></p>
+              <p className="text-[11px] text-[#5A5A40]/55">
+                Продажа в долг спишет остаток со склада и создаст запись в разделе должников.
+              </p>
             </div>
           )}
 

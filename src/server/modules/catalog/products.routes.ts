@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { authenticate, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
@@ -6,6 +7,30 @@ import { auditService } from '../../services/audit.service';
 import { findExistingProductByName } from '../../common/productName';
 
 export const productsRouter = Router();
+
+const normalizeSku = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
+const buildGeneratedSku = (name: string) => {
+  const base = String(name || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 16);
+
+  return `${base || 'ITEM'}-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+};
+
+const isSkuConflictError = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError
+  && error.code === 'P2002'
+  && Array.isArray((error.meta as { target?: unknown } | undefined)?.target)
+  && ((error.meta as { target?: unknown[] }).target || []).includes('sku');
+
+const isBarcodeConflictError = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError
+  && error.code === 'P2002'
+  && Array.isArray((error.meta as { target?: unknown } | undefined)?.target)
+  && ((error.meta as { target?: unknown[] }).target || []).includes('barcode');
 
 const mapProductStatus = (status: string | undefined): 'ACTIVE' | 'LOW_STOCK' | 'OUT_OF_STOCK' | undefined => {
   if (!status) return undefined;
@@ -164,7 +189,7 @@ productsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   // Explicit whitelist to prevent mass assignment
   const productData = {
     name: String(body.name ?? ''),
-    sku: body.sku != null ? String(body.sku) : undefined,
+    sku: normalizeSku(body.sku) || undefined,
     description: body.description != null ? String(body.description) : undefined,
     category: body.category != null ? String(body.category) : undefined,
     manufacturer: body.manufacturer != null ? String(body.manufacturer) : undefined,
@@ -183,40 +208,106 @@ productsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     return;
   }
 
-  const created = await prisma.product.create({
-    data: {
-      ...productData,
-      status: mapProductStatus(body.status) ?? 'ACTIVE',
-      totalStock: 0,
-      batches: {
-        create: (batches || []).map((b: any) => ({
-          batchNumber: b.batchNumber || b.id,
-          quantity: b.quantity || 0,
-          initialQty: b.initialQty || b.quantity || 0,
-          currentQty: b.currentQty || b.quantity || 0,
-          availableQty: b.availableQty || b.quantity || 0,
-          reservedQty: b.reservedQty || 0,
-          unit: b.unit || 'шт.',
-          costBasis: b.costBasis,
-          supplierId: b.supplierId,
-          warehouseId: b.warehouseId,
-          manufacturedDate: new Date(b.manufacturedDate),
-          expiryDate: new Date(b.expiryDate),
-          status: mapBatchStatus(b.status),
-          movements: {
-            create: (b.movements || []).map((m: any) => ({
-              type: m.type || 'RESTOCK',
-              quantity: m.quantity,
-              date: new Date(m.date || new Date()),
-              description: m.description,
-              userId: authedReq.user.id,
-            })),
-          },
-        })),
+  const normalizedSku = normalizeSku(productData.sku);
+  if (normalizedSku) {
+    const existingBySku = await prisma.product.findFirst({
+      where: {
+        sku: normalizedSku,
       },
-    },
-    include: { batches: true },
-  });
+      include: { batches: true },
+    });
+
+    if (existingBySku) {
+      if (existingBySku.isActive) {
+        res.json(existingBySku);
+        return;
+      }
+
+      const reactivatedProduct = await prisma.product.update({
+        where: { id: existingBySku.id },
+        data: {
+          ...productData,
+          sku: normalizedSku,
+          status: mapProductStatus(body.status) ?? 'ACTIVE',
+          isActive: true,
+        },
+        include: { batches: true },
+      });
+
+      res.json(reactivatedProduct);
+      return;
+    }
+  }
+
+  const resolvedSku = normalizedSku || buildGeneratedSku(productData.name);
+
+  let created;
+
+  try {
+    created = await prisma.product.create({
+      data: {
+        ...productData,
+        sku: resolvedSku,
+        status: mapProductStatus(body.status) ?? 'ACTIVE',
+        totalStock: 0,
+        batches: {
+          create: (batches || []).map((b: any) => ({
+            batchNumber: b.batchNumber || b.id,
+            quantity: b.quantity || 0,
+            initialQty: b.initialQty || b.quantity || 0,
+            currentQty: b.currentQty || b.quantity || 0,
+            availableQty: b.availableQty || b.quantity || 0,
+            reservedQty: b.reservedQty || 0,
+            unit: b.unit || 'шт.',
+            costBasis: b.costBasis,
+            supplierId: b.supplierId,
+            warehouseId: b.warehouseId,
+            manufacturedDate: new Date(b.manufacturedDate),
+            expiryDate: new Date(b.expiryDate),
+            status: mapBatchStatus(b.status),
+            movements: {
+              create: (b.movements || []).map((m: any) => ({
+                type: m.type || 'RESTOCK',
+                quantity: m.quantity,
+                date: new Date(m.date || new Date()),
+                description: m.description,
+                userId: authedReq.user.id,
+              })),
+            },
+          })),
+        },
+      },
+      include: { batches: true },
+    });
+  } catch (error) {
+    if (!isSkuConflictError(error)) {
+      throw error;
+    }
+
+    const existingBySku = await prisma.product.findFirst({
+      where: { sku: resolvedSku },
+      include: { batches: true },
+    });
+
+    if (!existingBySku) {
+      throw error;
+    }
+
+    if (!existingBySku.isActive) {
+      created = await prisma.product.update({
+        where: { id: existingBySku.id },
+        data: {
+          ...productData,
+          sku: resolvedSku,
+          status: mapProductStatus(body.status) ?? 'ACTIVE',
+          isActive: true,
+        },
+        include: { batches: true },
+      });
+    } else {
+      created = existingBySku;
+    }
+  }
 
   await auditService.log({
     userId: authedReq.user.id,
@@ -261,10 +352,19 @@ productsRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
     Object.entries(allowedFields).filter(([, v]) => v !== undefined),
   ) as Record<string, unknown>;
 
-  const updated = await prisma.product.update({
-    where: { id: req.params.id },
-    data: productData,
-  });
+  let updated;
+
+  try {
+    updated = await prisma.product.update({
+      where: { id: req.params.id },
+      data: productData,
+    });
+  } catch (error) {
+    if (isBarcodeConflictError(error)) {
+      return res.status(409).json({ error: 'Штрихкод уже используется другим товаром', code: 'BARCODE_ALREADY_EXISTS' });
+    }
+    throw error;
+  }
 
   await auditService.log({
     userId: authedReq.user.id,

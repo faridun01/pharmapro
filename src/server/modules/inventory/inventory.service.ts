@@ -317,8 +317,10 @@ export class InventoryService {
 
   async importPurchaseInvoice(input: PurchaseInvoiceImportInput, userId: string) {
     if (!input.supplierId) throw new ValidationError('supplierId is required');
-    if (!input.invoiceNumber) throw new ValidationError('invoiceNumber is required');
+    if (!String(input.invoiceNumber || '').trim()) throw new ValidationError('invoiceNumber is required');
     if (!input.items.length) throw new ValidationError('At least one purchase item is required');
+
+    const invoiceNumber = String(input.invoiceNumber || '').trim();
 
     const result = await prisma.$transaction(async (tx) => {
       const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
@@ -334,12 +336,12 @@ export class InventoryService {
       if (!warehouse) throw new ValidationError('No warehouse configured for purchase import');
 
       const existingInvoice = await tx.purchaseInvoice.findUnique({
-        where: { invoiceNumber: input.invoiceNumber },
+        where: { invoiceNumber },
         select: { id: true },
       });
 
       if (existingInvoice) {
-        throw new ValidationError(`Purchase invoice ${input.invoiceNumber} already exists`);
+        throw new ValidationError(`Purchase invoice ${invoiceNumber} already exists`);
       }
 
       const grossTotal = input.items.reduce((sum, item) => sum + (Number(item.costBasis) * Number(item.quantity)), 0);
@@ -349,7 +351,7 @@ export class InventoryService {
 
       const purchaseInvoice = await tx.purchaseInvoice.create({
         data: {
-          invoiceNumber: input.invoiceNumber,
+          invoiceNumber,
           supplierId: supplier.id,
           warehouseId: warehouse.id,
           invoiceDate: input.invoiceDate,

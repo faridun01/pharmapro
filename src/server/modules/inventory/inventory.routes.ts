@@ -43,7 +43,7 @@ inventoryRouter.post('/purchase-invoices', authenticate, asyncHandler(async (req
 
   const result = await inventoryService.importPurchaseInvoice({
     supplierId: String(body.supplierId),
-    invoiceNumber: String(body.invoiceNumber),
+    invoiceNumber: typeof body.invoiceNumber === 'string' ? body.invoiceNumber : undefined,
     invoiceDate: new Date(body.invoiceDate),
     discountAmount: parseNonNegative(body.discountAmount ?? 0, 'discountAmount'),
     taxAmount: parseNonNegative(body.taxAmount ?? 0, 'taxAmount'),

@@ -37,7 +37,6 @@ export const SuppliersView: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState<SupplierForm>(INITIAL_FORM);
 
-  // Debounce search to 300ms to avoid filtering on every keystroke
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const filteredSuppliers = suppliers.filter((s) =>
@@ -87,7 +86,7 @@ export const SuppliersView: React.FC = () => {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || t('Failed to save supplier'));
       }
-      await refreshSuppliers();
+      await refreshSuppliers(true);
       setIsAddOpen(false);
       setEditingSupplierId(null);
     } catch (e: any) {
@@ -109,7 +108,7 @@ export const SuppliersView: React.FC = () => {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || t('Failed to delete supplier'));
       }
-      await refreshSuppliers();
+      await refreshSuppliers(true);
     } catch (e: any) {
       setError(e.message || t('Failed to delete supplier'));
     } finally {
@@ -118,33 +117,40 @@ export const SuppliersView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">{t('Supplier Directory')}</h2>
-          <p className="text-[#5A5A40]/60 mt-1 italic">{t('Manage procurement partners and contact info')}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={t('Search suppliers...')}
-              className="w-64 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 shadow-sm"
-            />
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
+              Поставщиков: {filteredSuppliers.length}
+            </span>
+            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
+              Контакты и закупки
+            </span>
           </div>
-          <button onClick={openAdd} className="bg-[#5A5A40] text-white px-6 py-3 rounded-2xl font-medium shadow-lg hover:bg-[#4A4A30] transition-all flex items-center gap-2">
-            <Plus size={20} />
-            {t('Add Supplier')}
-          </button>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder={t('Search suppliers...')}
+                className="w-full min-w-0 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 shadow-sm sm:w-72"
+              />
+            </div>
+            <button onClick={openAdd} className="bg-[#5A5A40] text-white px-6 py-3 rounded-2xl font-medium shadow-lg hover:bg-[#4A4A30] transition-all flex items-center gap-2">
+              <Plus size={20} />
+              {t('Add Supplier')}
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredSuppliers.map((supplier) => (
-          <div key={supplier.id} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 hover:shadow-md transition-all group">
+          <div key={supplier.id} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 hover:-translate-y-1 hover:shadow-xl transition-all group">
             <div className="flex justify-between items-start mb-6">
               <div className="w-14 h-14 bg-[#f5f5f0] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
                 <Truck size={28} />

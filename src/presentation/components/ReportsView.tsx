@@ -1112,14 +1112,19 @@ ${toolbar}
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">Финансовые отчеты</h2>
-          <p className="text-[#5A5A40]/60 mt-1">Экспорт, детализация товаров и итоговые суммы по отчетам</p>
-        </div>
+    <div className="space-y-5 animate-in fade-in duration-300">
+      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5 space-y-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
+              Финансовая аналитика
+            </span>
+            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
+              PDF, XLSX и превью
+            </span>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
           <div className="mr-2 flex items-center rounded-2xl border border-[#5A5A40]/15 bg-white p-1">
             <button
               onClick={() => setViewMode('summary')}
@@ -1160,20 +1165,20 @@ ${toolbar}
             </div>
           )}
         </div>
-      </div>
+        </div>
+        <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#fcfbf7] p-3 flex flex-wrap items-center gap-2">
+          <Calendar size={14} className="text-[#5A5A40]/50" />
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} disabled={viewMode === 'detailed'} className="text-xs px-2 py-1 rounded-lg border border-[#5A5A40]/10 disabled:bg-[#f5f5f0] disabled:text-[#5A5A40]/45" />
+          <span className="text-[#5A5A40]/50">-</span>
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} disabled={viewMode === 'detailed'} className="text-xs px-2 py-1 rounded-lg border border-[#5A5A40]/10 disabled:bg-[#f5f5f0] disabled:text-[#5A5A40]/45" />
+          <button onClick={() => void loadReport(preset, fromDate, toDate)} disabled={viewMode === 'detailed'} className="px-3 py-1.5 rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-xs font-semibold disabled:opacity-50">Применить</button>
+          {viewMode === 'detailed' && <span className="text-xs text-[#5A5A40]/55">В детальном режиме период фиксирован: текущий месяц с 1 числа.</span>}
 
-      <div className="bg-white rounded-2xl border border-[#5A5A40]/10 p-3 flex flex-wrap items-center gap-2">
-        <Calendar size={14} className="text-[#5A5A40]/50" />
-        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} disabled={viewMode === 'detailed'} className="text-xs px-2 py-1 rounded-lg border border-[#5A5A40]/10 disabled:bg-[#f5f5f0] disabled:text-[#5A5A40]/45" />
-        <span className="text-[#5A5A40]/50">-</span>
-        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} disabled={viewMode === 'detailed'} className="text-xs px-2 py-1 rounded-lg border border-[#5A5A40]/10 disabled:bg-[#f5f5f0] disabled:text-[#5A5A40]/45" />
-        <button onClick={() => void loadReport(preset, fromDate, toDate)} disabled={viewMode === 'detailed'} className="px-3 py-1.5 rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-xs font-semibold disabled:opacity-50">Применить</button>
-        {viewMode === 'detailed' && <span className="text-xs text-[#5A5A40]/55">В детальном режиме период фиксирован: текущий месяц с 1 числа.</span>}
-
-        <div className="ml-auto flex items-center gap-2">
-          <button onClick={openPrintPreview} disabled={!report} className="px-3 py-1.5 rounded-lg border border-[#5A5A40]/20 text-xs flex items-center gap-1 disabled:opacity-50"><Eye size={13} /> Превью</button>
-          <button onClick={() => void exportXlsx()} disabled={!report || exporting} className="px-3 py-1.5 rounded-lg border border-[#5A5A40]/20 text-xs flex items-center gap-1 disabled:opacity-50"><FileSpreadsheet size={13} /> XLSX</button>
-          <button onClick={() => void downloadPdf()} disabled={!report || exporting} className="px-3 py-1.5 rounded-lg bg-[#5A5A40] text-white text-xs flex items-center gap-1 disabled:opacity-50"><FileDown size={13} /> PDF</button>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={openPrintPreview} disabled={!report} className="px-3 py-1.5 rounded-lg border border-[#5A5A40]/20 text-xs flex items-center gap-1 disabled:opacity-50"><Eye size={13} /> Превью</button>
+            <button onClick={() => void exportXlsx()} disabled={!report || exporting} className="px-3 py-1.5 rounded-lg border border-[#5A5A40]/20 text-xs flex items-center gap-1 disabled:opacity-50"><FileSpreadsheet size={13} /> XLSX</button>
+            <button onClick={() => void downloadPdf()} disabled={!report || exporting} className="px-3 py-1.5 rounded-lg bg-[#5A5A40] text-white text-xs flex items-center gap-1 disabled:opacity-50"><FileDown size={13} /> PDF</button>
+          </div>
         </div>
       </div>
 
@@ -1201,7 +1206,7 @@ ${toolbar}
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {kpiCards.map((kpi) => (
-                  <div key={kpi.label} className="bg-white p-4 rounded-2xl border border-[#5A5A40]/10">
+                  <div key={kpi.label} className="bg-white p-4 rounded-2xl border border-[#5A5A40]/10 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all">
                     <p className="text-xs uppercase tracking-wider text-[#5A5A40]/50">{kpi.label}</p>
                     <p className="text-2xl font-bold text-[#5A5A40] mt-1">{kpi.value}</p>
                   </div>

@@ -275,7 +275,10 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     monthlyInvoices,
   ] = await Promise.all([
     prisma.invoice.findMany({
-      where: { createdAt: { gte: from, lte: to } },
+      where: {
+        createdAt: { gte: from, lte: to },
+        paymentType: { not: 'CREDIT' },
+      },
       select: {
         id: true,
         status: true,
@@ -336,7 +339,13 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
       },
     }),
     prisma.payment.findMany({
-      where: { paymentDate: { gte: from, lte: to } },
+      where: {
+        paymentDate: { gte: from, lte: to },
+        OR: [
+          { invoiceId: null },
+          { invoice: { paymentType: { not: 'CREDIT' } } },
+        ],
+      },
       select: {
         direction: true,
         amount: true,
@@ -346,6 +355,10 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     prisma.receivable.findMany({
       where: {
         createdAt: { lte: to },
+        OR: [
+          { invoiceId: null },
+          { invoice: { paymentType: { not: 'CREDIT' } } },
+        ],
       },
       select: {
         originalAmount: true,
@@ -402,6 +415,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
           gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
           lte: new Date(),
         },
+        paymentType: { not: 'CREDIT' },
         paymentStatus: 'PAID',
         status: { not: 'CANCELLED' },
       },
@@ -779,6 +793,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     prisma.invoice.findMany({
       where: {
         createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // Last 7 days
+        paymentType: { not: 'CREDIT' },
       },
       select: {
         id: true,

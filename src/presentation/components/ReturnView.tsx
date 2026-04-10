@@ -503,13 +503,19 @@ export const ReturnView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-end justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">{t('Returns')}</h2>
-          <p className="text-[#5A5A40]/60 mt-1 italic">{t('Manage customer and supplier returns with stock adjustments')}</p>
-        </div>
-        <div className="flex items-center gap-3">
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
+              Корректировка остатков
+            </span>
+            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
+              Покупатели и поставщики
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
           <button onClick={load} className="p-3 bg-white rounded-2xl border border-[#5A5A40]/10 text-[#5A5A40]/60 hover:text-[#5A5A40] transition-all shadow-sm">
             <RefreshCw size={18} />
           </button>
@@ -520,25 +526,26 @@ export const ReturnView: React.FC = () => {
             <Plus size={20} /> {t('New Return')}
           </button>
         </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm">
+        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all">
           <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Общая сумма</p>
           <p className="text-2xl font-bold text-[#5A5A40] mt-2">{overallAmount.toFixed(2)} {currencyCode}</p>
         </div>
-        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm">
+        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all">
           <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Итого возвратов</p>
           <p className="text-2xl font-bold text-[#5A5A40] mt-2">{filteredReturns.length}</p>
         </div>
-        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm">
+        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all">
           <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Итого единиц</p>
           <p className="text-2xl font-bold text-[#5A5A40] mt-2">{overallQuantity}</p>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-3">
-        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-4 py-3 shadow-sm min-w-0">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+        <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 px-4 py-4 shadow-sm min-w-0">
           <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold mb-2">Тип возврата</p>
           <div className="flex gap-2 flex-wrap">
             {[
@@ -560,7 +567,7 @@ export const ReturnView: React.FC = () => {
             ))}
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-4 py-3 shadow-sm min-w-0">
+        <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 px-4 py-4 shadow-sm min-w-0">
           <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold mb-2">Статус</p>
           <div className="flex gap-2 flex-wrap">
             {[
