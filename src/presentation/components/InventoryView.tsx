@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useStat
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
-import { Search, Plus, Trash2, AlertTriangle, Pill, Package, X, PencilLine, Layers } from 'lucide-react';
+import { Search, Plus, Trash2, AlertTriangle, Package, X, PencilLine, Layers } from 'lucide-react';
 import { Product } from '../../core/domain';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { BatchesView } from './BatchesView';
@@ -43,6 +43,7 @@ const DEFAULT_FORM: NewProductForm = {
 };
 
 type InventoryRowProps = {
+  index: number;
   product: any;
   stockLabel: string;
   submitting: boolean;
@@ -54,11 +55,12 @@ type InventoryRowProps = {
   t: (key: string) => string;
 };
 
-const InventoryRow = React.memo(function InventoryRow({ product, stockLabel, submitting, selected, onToggleSelect, onEditPrices, onAddBarcode, onDelete, t }: InventoryRowProps) {
+const InventoryRow = React.memo(function InventoryRow({ index, product, stockLabel, submitting, selected, onToggleSelect, onEditPrices, onAddBarcode, onDelete, t }: InventoryRowProps) {
   const isLowStock = product.totalStock < (product.minStock || 10);
   return (
     <tr className="hover:bg-[#f5f5f0]/30 transition-colors group">
-      <td className="px-4 py-5">
+      <td className="px-4 py-3.5 text-xs font-bold text-[#5A5A40]/70">{index}</td>
+      <td className="px-4 py-3.5">
         <label className="inline-flex items-center justify-center cursor-pointer">
           <input
             type="checkbox"
@@ -68,85 +70,77 @@ const InventoryRow = React.memo(function InventoryRow({ product, stockLabel, sub
           />
         </label>
       </td>
-      <td className="px-8 py-5">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-[#f5f5f0] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
-            <Pill size={24} />
-          </div>
-          <div>
-            <p className="font-bold text-[#5A5A40]">{product.name}</p>
-            <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest mt-0.5">{product.sku}</p>
-            {!product.barcode && (
-              <span className="inline-flex mt-2 items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-700 border border-amber-100">
-                Без штрихкода
-              </span>
-            )}
-          </div>
+      <td className="px-6 py-3.5">
+        <div>
+          <p className="text-sm font-bold leading-tight text-[#5A5A40]">{product.name}</p>
+          <p className="mt-0.5 text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{product.sku}</p>
+          {!product.barcode && (
+            <span className="inline-flex mt-1.5 items-center rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-amber-700 border border-amber-100">
+              Без штрихкода
+            </span>
+          )}
         </div>
       </td>
-      <td className="px-8 py-5">
-        <span className="text-sm font-medium text-[#5A5A40]/70 bg-[#f5f5f0] px-3 py-1 rounded-lg">{product.category}</span>
-      </td>
-      <td className="px-8 py-5">
-        <div className="flex items-center gap-3">
+      <td className="px-6 py-3.5">
+        <div className="flex items-center gap-2.5">
           <div className="flex-1 min-w-25">
-            <div className="h-2 bg-[#f5f5f0] rounded-full overflow-hidden">
+            <div className="h-1.5 bg-[#f5f5f0] rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}
                 style={{ width: `${Math.min(100, (product.totalStock / (product.minStock || 10) * 50))}%` }}
               />
             </div>
-            <p className={`text-[10px] font-bold mt-1.5 uppercase tracking-wider ${isLowStock ? 'text-amber-600' : 'text-emerald-600'}`}>
+            <p className={`text-[9px] font-bold mt-1 uppercase tracking-wider ${isLowStock ? 'text-amber-600' : 'text-emerald-600'}`}>
               {stockLabel}
             </p>
           </div>
-          {isLowStock && <AlertTriangle size={16} className="text-amber-500 animate-pulse" />}
+          {isLowStock && <AlertTriangle size={14} className="text-amber-500 animate-pulse" />}
         </div>
       </td>
-      <td className="px-8 py-5">
+      <td className="px-6 py-3.5">
         <p className="text-sm font-bold text-[#5A5A40]">{product.sellingPrice.toFixed(2)} TJS</p>
-        <p className="text-[10px] text-[#5A5A40]/40 mt-0.5">{t('Cost')}: {product.costPrice.toFixed(2)} TJS</p>
+        <p className="text-[9px] text-[#5A5A40]/40 mt-0.5">{t('Cost')}: {product.costPrice.toFixed(2)} TJS</p>
       </td>
-      <td className="px-8 py-5">
+      <td className="px-6 py-3.5">
         {product.prescription ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 text-[10px] font-bold uppercase tracking-widest border border-red-100">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-600 text-[9px] font-bold uppercase tracking-widest border border-red-100">
             {t('Required')}
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase tracking-widest border border-emerald-100">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[9px] font-bold uppercase tracking-widest border border-emerald-100">
             {t('OTC')}
           </span>
         )}
       </td>
-      <td className="px-8 py-5 text-right">
+      <td className="px-6 py-3.5 text-right">
         <div className="flex items-center justify-end gap-2">
           {!product.barcode && (
             <button
               onClick={() => onAddBarcode(product)}
               disabled={submitting}
-              className="px-3 py-2 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all disabled:opacity-50 inline-flex items-center gap-2 text-sm"
+              className="px-2.5 py-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-all disabled:opacity-50 inline-flex items-center gap-1.5 text-xs"
               title="Добавить штрихкод"
             >
-              <PencilLine size={16} />
+              <PencilLine size={14} />
               Баркод
             </button>
           )}
           <button
             onClick={() => onEditPrices(product)}
             disabled={submitting}
-            className="px-3 py-2 text-[#5A5A40] bg-[#f5f5f0] hover:bg-[#ebeade] rounded-xl transition-all disabled:opacity-50 inline-flex items-center gap-2 text-sm"
+            className="px-2.5 py-1.5 text-[#5A5A40] bg-[#f5f5f0] hover:bg-[#ebeade] rounded-lg transition-all disabled:opacity-50 inline-flex items-center gap-1.5 text-xs"
             title="Изменить цены"
           >
-            <PencilLine size={16} />
+            <PencilLine size={14} />
             Цены
           </button>
           <button
             onClick={() => onDelete(product.id, product.name)}
             disabled={submitting}
-            className="p-2 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
+            className="p-1.5 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
             title={t('Delete Product')}
           >
-            <Trash2 size={18} />
+            <Trash2 size={16} />
           </button>
         </div>
       </td>
@@ -208,8 +202,8 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
   const [openCreateBatchSignal, setOpenCreateBatchSignal] = useState(0);
   const [barcodeEditModal, setBarcodeEditModal] = useState<BarcodeEditModalState | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
-
-  const [productsScrollTop, setProductsScrollTop] = useState(0);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogPageSize, setCatalogPageSize] = useState(10);
 
   useEffect(() => {
     setActiveSection(initialSection);
@@ -217,9 +211,7 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const PRODUCT_ROW_HEIGHT = 92;
-  const PRODUCT_VIEWPORT_HEIGHT = 560;
-  const PRODUCT_OVERSCAN = 8;
+  const catalogPageSizeOptions = [10, 25, 50];
 
   const generateBatchNumber = (sku: string): string => {
     if (!sku.trim()) return '';
@@ -263,7 +255,14 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     [products, selectedProductIds],
   );
 
-  const allVisibleSelected = filteredProducts.length > 0 && filteredProducts.every((product) => selectedProductIds.includes(product.id));
+  const totalCatalogPages = Math.max(1, Math.ceil(filteredProducts.length / catalogPageSize));
+  const safeCatalogPage = Math.min(catalogPage, totalCatalogPages);
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (safeCatalogPage - 1) * catalogPageSize;
+    return filteredProducts.slice(startIndex, startIndex + catalogPageSize);
+  }, [filteredProducts, safeCatalogPage, catalogPageSize]);
+
+  const allVisibleSelected = paginatedProducts.length > 0 && paginatedProducts.every((product) => selectedProductIds.includes(product.id));
 
   const productCounts = useMemo(() => ({
     all: products.length,
@@ -271,16 +270,15 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     prescription: products.filter((p) => p.prescription).length,
   }), [products]);
 
-  const onProductsScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    setProductsScrollTop(event.currentTarget.scrollTop);
-  }, []);
+  useEffect(() => {
+    setCatalogPage(1);
+  }, [debouncedSearchTerm, filter, catalogPageSize]);
 
-  const productStartIndex = Math.max(0, Math.floor(productsScrollTop / PRODUCT_ROW_HEIGHT) - PRODUCT_OVERSCAN);
-  const productVisibleCount = Math.ceil(PRODUCT_VIEWPORT_HEIGHT / PRODUCT_ROW_HEIGHT) + PRODUCT_OVERSCAN * 2;
-  const productEndIndex = Math.min(filteredProducts.length, productStartIndex + productVisibleCount);
-  const visibleProducts = filteredProducts.slice(productStartIndex, productEndIndex);
-  const productTopSpacerHeight = productStartIndex * PRODUCT_ROW_HEIGHT;
-  const productBottomSpacerHeight = Math.max(0, (filteredProducts.length - productEndIndex) * PRODUCT_ROW_HEIGHT);
+  useEffect(() => {
+    if (catalogPage > totalCatalogPages) {
+      setCatalogPage(totalCatalogPages);
+    }
+  }, [catalogPage, totalCatalogPages]);
 
   const openDeleteTarget = useCallback((id: string, name: string) => {
     setDeleteTarget({ id, name });
@@ -292,14 +290,14 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
 
   const toggleVisibleSelection = useCallback(() => {
     setSelectedProductIds((prev) => {
-      const visibleIds = filteredProducts.map((product) => product.id);
+      const visibleIds = paginatedProducts.map((product) => product.id);
       if (visibleIds.every((id) => prev.includes(id))) {
         return prev.filter((id) => !visibleIds.includes(id));
       }
 
       return Array.from(new Set([...prev, ...visibleIds]));
     });
-  }, [filteredProducts]);
+  }, [paginatedProducts]);
 
   const openPriceEditor = useCallback((product: Product) => {
     setPriceEditModal({
@@ -680,11 +678,12 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
           )}
 
           <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
-            <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: PRODUCT_VIEWPORT_HEIGHT }} onScroll={onProductsScroll}>
+            <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/50 font-bold">
-                    <th className="px-4 py-5">
+                    <th className="px-4 py-4">№</th>
+                    <th className="px-4 py-4">
                       <input
                         type="checkbox"
                         checked={allVisibleSelected}
@@ -693,24 +692,19 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                         title="Выбрать все видимые товары"
                       />
                     </th>
-                    <th className="px-8 py-5">{t('Product Info')}</th>
-                    <th className="px-8 py-5">{t('Category')}</th>
-                    <th className="px-8 py-5">{t('Stock Status')}</th>
-                    <th className="px-8 py-5">{t('Price')}</th>
-                    <th className="px-8 py-5">{t('Prescription')}</th>
-                    <th className="px-8 py-5 text-right">{t('Actions')}</th>
+                    <th className="px-6 py-4">{t('Product Info')}</th>
+                    <th className="px-6 py-4">{t('Stock Status')}</th>
+                    <th className="px-6 py-4">{t('Price')}</th>
+                    <th className="px-6 py-4">{t('Prescription')}</th>
+                    <th className="px-6 py-4 text-right">{t('Actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#5A5A40]/5">
-                  {productTopSpacerHeight > 0 && (
-                    <tr>
-                      <td colSpan={7} style={{ height: productTopSpacerHeight }} />
-                    </tr>
-                  )}
-                  {visibleProducts.map((product) => {
+                  {paginatedProducts.map((product, index) => {
                     return (
                       <InventoryRow
                         key={product.id}
+                        index={(safeCatalogPage - 1) * catalogPageSize + index + 1}
                         product={product}
                         stockLabel={formatStock(product.totalStock)}
                         submitting={submitting}
@@ -723,11 +717,6 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                       />
                     );
                   })}
-                  {productBottomSpacerHeight > 0 && (
-                    <tr>
-                      <td colSpan={7} style={{ height: productBottomSpacerHeight }} />
-                    </tr>
-                  )}
                   {filteredProducts.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-8 py-16 text-center text-[#5A5A40]/40">
@@ -739,6 +728,50 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                 </tbody>
               </table>
             </div>
+
+            {filteredProducts.length > 10 && (
+              <div className="flex flex-col gap-3 border-t border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-3 text-sm text-[#5A5A40]/70">
+                  <span>
+                    Показано {(safeCatalogPage - 1) * catalogPageSize + 1}-{Math.min(safeCatalogPage * catalogPageSize, filteredProducts.length)} из {filteredProducts.length}
+                  </span>
+                  <label className="flex items-center gap-2">
+                    <span>На странице</span>
+                    <select
+                      value={catalogPageSize}
+                      onChange={(e) => setCatalogPageSize(Number(e.target.value))}
+                      className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                    >
+                      {catalogPageSizeOptions.map((size) => (
+                        <option key={size} value={size}>{size}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}
+                    disabled={safeCatalogPage === 1}
+                    className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Назад
+                  </button>
+                  <span className="px-3 py-2 text-sm font-semibold text-[#5A5A40]">
+                    {safeCatalogPage} / {totalCatalogPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCatalogPage((page) => Math.min(totalCatalogPages, page + 1))}
+                    disabled={safeCatalogPage === totalCatalogPages}
+                    className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Вперед
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

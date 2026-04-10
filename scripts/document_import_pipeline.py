@@ -20,7 +20,7 @@ DEFAULT_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "invoice_number": ("invoice", "invoice_no", "invoice_number", "номернакладной", "документ", "номердокумента"),
     "supplier_name": ("supplier", "supplier_name", "vendor", "vendor_name", "поставщик", "контрагент"),
     "invoice_date": ("invoice_date", "date", "document_date", "дата", "датанакладной"),
-    "name": ("name", "product", "product_name", "item", "товар", "наименование", "номенклатура"),
+    "name": ("name", "product", "product_name", "item", "товар", "наименование", "номенклатура", "лекарство", "препарат", "медикамент"),
     "sku": ("sku", "article", "code", "артикул", "код", "кодтовара"),
     "barcode": ("barcode", "ean", "штрихкод", "штрих-код"),
     "quantity": ("qty", "quantity", "количество", "колво", "кол-во"),
@@ -28,7 +28,7 @@ DEFAULT_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "unit": ("unit", "ед", "единица", "unit_name"),
     "box_quantity": ("box_qty", "units_per_box", "quantity_per_box", "вупаковке", "вкоробке", "коробка"),
     "box_price": ("box_price", "line_total", "amount", "total", "сумма", "итого"),
-    "expiry_date": ("expiry", "expiry_date", "expiration_date", "срокгодности", "годендо"),
+    "expiry_date": ("expiry", "expiry_date", "expiration_date", "срок", "срокгодности", "годендо"),
     "batch_number": ("batch", "batch_number", "lot", "серия", "партия"),
 }
 
@@ -199,16 +199,118 @@ def detect_sheet_name(excel_file: Path, sheet_hints: Sequence[str] | None = None
 
 
 def build_column_mapping(columns: Sequence[str], aliases: dict[str, tuple[str, ...]]) -> dict[str, str]:
-    normalized_columns = {normalize_key(column): str(column) for column in columns}
+    normalized_columns = [(normalize_key(column), str(column)) for column in columns]
     mapping: dict[str, str] = {}
+
+    def match_score(column_key: str, alias_key: str) -> int:
+        if not column_key or not alias_key:
+            return -1
+        if column_key == alias_key:
+            return 300
+        if column_key.startswith(alias_key) or alias_key.startswith(column_key):
+            return 200
+        if len(alias_key) >= 4 and alias_key in column_key:
+            return 100
+        return -1
+
     for target_field, field_aliases in aliases.items():
+        best_match: tuple[int, str] | None = None
         for alias in field_aliases:
-            normalized_alias = normalize_key(alias)
-            matched_key = next((key for key in normalized_columns if normalized_alias and normalized_alias in key), None)
-            if matched_key:
-                mapping[target_field] = normalized_columns[matched_key]
-                break
+            alias_key = normalize_key(alias)
+            for column_key, original_column in normalized_columns:
+                score = match_score(column_key, alias_key)
+                if score < 0:
+                    continue
+                if best_match is None or score > best_match[0]:
+                    best_match = (score, original_column)
+        if best_match:
+            mapping[target_field] = best_match[1]
     return mapping
+
+
+def detect_excel_header_row(rows: Sequence[Sequence[Any]], aliases: dict[str, tuple[str, ...]]) -> int:
+    best_index = 0
+    best_score = -1
+    scan_limit = min(len(rows), 20)
+
+    for row_index in range(scan_limit):
+        row = rows[row_index]
+        normalized_headers = [normalize_text(cell) or f"column_{position}" for position, cell in enumerate(row)]
+        mapping = build_column_mapping(normalized_headers, aliases)
+        non_empty_cells = sum(1 for cell in row if normalize_text(cell))
+        score = 0
+
+        if mapping.get("name"):
+            score += 6
+        if mapping.get("quantity"):
+            score += 4
+        if mapping.get("cost_price") or mapping.get("box_price"):
+            score += 4
+        if mapping.get("expiry_date"):
+            score += 3
+        if mapping.get("sku") or mapping.get("barcode"):
+            score += 2
+        if mapping.get("batch_number"):
+            score += 1
+        if non_empty_cells >= 3:
+            score += 1
+
+        if score > best_score:
+            best_score = score
+            best_index = row_index
+
+    return best_index
+
+
+def extract_excel_metadata(rows: Sequence[Sequence[Any]], aliases: dict[str, tuple[str, ...]], header_row_index: int) -> dict[str, str]:
+    metadata = {
+        "invoice_number": "",
+        "supplier_name": "",
+        "invoice_date": "",
+    }
+
+    metadata_aliases = {
+        key: aliases[key]
+        for key in ("invoice_number", "supplier_name", "invoice_date")
+    }
+
+    def match_score(cell_key: str, alias_key: str) -> int:
+        if not cell_key or not alias_key:
+            return -1
+        if cell_key == alias_key:
+            return 300
+        if cell_key.startswith(alias_key) or alias_key in cell_key:
+            return 100 if len(alias_key) >= 4 else -1
+        return -1
+
+    for row in rows[: max(header_row_index, 8)]:
+        normalized_row = [normalize_text(cell) for cell in row]
+        for field_name, field_aliases in metadata_aliases.items():
+            if metadata[field_name]:
+                continue
+            for index, cell in enumerate(normalized_row):
+                cell_key = normalize_key(cell)
+                if not cell_key:
+                    continue
+                matched = any(match_score(cell_key, normalize_key(alias)) >= 0 for alias in field_aliases)
+                if not matched:
+                    continue
+
+                inline_match = re.search(r"[:=]\s*(.+)$", cell)
+                if inline_match and normalize_text(inline_match.group(1)):
+                    metadata[field_name] = normalize_text(inline_match.group(1))
+                    break
+
+                for sibling in normalized_row[index + 1 :]:
+                    if sibling:
+                        metadata[field_name] = sibling
+                        break
+                if metadata[field_name]:
+                    break
+
+    invoice_date, _ = safe_date(metadata["invoice_date"])
+    metadata["invoice_date"] = invoice_date
+    return metadata
 
 
 def merge_multiline_names(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -238,43 +340,86 @@ def parse_excel_file(
     selected_sheet = sheet_name or detect_sheet_name(excel_path)
     LOGGER.info("Parsing Excel file %s sheet=%s", excel_path, selected_sheet)
 
-    dataframe = pd.read_excel(excel_path, sheet_name=selected_sheet, dtype=object)
-    dataframe = dataframe.dropna(how="all")
-    dataframe.columns = [normalize_text(column) or f"column_{index}" for index, column in enumerate(dataframe.columns)]
+    raw_dataframe = pd.read_excel(excel_path, sheet_name=selected_sheet, dtype=object, header=None)
+    raw_dataframe = raw_dataframe.dropna(how="all").dropna(axis=1, how="all")
+    raw_rows = raw_dataframe.fillna("").values.tolist()
+    return parse_spreadsheet_like_rows(
+        raw_rows=raw_rows,
+        source="excel",
+        aliases=aliases,
+        metadata={"invoice_number": "", "supplier_name": "", "invoice_date": ""},
+        warnings=[],
+        extra={"sheet_name": selected_sheet},
+    )
 
-    column_mapping = build_column_mapping(dataframe.columns, aliases)
-    LOGGER.info("Excel column mapping: %s", column_mapping)
 
-    metadata = {
+def parse_spreadsheet_like_rows(
+    raw_rows: Sequence[Sequence[Any]],
+    source: str,
+    aliases: dict[str, tuple[str, ...]],
+    metadata: dict[str, str] | None = None,
+    warnings: Sequence[ParseWarning] | None = None,
+    raw_text: str = "",
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    extra = dict(extra or {})
+    collected_warnings = list(warnings or [])
+    normalized_metadata = {
         "invoice_number": "",
         "supplier_name": "",
         "invoice_date": "",
+        **(metadata or {}),
     }
 
-    rows: list[dict[str, Any]] = []
-    warnings: list[ParseWarning] = []
-    for row_index, record in enumerate(dataframe.to_dict(orient="records"), start=1):
-        normalized_record = {normalize_text(key): value for key, value in record.items()}
-        parsed_row = {"row_index": row_index, "raw_values": normalized_record}
-        for metadata_field in ("invoice_number", "supplier_name", "invoice_date"):
-            source_column = column_mapping.get(metadata_field)
-            if source_column and not metadata[metadata_field]:
-                metadata[metadata_field] = normalize_text(normalized_record.get(source_column))
+    trimmed_rows = [list(row) for row in raw_rows if any(normalize_text(cell) for cell in row)]
+    if not trimmed_rows:
+        return {
+            "source": source,
+            "metadata": normalized_metadata,
+            "rows": [],
+            "warnings": [*collected_warnings, ParseWarning(message="Spreadsheet contains no usable rows")],
+            "raw_text": raw_text,
+            **extra,
+        }
 
+    header_row_index = detect_excel_header_row(trimmed_rows, aliases)
+    headers = [normalize_text(column) or f"column_{index}" for index, column in enumerate(trimmed_rows[header_row_index])]
+    column_mapping = build_column_mapping(headers, aliases)
+    LOGGER.info("Spreadsheet-style column mapping (%s): %s", source, column_mapping)
+
+    extracted_metadata = extract_excel_metadata(trimmed_rows, aliases, header_row_index)
+    for key, value in extracted_metadata.items():
+      if value and not normalized_metadata.get(key):
+        normalized_metadata[key] = value
+
+    rows: list[dict[str, Any]] = []
+    body_rows = trimmed_rows[header_row_index + 1 :]
+
+    for row_index, row in enumerate(body_rows, start=1):
+        normalized_record = {
+            header: row[position] if position < len(row) else ""
+            for position, header in enumerate(headers)
+        }
+        parsed_row = {"row_index": row_index, "raw_values": normalized_record}
         for target_field in ("name", "sku", "barcode", "quantity", "cost_price", "unit", "box_quantity", "box_price", "expiry_date", "batch_number"):
             source_column = column_mapping.get(target_field)
             parsed_row[target_field] = normalized_record.get(source_column) if source_column else ""
+
+        row_payload_values = [parsed_row[field_name] for field_name in ("name", "sku", "barcode", "quantity", "cost_price", "unit", "box_quantity", "box_price", "expiry_date", "batch_number")]
+        if not any(normalize_text(value) for value in row_payload_values):
+            continue
         rows.append(parsed_row)
 
     if not rows:
-        warnings.append(ParseWarning(message="Excel file contains no usable rows"))
+        collected_warnings.append(ParseWarning(message=f"{source} contains no usable data rows after header detection"))
 
     return {
-        "source": "excel",
-        "sheet_name": selected_sheet,
-        "metadata": metadata,
+        "source": source,
+        "metadata": normalized_metadata,
         "rows": merge_multiline_names(rows),
-        "warnings": warnings,
+        "warnings": collected_warnings,
+        "raw_text": raw_text,
+        **extra,
     }
 
 
@@ -339,17 +484,22 @@ def parse_pdf_with_camelot(pdf_file: str | Path) -> dict[str, Any]:
         tables = _run_camelot(pdf_path, "stream")
         flavor_used = "stream"
 
-    rows: list[dict[str, Any]] = []
+    raw_rows: list[list[Any]] = []
     for table in tables:
-        rows.extend(dataframe_to_rows(table))
+        if table.empty:
+            continue
+        raw_rows.extend(table.fillna("").values.tolist())
+        raw_rows.append([])
 
-    return {
-        "source": "pdf-camelot",
-        "flavor": flavor_used,
-        "metadata": extract_pdf_metadata(pdf_path),
-        "rows": rows,
-        "warnings": warnings,
-    }
+    return parse_spreadsheet_like_rows(
+        raw_rows=raw_rows,
+        source="pdf-camelot",
+        aliases=merge_aliases(DEFAULT_COLUMN_ALIASES),
+        metadata=extract_pdf_metadata(pdf_path),
+        warnings=warnings,
+        raw_text="",
+        extra={"flavor": flavor_used},
+    )
 
 
 def parse_pdf_with_pdfplumber(pdf_file: str | Path) -> dict[str, Any]:
@@ -359,6 +509,7 @@ def parse_pdf_with_pdfplumber(pdf_file: str | Path) -> dict[str, Any]:
     LOGGER.info("Parsing PDF with pdfplumber %s", pdf_path)
     warnings: list[ParseWarning] = []
     rows: list[dict[str, Any]] = []
+    table_rows: list[list[Any]] = []
     raw_lines: list[str] = []
 
     with pdfplumber.open(str(pdf_path)) as pdf:
@@ -371,7 +522,18 @@ def parse_pdf_with_pdfplumber(pdf_file: str | Path) -> dict[str, Any]:
                 if not table:
                     continue
                 frame = pd.DataFrame(table)
-                rows.extend(dataframe_to_rows(frame))
+                table_rows.extend(frame.fillna("").values.tolist())
+                table_rows.append([])
+
+    if table_rows:
+        return parse_spreadsheet_like_rows(
+            raw_rows=table_rows,
+            source="pdf-pdfplumber",
+            aliases=merge_aliases(DEFAULT_COLUMN_ALIASES),
+            metadata=extract_pdf_metadata(pdf_path),
+            warnings=warnings,
+            raw_text="\n".join(raw_lines),
+        )
 
     if not rows:
         for index, line in enumerate(raw_lines, start=1):

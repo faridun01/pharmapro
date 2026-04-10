@@ -12,7 +12,7 @@ export const BootSplash: React.FC<{
   title = 'PharmaPro',
   subtitle = 'Подготавливаем рабочее пространство и подключаем данные аптеки',
   compact = false,
-  note = 'Secure pharmacy workspace',
+  note = 'Решение ITFORCE',
   showProgress = !compact,
   durationMs = 5000,
 }) => {
@@ -38,13 +38,13 @@ export const BootSplash: React.FC<{
 
   const progressLabel = useMemo(() => {
     if (!showProgress) {
-      return 'Syncing';
+      return 'Синхронизация';
     }
 
-    if (progress < 34) return 'Initializing';
-    if (progress < 68) return 'Securing';
-    if (progress < 100) return 'Preparing';
-    return 'Ready';
+    if (progress < 34) return 'Запуск';
+    if (progress < 68) return 'Подключение';
+    if (progress < 100) return 'Подготовка';
+    return 'Готово';
   }, [progress, showProgress]);
 
   return (
@@ -78,23 +78,23 @@ export const BootSplash: React.FC<{
         </div>
 
         <div className="pharma-splash__content">
-          <div className="pharma-splash__eyebrow">PHARMACY RETAIL SYSTEM</div>
+          <div className="pharma-splash__eyebrow">АПТЕЧНАЯ СИСТЕМА УПРАВЛЕНИЯ</div>
           <h1 className="pharma-splash__title">{title}</h1>
           <p className="pharma-splash__subtitle">{subtitle}</p>
         </div>
 
         <div className="pharma-splash__chips" aria-hidden="true">
           <div className="pharma-splash__chip">
-            <span className="pharma-splash__chip-label">Standard</span>
-            <span className="pharma-splash__chip-value">GDP Ready</span>
+            <span className="pharma-splash__chip-label">Партнер</span>
+            <span className="pharma-splash__chip-value">ITFORCE</span>
           </div>
           <div className="pharma-splash__chip">
-            <span className="pharma-splash__chip-label">Status</span>
-            <span className="pharma-splash__chip-value">Secure Sync</span>
+            <span className="pharma-splash__chip-label">Статус</span>
+            <span className="pharma-splash__chip-value">Безопасный запуск</span>
           </div>
           <div className="pharma-splash__chip">
-            <span className="pharma-splash__chip-label">Mode</span>
-            <span className="pharma-splash__chip-value">Premium Retail</span>
+            <span className="pharma-splash__chip-label">Режим</span>
+            <span className="pharma-splash__chip-value">Поддержка ITFORCE</span>
           </div>
         </div>
 

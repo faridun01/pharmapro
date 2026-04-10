@@ -45,6 +45,19 @@ const getBatchStatus = (expiryDate: Date): 'CRITICAL' | 'STABLE' | 'NEAR_EXPIRY'
 
 const normalizeCode = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
+const isPlaceholderItemName = (value: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return true;
+
+  return [
+    'тестовый препарат',
+    'test product',
+    'sample product',
+    'demo product',
+    'placeholder product',
+  ].some((token) => normalized.includes(token));
+};
+
 const buildGeneratedSku = (name: string) => {
   const base = String(name || '')
     .toUpperCase()
@@ -92,7 +105,7 @@ const buildNormalizedItems = (
   products: Array<{ id: string; name: string; sku: string; costPrice: number }>,
 ) =>
   rawItems
-    .filter((item) => item?.name)
+    .filter((item) => item?.name && !isPlaceholderItemName(item.name))
     .map((item, index) => {
       const matched = findBestProductMatch(item, products);
       const warnings: string[] = [];
@@ -122,7 +135,8 @@ const buildNormalizedItems = (
         warnings: warnings.join('; '),
         needsReview: !!item.needsReview || !matched || confidence !== 'HIGH',
       };
-    });
+    })
+    .filter((item) => item.quantity > 0 && item.costPrice > 0);
 
 const pickExistingUserId = async (reqUser?: { id?: string; email?: string }) => {
   if (reqUser?.id) {

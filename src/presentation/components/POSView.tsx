@@ -47,7 +47,6 @@ export const POSView: React.FC = () => {
   const { products, processTransaction, user } = usePharmacy();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [paymentType, setPaymentType] = useState<'CASH' | 'CARD' | 'CREDIT'>('CASH');
   const [paidAmountInput, setPaidAmountInput] = useState('');
@@ -66,12 +65,9 @@ export const POSView: React.FC = () => {
 
   const cartProductIds = new Set(cart.map((item) => item.id));
 
-  const categoryOptions = ['ALL', ...Array.from(new Set(products.map((product) => String(product.category || '').trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right, 'ru'))];
-
   const filteredProducts = products.filter((p) => {
     if (cartProductIds.has(p.id)) return false;
     if (p.totalStock <= 0) return false;
-    if (categoryFilter !== 'ALL' && p.category !== categoryFilter) return false;
     return (
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -414,19 +410,6 @@ export const POSView: React.FC = () => {
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] text-[#5A5A40]/55">Найдено: {filteredProducts.length}</span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {categoryOptions.map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => setCategoryFilter(category)}
-                  className={`px-3 py-1.5 rounded-xl text-[11px] font-medium border transition-colors ${categoryFilter === category ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-[#5A5A40]/10 text-[#5A5A40]/70 hover:bg-[#f5f5f0]'}`}
-                >
-                  {category === 'ALL' ? 'Все категории' : category}
-                </button>
-              ))}
             </div>
           </div>
         </div>

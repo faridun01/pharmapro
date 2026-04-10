@@ -390,26 +390,22 @@ const App: React.FC = () => {
     }
   };
 
-  if (!hasShownStartupIntro) {
+  if (!hasShownStartupIntro || isLoading) {
     return (
       <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">
         {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
         <div className="flex-1 min-h-0">
           <div className={isStartupFadingOut ? 'pharma-startup-fade-out' : 'pharma-startup-fade-in'}>
             <BootSplash
-              subtitle="Готовим премиальное рабочее пространство и запускаем приложение"
-              note="Curated pharmacy experience"
-              showProgress
+              subtitle={hasShownStartupIntro ? 'Проверяем рабочее пространство и подготавливаем вход' : 'Готовим премиальное рабочее пространство и запускаем приложение'}
+              note="Решение ITFORCE"
+              showProgress={!hasShownStartupIntro}
               durationMs={5000}
             />
           </div>
         </div>
       </div>
     );
-  }
-
-  if (isLoading) {
-    return <AppLoader label="Проверяем рабочее пространство" />;
   }
 
   if (!user) {

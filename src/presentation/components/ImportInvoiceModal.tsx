@@ -62,6 +62,43 @@ const buildItemIdentity = (item: Pick<InvoiceImportItem, 'name' | 'expiryDate' |
   ].join('::');
 };
 
+const isPlaceholderItemName = (value: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return true;
+
+  return [
+    'тестовый препарат',
+    'test product',
+    'sample product',
+    'demo product',
+    'placeholder product',
+  ].some((token) => normalized.includes(token));
+};
+
+const isImportablePreviewItem = (item: Partial<InvoiceImportItem>) => {
+  return !isPlaceholderItemName(String(item.name || ''))
+    && Number(item.quantity || 0) > 0
+    && Number(item.costPrice || 0) > 0;
+};
+
+const formatVisibleError = (message: string | null) => {
+  if (!message) return null;
+
+  const parserValidationMarkers = [
+    'Missing product name',
+    'Quantity could not be parsed',
+    'Cost price could not be parsed',
+    'Quantity must be >= 1',
+    'Cost price must be numeric and > 0',
+  ];
+
+  if (parserValidationMarkers.some((marker) => message.includes(marker))) {
+    return 'Не удалось корректно распознать позиции накладной. Проверьте файл или загрузите более четкое изображение.';
+  }
+
+  return message;
+};
+
 export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
   const { suppliers, products, importPurchaseInvoice, refreshProducts, createProduct } = usePharmacy();
@@ -81,10 +118,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
   const [reviewSummary, setReviewSummary] = useState<{ total: number; high: number; medium: number; low: number; needsReview: number } | null>(null);
   const [rawOcrText, setRawOcrText] = useState<string | null>(null);
   const [showRawText, setShowRawText] = useState(false);
-  const [ocrJsonResponse, setOcrJsonResponse] = useState<OcrAnalyzeResponse | null>(null);
-  const [showOcrJson, setShowOcrJson] = useState(false);
   const [pendingOcrItems, setPendingOcrItems] = useState<InvoiceImportItem[] | null>(null);
-  const [jsonCopied, setJsonCopied] = useState(false);
   const [excelPreviewItems, setExcelPreviewItems] = useState<InvoiceImportItem[] | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
 
@@ -144,6 +178,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
 
   const grossTotal = items.reduce((acc, i) => acc + i.quantity * i.unitsInPack * i.costPrice, 0);
   const netTotal = Math.max(0, grossTotal - discountAmount);
+  const visibleError = formatVisibleError(error);
 
   const toBase64 = async (file: File): Promise<string> => {
     // Prefer arrayBuffer because FileReader can sporadically fail in packaged Electron.
@@ -199,21 +234,23 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
       if (foundSupplier) setSupplierId(foundSupplier.id);
     }
 
-    return (data.items || []).map((item: any, index: number) => ({
-      lineId: item.lineId || `parsed-${Date.now()}-${index}`,
-      productId: item.productId || null,
-      name: item.name,
-      sku: item.sku || '',
-      barcode: item.barcode || '',
-      quantity: Number(item.quantity) || 1,
-      unitsInPack: 1,
-      costPrice: Number(item.costPrice) || 0,
-      batchNumber: item.batchNumber || `B-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-      expiryDate: item.expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      confidence: item.confidence,
-      warnings: item.warnings || '',
-      needsReview: !!item.needsReview,
-    })) as InvoiceImportItem[];
+    return (data.items || [])
+      .map((item: any, index: number) => ({
+        lineId: item.lineId || `parsed-${Date.now()}-${index}`,
+        productId: item.productId || null,
+        name: item.name,
+        sku: item.sku || '',
+        barcode: item.barcode || '',
+        quantity: Number(item.quantity) || 0,
+        unitsInPack: 1,
+        costPrice: Number(item.costPrice) || 0,
+        batchNumber: item.batchNumber || `B-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+        expiryDate: item.expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        confidence: item.confidence,
+        warnings: item.warnings || '',
+        needsReview: !!item.needsReview,
+      }))
+      .filter((item) => isImportablePreviewItem(item)) as InvoiceImportItem[];
   };
 
   const requestStructuredPreview = async (file: File) => {
@@ -270,10 +307,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
     setSelectedImportFile(file);
     setRawOcrText(null);
     setShowRawText(false);
-    setOcrJsonResponse(null);
-    setShowOcrJson(fileKind !== 'excel');
     setPendingOcrItems(null);
-    setJsonCopied(false);
     setOcrDraftId(null);
     setExcelPreviewItems(null);
 
@@ -310,7 +344,6 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
           return await response.json() as OcrAnalyzeResponse;
         })();
 
-      setOcrJsonResponse(data);
       const parsedItems = applyStructuredPreview(data);
 
       if (parsedItems.length === 0) {
@@ -367,38 +400,10 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
 
   const discardOcrJson = () => {
     setPendingOcrItems(null);
-    setOcrJsonResponse(null);
-    setShowOcrJson(false);
-    setJsonCopied(false);
     setRawOcrText(null);
     setShowRawText(false);
     setReviewSummary(null);
     setUsedEngine(null);
-  };
-
-  const copyOcrJson = async () => {
-    if (!ocrJsonResponse) return;
-    await navigator.clipboard.writeText(JSON.stringify(ocrJsonResponse, null, 2));
-    setJsonCopied(true);
-    window.setTimeout(() => setJsonCopied(false), 1500);
-  };
-
-  const downloadOcrJson = () => {
-    if (!ocrJsonResponse) return;
-    const jsonText = JSON.stringify(ocrJsonResponse, null, 2);
-    const blob = new Blob([jsonText], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    const fileLabel = (invoiceNumber || ocrJsonResponse.invoiceNumber || 'ocr-result')
-      .replace(/[^a-zA-Z0-9-_]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
-    anchor.href = url;
-    anchor.download = `${fileLabel || 'ocr-result'}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
   };
 
   const handleAnalyzeInvoice = async () => {
@@ -425,10 +430,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
     setReviewSummary(null);
     setRawOcrText(null);
     setShowRawText(false);
-    setOcrJsonResponse(null);
-    setShowOcrJson(false);
     setPendingOcrItems(null);
-    setJsonCopied(false);
     setExcelPreviewItems(null);
   };
 
@@ -555,7 +557,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
     !invoiceNumber.trim() ? 'укажите номер накладной' : '',
     !date ? 'укажите дату накладной' : '',
     items.length === 0 ? 'добавьте хотя бы одну позицию' : '',
-    pendingOcrItems?.length ? 'сначала подтвердите OCR JSON' : '',
+    pendingOcrItems?.length ? 'сначала подтвердите найденные позиции' : '',
   ].filter(Boolean);
 
   return (
@@ -656,43 +658,51 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                   </div>
                 )}
 
-                {ocrJsonResponse && (
-                  <div className="md:col-span-3">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <button type="button" onClick={() => setShowOcrJson((v) => !v)} className="text-[10px] text-left font-bold text-[#5A5A40]/50 uppercase tracking-widest hover:text-[#5A5A40] transition-colors">
-                        {showOcrJson ? '▲ Скрыть JSON OCR' : '▼ Показать JSON OCR'}
-                      </button>
+                {pendingOcrItems && pendingOcrItems.length > 0 && (
+                  <div className="md:col-span-3 bg-white border border-[#5A5A40]/15 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-widest text-[#151619]">Предпросмотр распознавания</p>
+                        <p className="text-xs text-[#5A5A40]/70">Проверьте найденные позиции и подтвердите добавление {pendingOcrItems.length} строк в накладную.</p>
+                      </div>
                       <div className="flex items-center gap-2">
-                        <button type="button" onClick={copyOcrJson} className="px-3 py-1.5 text-[10px] rounded-lg border border-[#5A5A40]/20 text-[#5A5A40] font-bold uppercase tracking-widest">
-                          {jsonCopied ? 'Скопировано' : 'Копировать JSON'}
-                        </button>
-                        <button type="button" onClick={downloadOcrJson} className="px-3 py-1.5 text-[10px] rounded-lg bg-[#2d4a2f] text-white font-bold uppercase tracking-widest">
-                          Скачать JSON
-                        </button>
+                        <button type="button" onClick={discardOcrJson} className="px-3 py-1.5 text-xs rounded-lg border border-[#5A5A40]/20 text-[#5A5A40]">Отменить</button>
+                        <button type="button" onClick={confirmOcrJson} className="px-3 py-1.5 text-xs rounded-lg bg-[#151619] text-white font-bold">Подтвердить и добавить</button>
                       </div>
                     </div>
-                    {showOcrJson && (
-                      <div className="mt-2 space-y-3">
-                        <pre className="p-4 bg-[#151619] rounded-2xl text-[11px] font-mono text-[#e9e7d8] whitespace-pre-wrap max-h-72 overflow-y-auto custom-scrollbar border border-[#5A5A40]/10">
-                          {JSON.stringify(ocrJsonResponse, null, 2)}
-                        </pre>
-                        {pendingOcrItems && pendingOcrItems.length > 0 && (
-                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-2xl border border-[#5A5A40]/10 bg-[#f5f5f0] p-4">
-                            <p className="text-xs text-[#5A5A40]/75">
-                              JSON прочитан. Проверьте его и подтвердите добавление {pendingOcrItems.length} позиций в накладную.
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <button type="button" onClick={discardOcrJson} className="px-3 py-2 text-xs rounded-lg border border-[#5A5A40]/20 text-[#5A5A40]">
-                                Отклонить JSON
-                              </button>
-                              <button type="button" onClick={confirmOcrJson} className="px-3 py-2 text-xs rounded-lg bg-[#151619] text-white font-bold">
-                                Подтвердить и добавить
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+
+                    <div className="max-h-64 overflow-y-auto rounded-xl border border-[#5A5A40]/10">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-[#f5f5f0] text-[#5A5A40]/70 uppercase tracking-wider text-[10px]">
+                            <th className="px-3 py-2">Наименование</th>
+                            <th className="px-3 py-2">Срок</th>
+                            <th className="px-3 py-2">Кол-во</th>
+                            <th className="px-3 py-2">Цена</th>
+                            <th className="px-3 py-2">Предупреждения</th>
+                            <th className="px-3 py-2">Статус</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pendingOcrItems.map((row) => (
+                            <tr key={row.lineId} className="border-t border-[#5A5A40]/10 align-top">
+                              <td className="px-3 py-2 font-semibold text-[#5A5A40]">{row.name}</td>
+                              <td className="px-3 py-2 whitespace-nowrap">{row.expiryDate}</td>
+                              <td className="px-3 py-2 whitespace-nowrap">{row.unitsInPack > 1 ? `${row.quantity} x ${row.unitsInPack}` : row.quantity}</td>
+                              <td className="px-3 py-2 whitespace-nowrap">{row.costPrice}</td>
+                              <td className="px-3 py-2 text-[11px] text-amber-800">{row.warnings || 'Без предупреждений'}</td>
+                              <td className="px-3 py-2 whitespace-nowrap">
+                                {row.needsReview ? (
+                                  <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Нужна проверка</span>
+                                ) : (
+                                  <span className="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">OK</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
 
@@ -728,7 +738,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-bold text-[#5A5A40] uppercase tracking-widest">Позиции накладной</h4>
-                    <p className="text-xs text-[#5A5A40]/55 mt-1">Для прихода достаточно указать название, срок годности, количество и цену за единицу.</p>
+                    <p className="text-xs text-[#5A5A40]/55 mt-1"></p>
                   </div>
                   {reviewSummary && (
                     <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
@@ -835,13 +845,13 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
               </div>
 
               <div className="flex items-center gap-4 w-full md:w-auto">
-                {error && (
+                {visibleError && (
                   <div className="flex items-center gap-2 text-red-600 text-xs font-medium">
                     <AlertCircle size={14} />
-                    {error}
+                    {visibleError}
                   </div>
                 )}
-                {!error && !success && !processing && submitBlockers.length > 0 && (
+                {!visibleError && !success && !processing && submitBlockers.length > 0 && (
                   <div className="flex items-center gap-2 text-amber-700 text-xs font-medium">
                     <AlertCircle size={14} />
                     Для записи в БД: {submitBlockers.join(', ')}.

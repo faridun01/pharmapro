@@ -54,6 +54,88 @@ const firstNumber = (record: Record<string, unknown>, keys: string[]) => {
   return 0;
 };
 
+const isLikelyHeaderCell = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  return [
+    'лекарство',
+    'наименование',
+    'товар',
+    'срок',
+    'срок годности',
+    'кол-во',
+    'колво',
+    'количество',
+    'цена',
+    'цена за шт',
+    'сумма',
+    '№',
+    'no',
+  ].includes(normalized);
+};
+
+const parseTranscriptTableItems = (rawText: string): ParsedInvoiceItem[] => {
+  const lines = rawText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const items: ParsedInvoiceItem[] = [];
+
+  for (const line of lines) {
+    if (!line.includes('|')) continue;
+
+    const cells = line
+      .split('|')
+      .map((cell) => cell.trim())
+      .filter(Boolean);
+
+    if (cells.length < 4) continue;
+    if (cells.every(isLikelyHeaderCell)) continue;
+
+    const workingCells = [...cells];
+    if (/^\d+$/.test(workingCells[0] || '')) {
+      workingCells.shift();
+    }
+
+    if (workingCells.length < 4) continue;
+    if (workingCells.some((cell) => /тестовая накладная/i.test(cell))) continue;
+
+    const name = workingCells[0] || '';
+    const expiryCandidate = workingCells[1] || '';
+    const quantityCandidate = workingCells[2] || '';
+    const fourthValue = workingCells[3] || '';
+    const fifthValue = workingCells[4] || '';
+
+    const expiryDate = normalizeDateString(expiryCandidate) || undefined;
+    const quantity = Math.max(1, Math.round(normalizeNumber(quantityCandidate) || 1));
+
+    let costPrice = normalizeNumber(fourthValue);
+    let lineTotal = 0;
+
+    if (workingCells.length >= 5) {
+      const maybeUnit = fourthValue.toLowerCase();
+      if (!normalizeNumber(fourthValue) && ['шт', 'ед', 'уп', 'упак', 'таб', 'капс'].includes(maybeUnit)) {
+        costPrice = normalizeNumber(fifthValue);
+        lineTotal = workingCells[5] ? normalizeNumber(workingCells[5]) : 0;
+      } else {
+        lineTotal = normalizeNumber(fifthValue);
+      }
+    }
+
+    if (!name || costPrice <= 0) continue;
+
+    items.push({
+      name,
+      quantity,
+      costPrice: Math.max(0, Number(costPrice.toFixed(2))),
+      lineTotal: lineTotal > 0 ? Number(lineTotal.toFixed(2)) : undefined,
+      expiryDate,
+    });
+  }
+
+  return items;
+};
+
 const normalizeDateString = (value?: string) => {
   if (!value) return '';
   const source = String(value).trim();
@@ -162,21 +244,21 @@ const normalizeItems = (items: unknown): ParsedInvoiceItem[] => {
   const normalized: ParsedInvoiceItem[] = [];
   for (const item of items) {
     const record = item as Record<string, unknown>;
-    const name = firstString(record, ['name', 'title', 'productName', 'itemName']);
+    const name = firstString(record, ['name', 'title', 'productName', 'itemName', 'лекарство', 'наименование', 'товар']);
     if (!name) continue;
-    const quantity = Math.max(1, Math.round(firstNumber(record, ['quantity', 'qty', 'count']) || 1));
-    const lineTotal = firstNumber(record, ['lineTotal', 'total', 'sum', 'amount', 'totalPrice']);
-    const directCost = firstNumber(record, ['costPrice', 'price', 'unitPrice', 'purchasePrice']);
+    const quantity = Math.max(1, Math.round(firstNumber(record, ['quantity', 'qty', 'count', 'количество', 'колво', 'кол-во']) || 1));
+    const lineTotal = firstNumber(record, ['lineTotal', 'total', 'sum', 'amount', 'totalPrice', 'сумма', 'итого']);
+    const directCost = firstNumber(record, ['costPrice', 'price', 'unitPrice', 'purchasePrice', 'цена', 'цена за шт', 'ценазаед']);
     const costPrice = directCost > 0 ? directCost : lineTotal > 0 && quantity > 0 ? lineTotal / quantity : 0;
     normalized.push({
       name,
-      sku: firstString(record, ['sku', 'code', 'article']) || undefined,
-      barcode: firstString(record, ['barcode', 'ean']) || undefined,
+      sku: firstString(record, ['sku', 'code', 'article', 'код', 'артикул']) || undefined,
+      barcode: firstString(record, ['barcode', 'ean', 'штрихкод']) || undefined,
       quantity,
       costPrice: Math.max(0, Number(costPrice.toFixed(2))),
       lineTotal: lineTotal > 0 ? Number(lineTotal.toFixed(2)) : undefined,
       batchNumber: String(record.batchNumber || '').trim() || undefined,
-      expiryDate: normalizeDateString(firstString(record, ['expiryDate', 'expiry', 'expDate', 'expirationDate'])) || undefined,
+      expiryDate: normalizeDateString(firstString(record, ['expiryDate', 'expiry', 'expDate', 'expirationDate', 'срок', 'срок годности'])) || undefined,
     });
   }
   return normalized;
@@ -301,12 +383,15 @@ const normalizeOllamaResult = (content: string, rawText = ''): OcrResult => {
     items?: unknown;
   }>(content);
 
+  const normalizedItems = normalizeItems(parsed?.items);
+  const transcriptItems = normalizedItems.length === 0 && rawText ? parseTranscriptTableItems(rawText) : [];
+
   return {
     invoiceNumber: String(parsed?.invoiceNumber || '').trim(),
     supplierName: String(parsed?.supplierName || '').trim(),
     invoiceDate: normalizeDateString(parsed?.invoiceDate) || new Date().toISOString().split('T')[0],
     rawText: rawText || content,
-    items: normalizeItems(parsed?.items),
+    items: normalizedItems.length > 0 ? normalizedItems : transcriptItems,
   };
 };
 
