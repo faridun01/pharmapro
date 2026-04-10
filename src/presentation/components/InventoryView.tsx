@@ -118,27 +118,28 @@ const InventoryRow = React.memo(function InventoryRow({ index, product, stockLab
             <button
               onClick={() => onAddBarcode(product)}
               disabled={submitting}
-              className="px-2.5 py-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-all disabled:opacity-50 inline-flex items-center gap-1.5 text-xs"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
               title="Добавить штрихкод"
+              aria-label="Добавить штрихкод"
             >
               <PencilLine size={14} />
-              Баркод
             </button>
           )}
           <button
             onClick={() => onEditPrices(product)}
             disabled={submitting}
-            className="px-2.5 py-1.5 text-[#5A5A40] bg-[#f5f5f0] hover:bg-[#ebeade] rounded-lg transition-all disabled:opacity-50 inline-flex items-center gap-1.5 text-xs"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#f5f5f0] text-[#5A5A40] transition-all hover:bg-[#ebeade] disabled:opacity-50"
             title="Изменить цены"
+            aria-label="Изменить цены"
           >
             <PencilLine size={14} />
-            Цены
           </button>
           <button
             onClick={() => onDelete(product.id, product.name)}
             disabled={submitting}
-            className="p-1.5 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#5A5A40]/30 transition-all hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
             title={t('Delete Product')}
+            aria-label={t('Delete Product')}
           >
             <Trash2 size={16} />
           </button>
