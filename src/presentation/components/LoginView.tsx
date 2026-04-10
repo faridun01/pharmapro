@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { LogIn, ShieldCheck } from 'lucide-react';
 
-export const LoginView: React.FC = () => {
+export const LoginView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { t } = useTranslation();
   const { login } = usePharmacy();
   const [loginField, setLoginField] = useState('');
@@ -25,7 +25,7 @@ export const LoginView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f5f5f0] p-4 font-serif">
+    <div className={`${embedded ? 'h-full min-h-0' : 'min-h-screen'} flex items-center justify-center bg-[#f5f5f0] p-4 font-serif`}>
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-[#5A5A40]/10">
         <div className="bg-[#5A5A40] p-8 text-white text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-4">

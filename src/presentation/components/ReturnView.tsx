@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { useCurrencyCode } from '../../lib/useCurrencyCode';
+import { runRefreshTasks } from '../../lib/utils';
 import { Plus, CheckCircle2, XCircle, Clock, RefreshCw, ChevronDown, ChevronUp, Package, Printer } from 'lucide-react';
 import { AppModal } from './AppModal';
 
@@ -386,6 +387,7 @@ function CreateReturnModal({
 export const ReturnView: React.FC = () => {
   const { t } = useTranslation();
   const currencyCode = useCurrencyCode();
+  const { refreshProducts } = usePharmacy();
   const [returns, setReturns] = useState<Return[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -410,7 +412,9 @@ export const ReturnView: React.FC = () => {
     setActionPending(id);
     try {
       const res = await fetch(`/api/returns/${id}/approve`, { method: 'PUT', headers: await buildApiHeaders() });
-      if (res.ok) load();
+      if (res.ok) {
+        await runRefreshTasks(load, refreshProducts);
+      }
     } finally {
       setActionPending(null);
     }

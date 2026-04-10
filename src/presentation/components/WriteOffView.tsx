@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { Plus, Trash2, RefreshCw, AlertTriangle, Package } from 'lucide-react';
+import { runRefreshTasks } from '../../lib/utils';
 import { AppModal } from './AppModal';
 
 const REASONS = ['EXPIRED', 'DAMAGED', 'LOST', 'INTERNAL_USE', 'MISMATCH', 'BROKEN_PACKAGING', 'OTHER'] as const;
@@ -52,10 +53,10 @@ function CreateWriteOffModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: () => void | Promise<void>;
 }) {
   const { t } = useTranslation();
-  const { products } = usePharmacy();
+  const { products, refreshProducts } = usePharmacy();
   const [reason, setReason] = useState<Reason>('EXPIRED');
   const [note, setNote] = useState('');
   const [formItems, setFormItems] = useState<FormItem[]>([{ productId: '', batchId: '', quantity: 1 }]);
@@ -122,7 +123,7 @@ function CreateWriteOffModal({
         const data = await res.json();
         throw new Error(data.message || 'Failed to create write-off');
       }
-      onCreated();
+      await runRefreshTasks(refreshProducts, onCreated);
       onClose();
     } catch (e: any) {
       setError(e.message);

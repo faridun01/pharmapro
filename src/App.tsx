@@ -25,6 +25,8 @@ import {
 import { usePharmacy } from './presentation/context';
 import { useTranslation } from 'react-i18next';
 import { getShiftClosedEventName, loadLatestClosedShiftNotice } from './lib/shiftCloseNotice';
+import { lazyNamedImport } from './lib/lazyLoadComponents';
+import { BootSplash } from './presentation/components/BootSplash';
 
 type ViewErrorBoundaryState = { hasError: boolean; message: string };
 
@@ -91,24 +93,82 @@ class ViewErrorBoundary extends React.Component<{ children: React.ReactNode; onR
 
 type View = 'dashboard' | 'notifications' | 'pos' | 'inventory' | 'batches' | 'invoices' | 'debtors' | 'suppliers' | 'reports' | 'settings' | 'returns' | 'writeoffs' | 'shifts';
 
-const LoginView = lazy(async () => ({ default: (await import('./presentation/components/LoginView')).LoginView }));
-const DashboardView = lazy(async () => ({ default: (await import('./presentation/components/DashboardView')).DashboardView }));
-const NotificationsView = lazy(async () => ({ default: (await import('./presentation/components/NotificationsView')).NotificationsView }));
-const POSView = lazy(async () => ({ default: (await import('./presentation/components/POSView')).POSView }));
-const InventoryView = lazy(async () => ({ default: (await import('./presentation/components/InventoryView')).InventoryView }));
-const InvoicesView = lazy(async () => ({ default: (await import('./presentation/components/InvoicesView')).InvoicesView }));
-const BatchesView = lazy(async () => ({ default: (await import('./presentation/components/BatchesView')).BatchesView }));
-const SuppliersView = lazy(async () => ({ default: (await import('./presentation/components/SuppliersView')).SuppliersView }));
-const ReportsView = lazy(async () => ({ default: (await import('./presentation/components/ReportsView')).ReportsView }));
-const SettingsView = lazy(async () => ({ default: (await import('./presentation/components/SettingsView')).SettingsView }));
-const ImportInvoiceModal = lazy(async () => ({ default: (await import('./presentation/components/ImportInvoiceModal')).ImportInvoiceModal }));
-const ReturnView = lazy(async () => ({ default: (await import('./presentation/components/ReturnView')).ReturnView }));
-const WriteOffView = lazy(async () => ({ default: (await import('./presentation/components/WriteOffView')).WriteOffView }));
-const ShiftView = lazy(async () => ({ default: (await import('./presentation/components/ShiftView')).ShiftView }));
+const LoginView = lazyNamedImport(() => import('./presentation/components/LoginView'), 'LoginView');
+const DashboardView = lazyNamedImport(() => import('./presentation/components/DashboardView'), 'DashboardView');
+const NotificationsView = lazyNamedImport(() => import('./presentation/components/NotificationsView'), 'NotificationsView');
+const POSView = lazyNamedImport(() => import('./presentation/components/POSView'), 'POSView');
+const InventoryView = lazyNamedImport(() => import('./presentation/components/InventoryView'), 'InventoryView');
+const InvoicesView = lazyNamedImport(() => import('./presentation/components/InvoicesView'), 'InvoicesView');
+const BatchesView = lazyNamedImport(() => import('./presentation/components/BatchesView'), 'BatchesView');
+const SuppliersView = lazyNamedImport(() => import('./presentation/components/SuppliersView'), 'SuppliersView');
+const ReportsView = lazyNamedImport(() => import('./presentation/components/ReportsView'), 'ReportsView');
+const SettingsView = lazyNamedImport(() => import('./presentation/components/SettingsView'), 'SettingsView');
+const ImportInvoiceModal = lazyNamedImport(() => import('./presentation/components/ImportInvoiceModal'), 'ImportInvoiceModal');
+const ReturnView = lazyNamedImport(() => import('./presentation/components/ReturnView'), 'ReturnView');
+const WriteOffView = lazyNamedImport(() => import('./presentation/components/WriteOffView'), 'WriteOffView');
+const ShiftView = lazyNamedImport(() => import('./presentation/components/ShiftView'), 'ShiftView');
+
+const DesktopTitlebar: React.FC<{
+  controls: NonNullable<NonNullable<(Window & {
+    pharmaproDesktop?: {
+      controls?: {
+        minimize: () => void;
+        toggleMaximize: () => void;
+        close: () => void;
+      };
+    };
+  })['pharmaproDesktop']>['controls']>;
+}> = ({ controls }) => (
+  <div className="desktop-titlebar shrink-0 flex items-center justify-between pl-3">
+    <div className="app-drag min-w-0 flex-1 self-stretch" />
+
+    <div className="desktop-titlebar__controls app-no-drag flex items-center self-stretch">
+      <button
+        type="button"
+        onClick={() => controls.minimize()}
+        className="desktop-titlebar__button"
+        aria-label="Minimize window"
+      >
+        <Minus size={14} strokeWidth={2.2} />
+      </button>
+      <button
+        type="button"
+        onClick={() => controls.toggleMaximize()}
+        className="desktop-titlebar__button"
+        aria-label="Toggle maximize window"
+      >
+        <Square size={12} strokeWidth={2.1} />
+      </button>
+      <button
+        type="button"
+        onClick={() => controls.close()}
+        className="desktop-titlebar__button desktop-titlebar__button--close"
+        aria-label="Close window"
+      >
+        <X size={14} strokeWidth={2.2} />
+      </button>
+    </div>
+  </div>
+);
+
+const AppLoader: React.FC<{
+  label?: string;
+  compact?: boolean;
+}> = ({ label = 'Загрузка...', compact = false }) => (
+  <div className={`${compact ? 'min-h-60' : 'h-full min-h-0'} flex items-center justify-center bg-[#f5f5f0]`}>
+    <div className="flex flex-col items-center gap-3 text-center px-6">
+      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40]" />
+      <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#5A5A40]/55">{label}</p>
+    </div>
+  </div>
+);
 
 const App: React.FC = () => {
   const { t } = useTranslation();
   const { user, logout, isLoading, error, invoices, products } = usePharmacy();
+  const [bootStartedAt] = useState(() => Date.now());
+  const [hasShownStartupIntro, setHasShownStartupIntro] = useState(false);
+  const [isStartupFadingOut, setIsStartupFadingOut] = useState(false);
   const desktopControls = (window as Window & {
     pharmaproDesktop?: {
       controls?: {
@@ -139,6 +199,21 @@ const App: React.FC = () => {
       window.removeEventListener(getShiftClosedEventName(), refreshShiftNotice as EventListener);
     };
   }, []);
+
+  React.useEffect(() => {
+    if (hasShownStartupIntro) {
+      return;
+    }
+
+    const remainingMs = Math.max(0, 5000 - (Date.now() - bootStartedAt));
+    const fadeTimer = window.setTimeout(() => setIsStartupFadingOut(true), remainingMs);
+    const completeTimer = window.setTimeout(() => setHasShownStartupIntro(true), remainingMs + 420);
+
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(completeTimer);
+    };
+  }, [bootStartedAt, hasShownStartupIntro]);
 
 
   const menuItems = [
@@ -315,25 +390,40 @@ const App: React.FC = () => {
     }
   };
 
-  if (isLoading) {
+  if (!hasShownStartupIntro) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f0]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#5A5A40]"></div>
+      <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">
+        {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
+        <div className="flex-1 min-h-0">
+          <div className={isStartupFadingOut ? 'pharma-startup-fade-out' : 'pharma-startup-fade-in'}>
+            <BootSplash
+              subtitle="Готовим премиальное рабочее пространство и запускаем приложение"
+              note="Curated pharmacy experience"
+              showProgress
+              durationMs={5000}
+            />
+          </div>
+        </div>
       </div>
     );
   }
 
+  if (isLoading) {
+    return <AppLoader label="Проверяем рабочее пространство" />;
+  }
+
   if (!user) {
     return (
-      <Suspense
-        fallback={
-          <div className="min-h-screen flex items-center justify-center bg-[#f5f5f0]">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#5A5A40]"></div>
-          </div>
-        }
-      >
-        <LoginView />
-      </Suspense>
+      <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">
+        {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
+        <div className="flex-1 min-h-0">
+          <Suspense
+            fallback={<AppLoader label="Открываем форму входа" />}
+          >
+            <LoginView embedded={Boolean(desktopControls)} />
+          </Suspense>
+        </div>
+      </div>
     );
   }
 
@@ -342,9 +432,9 @@ const App: React.FC = () => {
       {/* Sidebar */}
       <aside
         className="bg-[#151619] text-white flex flex-col relative z-30 shadow-2xl pharma-sidebar"
-        style={{ width: isSidebarOpen ? 280 : 80 }}
+        style={{ width: isSidebarOpen ? 248 : 72 }}
       >
-        <div className="p-6 flex items-center gap-4 border-b border-white/5">
+        <div className="px-5 py-6 flex items-center gap-3 border-b border-white/5">
           <div className="w-10 h-10 bg-[#5A5A40] rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0">
             <Pill size={24} />
           </div>
@@ -356,12 +446,12 @@ const App: React.FC = () => {
           )}
         </div>
 
-        <nav className="flex-1 py-8 px-4 space-y-2 overflow-y-auto custom-scrollbar">
+        <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto custom-scrollbar">
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setCurrentView(item.id as View)}
-              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group relative ${
+              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl transition-all group relative ${
                 currentView === item.id 
                   ? 'bg-[#5A5A40] text-white shadow-lg' 
                   : 'text-white/40 hover:text-white hover:bg-white/5'
@@ -390,10 +480,10 @@ const App: React.FC = () => {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-white/5">
+        <div className="p-3 border-t border-white/5">
           <button 
             onClick={logout}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all group"
+            className="w-full flex items-center gap-3 px-3.5 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all group"
           >
             <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
             {isSidebarOpen && <span className="font-medium text-sm">{t('Sign Out')}</span>}
@@ -402,7 +492,7 @@ const App: React.FC = () => {
 
         <button 
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="absolute -right-4 top-20 w-8 h-8 bg-[#5A5A40] rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 transition-transform z-40 border-4 border-[#f5f5f0]"
+          className="absolute -right-4 top-20 w-8 h-8 bg-[#5A5A40] rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 transition-transform z-40 border-4 border-[#f5f5f0] app-no-drag"
         >
           {isSidebarOpen ? <X size={14} /> : <Menu size={14} />}
         </button>
@@ -410,38 +500,7 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        {desktopControls ? (
-          <div className="app-drag desktop-titlebar shrink-0 flex items-center justify-between pl-4">
-            <div className="min-w-0 flex-1" />
-
-            <div className="app-no-drag flex items-center self-stretch">
-              <button
-                type="button"
-                onClick={() => desktopControls.minimize()}
-                className="desktop-titlebar__button"
-                aria-label="Minimize window"
-              >
-                <Minus size={14} strokeWidth={2.2} />
-              </button>
-              <button
-                type="button"
-                onClick={() => desktopControls.toggleMaximize()}
-                className="desktop-titlebar__button"
-                aria-label="Toggle maximize window"
-              >
-                <Square size={12} strokeWidth={2.1} />
-              </button>
-              <button
-                type="button"
-                onClick={() => desktopControls.close()}
-                className="desktop-titlebar__button desktop-titlebar__button--close"
-                aria-label="Close window"
-              >
-                <X size={14} strokeWidth={2.2} />
-              </button>
-            </div>
-          </div>
-        ) : null}
+        {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
 
         {/* Error Banner */}
         {error && (
@@ -460,8 +519,8 @@ const App: React.FC = () => {
         )}
 
         {/* Header */}
-        <header className="h-24 bg-white/80 backdrop-blur-md border-b border-[#5A5A40]/5 flex items-center justify-between px-8 shrink-0 z-20">
-          <div className="flex items-center gap-6">
+        <header className="h-24 bg-white/80 backdrop-blur-md border-b border-[#5A5A40]/5 flex items-center justify-between px-6 shrink-0 z-20">
+          <div className="flex items-center gap-4 min-w-0">
             <div className="flex flex-col">
               <h2 className="text-xl font-bold text-[#5A5A40]">{currentMenuItem?.label || t(currentView.replace('-', ' '))}</h2>
               <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest font-bold">
@@ -470,13 +529,13 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-[#f5f5f0] rounded-2xl border border-[#5A5A40]/5">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
               <span className="text-[10px] font-bold text-[#5A5A40]/60 uppercase tracking-widest">{t('Server Connected')}</span>
             </div>
 
-            <div className="flex items-center gap-3 pl-4 border-l border-[#5A5A40]/10 ml-2">
+            <div className="flex items-center gap-3 pl-3 border-l border-[#5A5A40]/10">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-[#5A5A40]">{user.name}</p>
                 <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest font-bold">{user.role}</p>
@@ -489,15 +548,11 @@ const App: React.FC = () => {
         </header>
 
         {/* View Content */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar relative">
           <div key={currentView} className="pharma-view-enter">
             <ViewErrorBoundary onReset={() => setCurrentView('dashboard')}>
               <Suspense
-                fallback={
-                  <div className="min-h-60 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40]"></div>
-                  </div>
-                }
+                fallback={<AppLoader compact label="Загружаем раздел" />}
               >
                 {renderView()}
               </Suspense>

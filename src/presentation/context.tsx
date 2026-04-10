@@ -3,6 +3,7 @@ import { Product, User, Invoice, Supplier } from '../core/domain';
 import { TransactionDTO } from '../application/services';
 import { ApiProductRepository, ApiInvoiceRepository, ApiSupplierRepository, buildApiHeaders } from '../infrastructure/api';
 import { ConsoleLogger } from '../infrastructure/persistence';
+import { runRefreshTasks } from '../lib/utils';
 
 /**
  * Cache strategy for reference data (rarely changed)
@@ -64,6 +65,13 @@ interface PharmacyContextType {
 }
 
 const PharmacyContext = createContext<PharmacyContextType | undefined>(undefined);
+
+const bootstrapLoads = new Map<string, Promise<void>>();
+
+const getBootstrapLoadKey = (user: User | null) => {
+  const token = window.sessionStorage.getItem('pharmapro_token') || localStorage.getItem('pharmapro_token') || 'guest';
+  return user ? `auth:${user.id}:${token}` : `guest:${token}`;
+};
 
 export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -180,7 +188,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
         createdAt: new Date(body.createdAt),
       };
 
-      await Promise.all([refreshProducts(), refreshInvoices()]);
+      await runRefreshTasks(refreshProducts, refreshInvoices);
       return invoice;
     } catch (error) {
       logger.error('Transaction failed', error);
@@ -298,11 +306,27 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   useEffect(() => {
+    const loadKey = getBootstrapLoadKey(user);
+
     const init = async () => {
       setIsLoading(true);
-      await Promise.all([refreshProducts(), refreshInvoices(), refreshSuppliers()]);
-      setIsLoading(false);
+
+      let bootstrapPromise = bootstrapLoads.get(loadKey);
+      if (!bootstrapPromise) {
+        bootstrapPromise = runRefreshTasks(refreshProducts, refreshInvoices, refreshSuppliers).catch((error) => {
+          bootstrapLoads.delete(loadKey);
+          throw error;
+        });
+        bootstrapLoads.set(loadKey, bootstrapPromise);
+      }
+
+      try {
+        await bootstrapPromise;
+      } finally {
+        setIsLoading(false);
+      }
     };
+
     init();
   }, [user]);
 

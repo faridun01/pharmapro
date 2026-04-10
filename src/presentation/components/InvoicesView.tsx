@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
 import { downloadExcelFriendlyCsv } from '../../lib/excelCsv';
+import { runRefreshTasks } from '../../lib/utils';
 import { useCurrencyCode } from '../../lib/useCurrencyCode';
 import { 
   Search, 
@@ -396,7 +397,7 @@ export const InvoicesView: React.FC<{
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || t('Failed to edit invoice'));
       closeEditModal();
-      await Promise.all([refreshInvoices(), refreshProducts()]);
+      await runRefreshTasks(refreshInvoices, refreshProducts);
     } catch (e: any) {
       setEditModal((prev) => ({ ...prev, error: e.message || t('Failed to edit invoice') }));
     } finally {
@@ -428,7 +429,7 @@ export const InvoicesView: React.FC<{
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || t('Failed to return invoice'));
       closeReturnModal();
-      await Promise.all([refreshInvoices(), refreshProducts()]);
+      await runRefreshTasks(refreshInvoices, refreshProducts);
     } catch (e: any) {
       setReturnInvoiceTarget((prev) => prev ? { ...prev, error: e.message || t('Failed to return invoice') } : prev);
     } finally {
@@ -533,7 +534,7 @@ export const InvoicesView: React.FC<{
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || t('Failed to delete invoice'));
       setDeleteInvoiceTarget(null);
-      await Promise.all([refreshInvoices(), refreshProducts()]);
+      await runRefreshTasks(refreshInvoices, refreshProducts);
     } catch (e: any) {
       setActionError(e.message || t('Failed to delete invoice'));
     } finally {
@@ -862,15 +863,17 @@ export const InvoicesView: React.FC<{
                   </td>
                   <td className="px-6 py-3.5">
                     <div className="inline-flex flex-col gap-1.5">
-                      <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border ${paymentMethodBadge.className}`}>
-                        {paymentMethodBadge.label}
-                      </span>
+                      {!isDebtorsView && (
+                        <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border ${paymentMethodBadge.className}`}>
+                          {paymentMethodBadge.label}
+                        </span>
+                      )}
                       <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${paymentBadge.className}`}>
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
                         {paymentBadge.label}
                       </span>
                     </div>
-                    {shouldShowDebt && (
+                    {!isDebtorsView && shouldShowDebt && (
                       <p className="text-[9px] font-semibold text-rose-700 leading-none mt-1.5 bg-rose-50 border border-rose-100 rounded-full px-2 py-1 inline-flex items-center">
                         Остаток: {outstandingAmount.toFixed(2)} {currencyCode}
                       </p>

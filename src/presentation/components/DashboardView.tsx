@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
+import { lazyNamedImport } from '../../lib/lazyLoadComponents';
 import { 
   TrendingUp, 
   Package, 
@@ -15,9 +16,7 @@ import {
 
 type DashboardPeriodPreset = 'month' | 'q1' | 'q2' | 'q3' | 'q4' | 'year';
 
-const DashboardSalesChart = lazy(async () => ({
-  default: (await import('./DashboardSalesChart')).DashboardSalesChart,
-}));
+const DashboardSalesChart = lazyNamedImport(() => import('./DashboardSalesChart'), 'DashboardSalesChart');
 
 const startOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
 

@@ -6,8 +6,9 @@ import { Search, Plus, Trash2, AlertTriangle, Pill, Package, X, PencilLine } fro
 import { Product } from '../../core/domain';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { BatchesView } from './BatchesView';
+import { lazyNamedImport } from '../../lib/lazyLoadComponents';
 
-const ImportInvoiceModal = lazy(async () => ({ default: (await import('./ImportInvoiceModal')).ImportInvoiceModal }));
+const ImportInvoiceModal = lazyNamedImport(() => import('./ImportInvoiceModal'), 'ImportInvoiceModal');
 
 type NewProductForm = {
   name: string;
