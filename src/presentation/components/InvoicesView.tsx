@@ -59,9 +59,21 @@ type DebtorGroup = {
   totalPaid: number;
   totalOutstanding: number;
   totalUnits: number;
-  overdueCount: number;
   latestActivityAt: Date | null;
 };
+
+type DateFilterMode = 'all' | 'today' | 'month' | 'year' | 'custom';
+
+const formatDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const startOfMonthValue = (date: Date) => formatDateInputValue(new Date(date.getFullYear(), date.getMonth(), 1));
+const startOfYearValue = (date: Date) => formatDateInputValue(new Date(date.getFullYear(), 0, 1));
+const toLocalDayKey = (value: string | Date) => formatDateInputValue(new Date(value));
 
 export const InvoicesView: React.FC<{
   viewMode?: 'history' | 'debtors';
@@ -74,14 +86,16 @@ export const InvoicesView: React.FC<{
   const { t } = useTranslation();
   const { invoices, products, isLoading, refreshInvoices, refreshProducts } = usePharmacy();
   const isDebtorsView = viewMode === 'debtors';
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const currentDate = new Date();
+  const todayIso = formatDateInputValue(currentDate);
+  const monthStartIso = startOfMonthValue(currentDate);
+  const yearStartIso = startOfYearValue(currentDate);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'id'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [dateFilterMode, setDateFilterMode] = useState<'all' | 'today' | 'custom'>('all');
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>(isDebtorsView ? 'all' : 'today');
   const [dateFrom, setDateFrom] = useState(todayIso);
   const [dateTo, setDateTo] = useState(todayIso);
-  const [debtFilter, setDebtFilter] = useState<'all' | 'overdue'>('all');
   const currencyCode = useCurrencyCode();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -175,15 +189,23 @@ export const InvoicesView: React.FC<{
       return true;
     }
 
-    const invoiceDay = invoiceDate.toISOString().slice(0, 10);
+    const invoiceDay = toLocalDayKey(createdAt);
     if (dateFilterMode === 'today') {
       return invoiceDay === todayIso;
+    }
+
+    if (dateFilterMode === 'month') {
+      return invoiceDay >= monthStartIso && invoiceDay <= todayIso;
+    }
+
+    if (dateFilterMode === 'year') {
+      return invoiceDay >= yearStartIso && invoiceDay <= todayIso;
     }
 
     const from = dateFrom || todayIso;
     const to = dateTo || from;
     return invoiceDay >= from && invoiceDay <= to;
-  }, [dateFilterMode, dateFrom, dateTo, todayIso]);
+  }, [dateFilterMode, dateFrom, dateTo, monthStartIso, todayIso, yearStartIso]);
 
   const getInvoiceOutstandingAmount = useCallback((invoice: any) => Number(
     invoice?.outstandingAmount
@@ -193,15 +215,20 @@ export const InvoicesView: React.FC<{
   ), []);
 
   const isDebtorInvoice = useCallback((invoice: any) => getInvoiceOutstandingAmount(invoice) > 0.009, [getInvoiceOutstandingAmount]);
-  const isOverdueInvoice = useCallback((invoice: any) => {
-    const dueDateValue = invoice?.receivables?.[0]?.dueDate;
-    if (!dueDateValue || !isDebtorInvoice(invoice)) return false;
-    const dueDate = new Date(dueDateValue);
-    if (Number.isNaN(dueDate.getTime())) return false;
-    return dueDate.getTime() < Date.now();
-  }, [isDebtorInvoice]);
 
   const moneyLabel = useCallback((label: string) => `${label} (${currencyCode})`, [currencyCode]);
+
+  const getPaymentStatusLabel = useCallback((paymentState: string, outstandingAmount: number, paidAmount = 0) => {
+    if (outstandingAmount <= 0 || paymentState === 'PAID') {
+      return { label: 'Оплачено', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    }
+
+    if (paymentState === 'PARTIALLY_PAID' || paidAmount > 0) {
+      return { label: 'Частично оплачено', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+    }
+
+    return { label: 'Долг', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+  }, []);
 
   const getProductDisplayLabel = useCallback((productId?: string, fallbackName?: string) => {
     const baseName = String(fallbackName || '-').trim() || '-';
@@ -220,7 +247,6 @@ export const InvoicesView: React.FC<{
     const filtered = invoices.filter((inv) => 
       matchesDateFilter(inv.createdAt)
       && (isDebtorsView ? isDebtorInvoice(inv) : (!isDebtorInvoice(inv) && String(inv.paymentStatus || '').toUpperCase() === 'PAID'))
-      && (!isDebtorsView || debtFilter === 'all' || isOverdueInvoice(inv))
       && (
         (inv.invoiceNo || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
         inv.id.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
@@ -244,7 +270,7 @@ export const InvoicesView: React.FC<{
     });
 
     return sorted;
-  }, [invoices, debouncedSearchTerm, sortBy, sortOrder, matchesDateFilter, isDebtorsView, isDebtorInvoice, debtFilter, isOverdueInvoice]);
+  }, [invoices, debouncedSearchTerm, sortBy, sortOrder, matchesDateFilter, isDebtorsView, isDebtorInvoice]);
 
   const debtorGroups = useMemo<DebtorGroup[]>(() => {
     if (!isDebtorsView) {
@@ -270,7 +296,6 @@ export const InvoicesView: React.FC<{
         existing.totalPaid += paidAmount;
         existing.totalOutstanding += outstandingAmount;
         existing.totalUnits += totalUnits;
-        existing.overdueCount += isOverdueInvoice(invoice) ? 1 : 0;
         if (invoice.customerId && !existing.customerIds.includes(invoice.customerId)) {
           existing.customerIds.push(invoice.customerId);
         }
@@ -290,7 +315,6 @@ export const InvoicesView: React.FC<{
         totalPaid: paidAmount,
         totalOutstanding: outstandingAmount,
         totalUnits,
-        overdueCount: isOverdueInvoice(invoice) ? 1 : 0,
         latestActivityAt: createdAt,
       });
     }
@@ -312,7 +336,7 @@ export const InvoicesView: React.FC<{
       const rightTime = right.latestActivityAt?.getTime() || 0;
       return sortOrder === 'asc' ? leftTime - rightTime : rightTime - leftTime;
     });
-  }, [filteredInvoices, getInvoiceOutstandingAmount, isDebtorsView, isOverdueInvoice, sortBy, sortOrder]);
+  }, [filteredInvoices, getInvoiceOutstandingAmount, isDebtorsView, sortBy, sortOrder]);
 
   useEffect(() => {
     if (!detailsDebtor) {
@@ -331,17 +355,68 @@ export const InvoicesView: React.FC<{
     const totalOutstanding = isDebtorsView
       ? debtorGroups.reduce((acc, debtor) => acc + debtor.totalOutstanding, 0)
       : filteredInvoices.reduce((acc, inv) => acc + getInvoiceOutstandingAmount(inv), 0);
-    const overdueCount = isDebtorsView
-      ? debtorGroups.filter((debtor) => debtor.overdueCount > 0).length
-      : filteredInvoices.filter((inv) => isOverdueInvoice(inv)).length;
+    const totalDebtInvoices = isDebtorsView
+      ? debtorGroups.reduce((acc, debtor) => acc + debtor.invoiceCount, 0)
+      : 0;
     return {
       totalRevenue,
       totalCount,
       totalOutstanding,
-      overdueCount,
+      totalDebtInvoices,
       averageOrder: totalRevenue / (totalCount || 1),
     };
-  }, [debtorGroups, filteredInvoices, getInvoiceOutstandingAmount, isDebtorsView, isOverdueInvoice]);
+  }, [debtorGroups, filteredInvoices, getInvoiceOutstandingAmount, isDebtorsView]);
+
+  const latestVisibleInvoice = useMemo(() => {
+    if (isDebtorsView) {
+      return debtorGroups[0]?.latestActivityAt || null;
+    }
+
+    return filteredInvoices[0] || null;
+  }, [debtorGroups, filteredInvoices, isDebtorsView]);
+
+  const activeRangeMeta = useMemo(() => {
+    if (isDebtorsView) {
+      return {
+        label: 'Все долги',
+        hint: 'Текущий список клиентов с непогашенным остатком.',
+      };
+    }
+
+    if (dateFilterMode === 'today') {
+      return { label: 'Сегодня', hint: 'Автоматически открываем текущий день, чтобы сразу видеть свежие продажи.' };
+    }
+    if (dateFilterMode === 'month') {
+      return { label: 'Текущий месяц', hint: 'Срез с 1 числа месяца по сегодня.' };
+    }
+    if (dateFilterMode === 'year') {
+      return { label: 'Текущий год', hint: 'Продажи с 1 января по текущую дату.' };
+    }
+    if (dateFilterMode === 'custom') {
+      return { label: 'Выбранный период', hint: `${dateFrom || todayIso} - ${dateTo || dateFrom || todayIso}` };
+    }
+
+    return { label: 'Все продажи', hint: 'Полная история без ограничения по датам.' };
+  }, [dateFilterMode, dateFrom, dateTo, isDebtorsView, todayIso]);
+
+  const quickDatePresets = useMemo(() => ([
+    {
+      key: 'today' as DateFilterMode,
+      label: 'Сегодня',
+    },
+    {
+      key: 'month' as DateFilterMode,
+      label: 'Месяц',
+    },
+    {
+      key: 'year' as DateFilterMode,
+      label: 'Год',
+    },
+    {
+      key: 'custom' as DateFilterMode,
+      label: 'Период',
+    },
+  ]), []);
 
   const onInvoicesScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     setInvoicesScrollTop(event.currentTarget.scrollTop);
@@ -827,75 +902,118 @@ export const InvoicesView: React.FC<{
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
-              {isDebtorsView ? 'Контроль задолженности' : 'История чеков'}
-            </span>
-            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
-              {isDebtorsView ? 'Платежи и погашение' : 'Фильтры и экспорт'}
-            </span>
+      <div className="overflow-hidden rounded-3xl border border-[#5A5A40]/5 bg-white shadow-sm">
+        <div className="grid gap-5 border-b border-[#5A5A40]/8 px-5 py-5 md:px-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] xl:items-start">
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-2xl font-black tracking-tight text-[#423d2f] md:text-[30px]">
+                {isDebtorsView ? 'Должники' : 'История продаж'}
+              </h2>
+            </div>
+
+            {!isDebtorsView && (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {quickDatePresets.map((preset) => {
+                  const isActive = dateFilterMode === preset.key;
+                  return (
+                    <button
+                      key={preset.key}
+                      onClick={() => {
+                        setDateFilterMode(preset.key);
+                        if (preset.key === 'today') {
+                          setDateFrom(todayIso);
+                          setDateTo(todayIso);
+                        }
+                        if (preset.key === 'month') {
+                          setDateFrom(monthStartIso);
+                          setDateTo(todayIso);
+                        }
+                        if (preset.key === 'year') {
+                          setDateFrom(yearStartIso);
+                          setDateTo(todayIso);
+                        }
+                      }}
+                      className={`rounded-2xl border px-4 py-4 text-left transition-all ${isActive ? 'border-[#5A5A40] bg-[#5A5A40] text-white shadow-[0_10px_20px_rgba(90,90,64,0.14)]' : 'border-[#5A5A40]/10 bg-white text-[#5A5A40] hover:bg-[#f8f7f2]'}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-extrabold uppercase tracking-[0.18em]">{preset.label}</span>
+                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold ${isActive ? 'bg-white/16 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/70'}`}>
+                          {preset.label.slice(0, 1)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-          {!isDebtorsView && (
-            <>
-              <div className="flex items-center gap-2 rounded-2xl border border-[#5A5A40]/10 bg-white px-3 py-2 shadow-sm">
-                <button
-                  onClick={() => setDateFilterMode('all')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateFilterMode === 'all' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/65 hover:bg-[#f5f5f0]'}`}
-                >
-                  Все дни
-                </button>
-                <button
-                  onClick={() => {
-                    setDateFilterMode('today');
-                    setDateFrom(todayIso);
-                    setDateTo(todayIso);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateFilterMode === 'today' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/65 hover:bg-[#f5f5f0]'}`}
-                >
-                  Сегодня
-                </button>
-                <button
-                  onClick={() => setDateFilterMode('custom')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateFilterMode === 'custom' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/65 hover:bg-[#f5f5f0]'}`}
-                >
-                  Период
-                </button>
+          <div className="grid gap-3 rounded-[28px] border border-[#5A5A40]/8 bg-[#fcfbf8] p-4">
+            <div className="rounded-[22px] border border-[#5A5A40]/8 bg-white p-4">
+              <p className="mt-2 text-2xl font-black text-[#423d2f]">{activeRangeMeta.label}</p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-[22px] border border-[#5A5A40]/8 bg-white px-4 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#5A5A40]/45">{isDebtorsView ? 'В фокусе' : 'Продаж в выборке'}</p>
+                <p className="mt-2 text-2xl font-black text-[#423d2f]">{invoicesSummary.totalCount}</p>
               </div>
-              {dateFilterMode === 'custom' && (
-                <div className="flex items-center gap-2 rounded-2xl border border-[#5A5A40]/10 bg-white px-3 py-2 shadow-sm">
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="rounded-xl border border-[#5A5A40]/10 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                  />
-                  <span className="text-xs text-[#5A5A40]/50">—</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    min={dateFrom}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="rounded-xl border border-[#5A5A40]/10 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                  />
-                </div>
-              )}
-            </>
-          )}
-          <button
-            onClick={exportInvoicesReport}
-            className="bg-white text-[#5A5A40] px-6 py-3 rounded-2xl font-medium border border-[#5A5A40]/10 shadow-sm hover:bg-[#f5f5f0] transition-all flex items-center gap-2"
-          >
-            <Download size={20} />
-            {t('Export Report')}
-          </button>
-        </div>
+              <div className="rounded-[22px] border border-[#5A5A40]/8 bg-white px-4 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#5A5A40]/45">{isDebtorsView ? 'Последняя активность' : 'Последняя продажа'}</p>
+                <p className="mt-2 text-lg font-black text-[#423d2f]">
+                  {latestVisibleInvoice
+                    ? (isDebtorsView
+                      ? (latestVisibleInvoice as Date).toLocaleDateString('ru-RU')
+                      : new Date((latestVisibleInvoice as any).createdAt).toLocaleDateString('ru-RU'))
+                    : 'Нет данных'}
+                </p>
+                <p className="mt-1 text-xs text-[#5A5A40]/58">
+                  {latestVisibleInvoice
+                    ? (isDebtorsView
+                      ? (latestVisibleInvoice as Date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+                      : new Date((latestVisibleInvoice as any).createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }))
+                    : '—'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={exportInvoicesReport}
+              className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-[#5A5A40]/10 bg-[#5A5A40] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(90,90,64,0.22)] transition-all hover:-translate-y-px hover:bg-[#4b4b36]"
+            >
+              <Download size={18} />
+              {t('Export Report')}
+            </button>
+          </div>
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 border-t border-[#5A5A40]/8 pt-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="px-5 py-5 md:px-6">
+          {!isDebtorsView && dateFilterMode === 'custom' && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[22px] border border-[#5A5A40]/10 bg-white/80 px-3 py-3 shadow-sm">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="rounded-xl border border-[#5A5A40]/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+              />
+              <span className="text-xs text-[#5A5A40]/50">—</span>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="rounded-xl border border-[#5A5A40]/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+              />
+              <button
+                onClick={() => setDateFilterMode('all')}
+                className="ml-auto rounded-xl border border-[#5A5A40]/10 px-3 py-2 text-xs font-semibold text-[#5A5A40]/70 transition-colors hover:bg-[#f5f5f0]"
+              >
+                Сбросить период
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative group w-full xl:max-w-85">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
             <input 
@@ -908,7 +1026,6 @@ export const InvoicesView: React.FC<{
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar">
-            <span className="text-xs font-semibold text-[#5A5A40]/50 whitespace-nowrap"></span>
             {[
               { key: 'date', label: 'По дате' },
               { key: 'amount', label: 'По сумме' },
@@ -933,25 +1050,37 @@ export const InvoicesView: React.FC<{
                 {option.label} {sortBy === option.key && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
             ))}
+
+            {!isDebtorsView && (
+              <button
+                onClick={() => setDateFilterMode('all')}
+                className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${dateFilterMode === 'all' ? 'bg-[#5A5A40] text-white border-[#5A5A40]' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'}`}
+              >
+                Вся история
+              </button>
+            )}
           </div>
         </div>
       </div>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
           ...(isDebtorsView
             ? [
                 { label: moneyLabel('Общий долг'), value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-rose-600', bg: 'bg-rose-50' },
                 { label: 'Количество должников', value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
-                { label: 'Просроченные', value: invoicesSummary.overdueCount.toString(), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+                { label: 'Накладных в долге', value: invoicesSummary.totalDebtInvoices.toString(), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+                { label: 'Средний долг', value: `${invoicesSummary.averageOrder.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: AlertCircle, color: 'text-[#7a5b1f]', bg: 'bg-[#fbf3df]' },
               ]
             : [
                 { label: moneyLabel(t('Total Revenue')), value: `${invoicesSummary.totalRevenue.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                 { label: t('Total Invoices'), value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
                 { label: moneyLabel(t('Avg. Order Value')), value: `${invoicesSummary.averageOrder.toFixed(2)} ${currencyCode}`, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
+                { label: 'Остаток по продажам', value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
               ])
         ].map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 flex items-center gap-4 hover:-translate-y-0.5 hover:shadow-md transition-all">
+          <div key={i} className="bg-white p-5 rounded-[28px] shadow-sm border border-[#5A5A40]/5 flex items-center gap-4 hover:-translate-y-0.5 hover:shadow-md transition-all">
             <div className={`w-12 h-12 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
               <stat.icon size={24} />
             </div>
@@ -1010,12 +1139,7 @@ export const InvoicesView: React.FC<{
               )}
               {!isInitialInvoicesLoading && isDebtorsView && debtorGroups.map((debtor, index) => {
                 const rowNumber = index + 1;
-                const debtorIsOverdue = debtor.overdueCount > 0;
-                const statusBadge = debtorIsOverdue
-                  ? { label: 'Просрочен', className: 'bg-rose-50 text-rose-700 border-rose-200' }
-                  : debtor.totalPaid > 0
-                    ? { label: 'Частично оплачено', className: 'bg-amber-50 text-amber-700 border-amber-200' }
-                    : { label: 'Долг', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+                const statusBadge = getPaymentStatusLabel('UNPAID', debtor.totalOutstanding, debtor.totalPaid);
 
                 return (
                   <tr key={debtor.key} className="hover:bg-[#f5f5f0]/30 transition-colors group align-top">
@@ -1089,14 +1213,7 @@ export const InvoicesView: React.FC<{
                 const outstandingAmount = Number((invoice as any).outstandingAmount ?? invoice.receivables?.[0]?.remainingAmount ?? Math.max(0, netAmount - paidAmount));
                 const paymentState = String(invoice.paymentStatus || 'UNPAID');
                 const shouldShowDebt = ['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'].includes(paymentState) && outstandingAmount > 0;
-                const invoiceIsOverdue = isOverdueInvoice(invoice);
-                const paymentBadge = invoiceIsOverdue
-                  ? { label: 'Просрочен', className: 'bg-rose-50 text-rose-700 border-rose-200' }
-                  : paymentState === 'PAID'
-                  ? { label: 'Оплачено', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
-                  : paymentState === 'PARTIALLY_PAID'
-                    ? { label: 'Частично оплачено', className: 'bg-amber-50 text-amber-700 border-amber-200' }
-                    : { label: 'Долг', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+                const paymentBadge = getPaymentStatusLabel(paymentState, outstandingAmount, paidAmount);
                 const paymentMethodBadge = invoice.paymentType === 'CASH'
                   ? { label: 'Наличные', className: 'bg-blue-50 text-blue-700 border-blue-200' }
                   : invoice.paymentType === 'CARD'
@@ -1285,11 +1402,12 @@ export const InvoicesView: React.FC<{
                         const paidAmount = Number((invoice as any).paidAmountTotal ?? 0);
                         const outstandingAmount = Number((invoice as any).outstandingAmount ?? getInvoiceOutstandingAmount(invoice));
                         const paymentState = String(invoice.paymentStatus || 'UNPAID');
+                        const paymentBadge = getPaymentStatusLabel(paymentState, outstandingAmount, paidAmount);
                         return (
                           <tr key={invoice.id} className="border-t border-[#5A5A40]/10">
                             <td className="px-3 py-2 font-semibold text-[#5A5A40]">{invoice.invoiceNo || invoice.id}</td>
                             <td className="px-3 py-2">{new Date(invoice.createdAt).toLocaleString('ru-RU')}</td>
-                            <td className="px-3 py-2">{paymentState}</td>
+                            <td className="px-3 py-2">{paymentBadge.label}</td>
                             <td className="px-3 py-2 text-right">{Number(invoice.totalAmount || 0).toFixed(2)}</td>
                             <td className="px-3 py-2 text-right text-emerald-700">{paidAmount.toFixed(2)}</td>
                             <td className="px-3 py-2 text-right text-rose-700">{outstandingAmount.toFixed(2)}</td>
