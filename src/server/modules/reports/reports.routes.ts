@@ -39,6 +39,8 @@ type MonthlySaleDetailRow = {
   customer: string;
   paymentType: string;
   totalAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
   itemCount: number;
   soldUnits: number;
   items: Array<{
@@ -47,7 +49,9 @@ type MonthlySaleDetailRow = {
     sku: string;
     quantity: number;
     unitPrice: number;
+    unitCost: number;
     lineTotal: number;
+    lineProfit: number;
   }>;
 };
 
@@ -473,9 +477,15 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
             quantity: true,
             unitPrice: true,
             totalPrice: true,
+            batch: {
+              select: {
+                costBasis: true,
+              },
+            },
             product: {
               select: {
                 sku: true,
+                costPrice: true,
               },
             },
           },
@@ -641,14 +651,19 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
       outstandingAmount: getInvoiceOutstandingAmount(invoice),
       itemCount: invoice.items.length,
       soldUnits: invoice.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-      items: invoice.items.map((item) => ({
-        productId: String(item.productId || ''),
-        productName: String(item.productName || '-'),
-        sku: String(item.product?.sku || '-'),
-        quantity: Number(item.quantity || 0),
-        unitPrice: Number(item.unitPrice || 0),
-        lineTotal: Number(item.totalPrice || 0),
-      })),
+      items: invoice.items.map((item) => {
+        const unitCost = Number(item.batch?.costBasis || item.product?.costPrice || 0);
+        return {
+          productId: String(item.productId || ''),
+          productName: String(item.productName || '-'),
+          sku: String(item.product?.sku || '-'),
+          quantity: Number(item.quantity || 0),
+          unitPrice: Number(item.unitPrice || 0),
+          lineTotal: Number(item.totalPrice || 0),
+          unitCost,
+          lineProfit: Number(item.totalPrice || 0) - (Number(item.quantity || 0) * unitCost),
+        };
+      }),
     }));
 
   const currentMonthProductSalesMap = new Map<string, MonthlyProductSalesRow>();

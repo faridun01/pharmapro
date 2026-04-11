@@ -107,7 +107,9 @@ type FinanceReport = {
         sku: string;
         quantity: number;
         unitPrice: number;
+        unitCost: number;
         lineTotal: number;
+        lineProfit: number;
       }>;
     }>;
     productTotals: Array<{
@@ -253,7 +255,9 @@ const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceReport => 
                 sku: String(item?.sku || '-'),
                 quantity: toNumber(item?.quantity),
                 unitPrice: toNumber(item?.unitPrice),
+                  unitCost: toNumber(item?.unitCost),
                 lineTotal: toNumber(item?.lineTotal),
+                  lineProfit: toNumber(item?.lineProfit),
               }))
             : [],
         }))
@@ -387,6 +391,14 @@ export const ReportsView: React.FC = () => {
     return `${wholeQuantity} ед.`;
   };
 
+  const getLocalDateKey = (value: string) => {
+    const date = new Date(value);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const kpiCards = useMemo(() => {
     if (!report) return [];
     return [
@@ -406,6 +418,137 @@ export const ReportsView: React.FC = () => {
     try {
       const XLSX = await loadXlsx();
       const wb = XLSX.utils.book_new();
+
+      if (viewMode === 'detailed') {
+        const dailySalesMap = new Map<string, {
+          date: Date;
+          totalAmount: number;
+          totalProfit: number;
+          rows: Array<[
+            string,
+            string,
+            string,
+            string,
+            string,
+            number,
+            number,
+            number,
+            number,
+          ]>;
+        }>();
+
+        for (const sale of report.currentMonthSales.saleDetails) {
+          const saleDate = new Date(sale.createdAt);
+          const dayKey = getLocalDateKey(sale.createdAt);
+          const existing = dailySalesMap.get(dayKey) ?? {
+            date: saleDate,
+            totalAmount: 0,
+            totalProfit: 0,
+            rows: [],
+          };
+
+          existing.totalAmount += toNumber(sale.totalAmount);
+
+          for (const item of sale.items) {
+            const lineProfit = toNumber(item.lineProfit);
+            existing.totalProfit += lineProfit;
+            existing.rows.push([
+              new Date(sale.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+              sale.invoiceNo,
+              sale.customer,
+              item.productName,
+              item.sku,
+              toNumber(item.quantity),
+              toNumber(item.unitPrice),
+              toNumber(item.lineTotal),
+              lineProfit,
+            ]);
+          }
+
+          dailySalesMap.set(dayKey, existing);
+        }
+
+        const detailRows: Array<Array<string | number>> = [
+          ['Детализированный отчет по продажам'],
+          [`Период: ${new Date(report.currentMonthSales.from).toLocaleDateString('ru-RU')} - ${new Date(report.currentMonthSales.to).toLocaleDateString('ru-RU')}`],
+          [],
+        ];
+
+        for (const day of Array.from(dailySalesMap.values()).sort((left, right) => left.date.getTime() - right.date.getTime())) {
+          detailRows.push([
+            'Дата',
+            day.date.toLocaleDateString('ru-RU'),
+            '',
+            'Сумма за день',
+            day.totalAmount,
+            '',
+            'Прибыль за день',
+            day.totalProfit,
+          ]);
+          detailRows.push(['Время', 'Накладная', 'Покупатель', 'Товар', 'SKU', 'Кол-во', 'Цена', 'Сумма', 'Прибыль']);
+          detailRows.push(...day.rows);
+          detailRows.push([]);
+        }
+
+        const detailSheet = XLSX.utils.aoa_to_sheet(detailRows);
+        detailSheet['!cols'] = [
+          { wch: 10 },
+          { wch: 20 },
+          { wch: 24 },
+          { wch: 32 },
+          { wch: 14 },
+          { wch: 10 },
+          { wch: 12 },
+          { wch: 14 },
+          { wch: 14 },
+        ];
+        XLSX.utils.book_append_sheet(wb, detailSheet, 'Продажи по дням');
+
+        const totalSales = report.currentMonthSales.saleDetails.length;
+        const totalUnits = report.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.soldUnits), 0);
+        const totalRevenue = report.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.totalAmount), 0);
+        const totalPaid = report.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.paidAmount), 0);
+        const totalDebt = report.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.outstandingAmount), 0);
+
+        const analyticsRows: Array<Array<string | number>> = [
+          ['Аналитика детализированного отчета'],
+          ['Показатель', 'Значение'],
+          ['Период с', new Date(report.currentMonthSales.from).toLocaleDateString('ru-RU')],
+          ['Период по', new Date(report.currentMonthSales.to).toLocaleDateString('ru-RU')],
+          ['Продаж', totalSales],
+          ['Товаров в продажах', report.currentMonthSales.productTotals.length],
+          ['Продано единиц', totalUnits],
+          ['Сумма продаж', totalRevenue],
+          ['Оплачено', totalPaid],
+          ['В долг', totalDebt],
+          ['Валовая прибыль', report.kpi.grossProfit],
+          ['Валовая маржа %', toNumber(report.kpi.grossMarginPct)],
+          ['Возвраты', report.kpi.customerReturnsAmount],
+          [],
+          ['Продажи по товарам'],
+          ['Товар', 'SKU', 'Продано', 'Продаж', 'Выручка'],
+          ...report.currentMonthSales.productTotals.map((row) => [
+            row.name,
+            row.sku,
+            row.soldUnits,
+            row.salesCount,
+            row.revenue,
+          ]),
+        ];
+
+        const analyticsSheet = XLSX.utils.aoa_to_sheet(analyticsRows);
+        analyticsSheet['!cols'] = [
+          { wch: 28 },
+          { wch: 16 },
+          { wch: 12 },
+          { wch: 12 },
+          { wch: 14 },
+        ];
+        XLSX.utils.book_append_sheet(wb, analyticsSheet, 'Аналитика');
+
+        XLSX.writeFile(wb, `детализированный-отчет-${new Date().toISOString().slice(0, 10)}.xlsx`);
+        return;
+      }
 
       const summarySheet = XLSX.utils.aoa_to_sheet([
         ['Показатель', 'Значение'],
