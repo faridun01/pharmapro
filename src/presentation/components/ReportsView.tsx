@@ -390,7 +390,7 @@ export const ReportsView: React.FC = () => {
   const kpiCards = useMemo(() => {
     if (!report) return [];
     return [
-      { label: 'Получено денег', value: formatMoney(report.kpi.netRevenue) },
+      { label: 'Получено денег', value: formatMoney(report.kpi.revenueGross) },
       { label: 'Осталось в долг', value: formatMoney(report.debts.receivableTotal) },
       { label: 'Валовая прибыль', value: formatMoney(report.kpi.grossProfit) },
       { label: 'Валовая маржа', value: `${toNumber(report.kpi.grossMarginPct).toFixed(1)} %` },
@@ -409,7 +409,7 @@ export const ReportsView: React.FC = () => {
 
       const summarySheet = XLSX.utils.aoa_to_sheet([
         ['Показатель', 'Значение'],
-        ['Получено денег', report.kpi.netRevenue],
+        ['Получено денег', report.kpi.revenueGross],
         ['Осталось в долг', report.debts.receivableTotal],
         ['Валовая прибыль', report.kpi.grossProfit],
         ['Валовая маржа %', toNumber(report.kpi.grossMarginPct)],

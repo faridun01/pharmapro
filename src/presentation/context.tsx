@@ -321,7 +321,11 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
 
       let bootstrapPromise = bootstrapLoads.get(loadKey);
       if (!bootstrapPromise) {
-        bootstrapPromise = Promise.resolve().catch((error) => {
+        bootstrapPromise = runRefreshTasks(
+          refreshProducts,
+          refreshInvoices,
+          refreshSuppliers,
+        ).catch((error) => {
           bootstrapLoads.delete(loadKey);
           throw error;
         });
