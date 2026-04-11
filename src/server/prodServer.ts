@@ -3,6 +3,7 @@ import path from 'path';
 import express from 'express';
 import { createApp } from './app/createApp';
 import { ensureAdminUser } from './common/auth';
+import { logStartupError } from './common/startup';
 
 const app = createApp();
 const PORT = Number(process.env.PORT || 3921);
@@ -29,6 +30,6 @@ app.listen(PORT, '127.0.0.1', async () => {
   try {
     await ensureAdminUser();
   } catch (err) {
-    console.error('[startup] ensureAdminUser failed:', err instanceof Error ? err.message : err);
+    logStartupError(err);
   }
 });

@@ -72,6 +72,14 @@ function CreateWriteOffModal({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open || products.length > 0) {
+      return;
+    }
+
+    void refreshProducts();
+  }, [open, products.length, refreshProducts]);
+
   const updateItem = (idx: number, field: keyof FormItem, value: string | number) => {
     setFormItems((prev) => {
       const next = [...prev];

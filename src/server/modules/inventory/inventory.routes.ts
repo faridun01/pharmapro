@@ -28,7 +28,6 @@ inventoryRouter.post('/restock', authenticate, asyncHandler(async (req, res) => 
     quantity: parsePositiveInt(body.quantity, 'quantity'),
     unit: String(body.unit || 'units'),
     costBasis: parseNonNegative(body.costBasis ?? 0, 'costBasis'),
-    retailPrice: body.retailPrice == null ? undefined : parseNonNegative(body.retailPrice, 'retailPrice'),
     supplierId: body.supplierId ? String(body.supplierId) : null,
     manufacturedDate: new Date(body.manufacturedDate),
     expiryDate: new Date(body.expiryDate),
@@ -56,7 +55,6 @@ inventoryRouter.post('/purchase-invoices', authenticate, asyncHandler(async (req
         unit: String(item.unit || 'units'),
         costBasis: parseNonNegative(item.costBasis ?? 0, `items[${idx}].costBasis`),
         wholesalePrice: item.wholesalePrice == null ? null : parseNonNegative(item.wholesalePrice, `items[${idx}].wholesalePrice`),
-        retailPrice: item.retailPrice == null ? null : parseNonNegative(item.retailPrice, `items[${idx}].retailPrice`),
         manufacturedDate: new Date(item.manufacturedDate),
         expiryDate: new Date(item.expiryDate),
       }))
@@ -88,7 +86,6 @@ inventoryRouter.patch('/batches/:id', authenticate, asyncHandler(async (req, res
     String(req.params.id),
     {
       costBasis: body.costBasis !== undefined ? parseNonNegative(body.costBasis, 'costBasis') : undefined,
-      retailPrice: body.retailPrice !== undefined ? parseNonNegative(body.retailPrice, 'retailPrice') : undefined,
       quantity: body.quantity !== undefined ? parseNonNegative(body.quantity, 'quantity') : undefined,
     },
     authedReq.user.id,

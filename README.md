@@ -2,19 +2,61 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# PharmaPro
 
-This contains everything you need to run your app locally.
+Desktop pharmacy management system built with Electron, React, Express, and Prisma.
 
-View your app in AI Studio: https://ai.studio/apps/1e581ba8-b371-486b-8432-3cdbcc7d448d
+## Local Development
 
-## Run Locally
+Prerequisites:
 
-**Prerequisites:**  Node.js
+1. Node.js 22+
+2. PostgreSQL 15+ running locally or on a reachable host
 
+Setup:
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+2. Create `.env` from `.env.example`
+3. Update `DATABASE_URL` with valid PostgreSQL credentials
+4. Create the target database if it does not exist
+5. Apply the Prisma schema:
+   `npx prisma migrate deploy`
+6. Start the app:
+   `npm run electron:dev`
+
+Example `.env` value:
+
+`DATABASE_URL="postgresql://postgres:postgres@localhost:5432/pharmapro?schema=public"`
+
+If startup logs `Database bootstrap skipped`, PostgreSQL is not reachable with the credentials currently configured in `.env`.
+
+## Production Build
+
+Build the packaged Windows app with:
+
+`npm run electron:build`
+
+Before building, create `.env.production` or `.env.production.local` from `.env.production.example`.
+
+Runtime configuration for the packaged app is resolved in this order:
+
+1. `%APPDATA%/pharmapro/.env`
+2. `.env` next to `PharmaPro.exe`
+3. `resources/.env` bundled with the app
+
+Notes:
+
+1. `npm run electron:build` now packages `build/runtime/.env`, generated from `.env.production.local` or `.env.production`.
+2. Production ignores `ALLOW_DEV_AUTH_BYPASS` even if it exists in a source env file.
+3. `JWT_SECRET` must be set for production.
+4. Re-running `npm run electron:build` is safe; the build now cleans stale Electron and `win-unpacked` locks first.
+5. Production no longer auto-creates the default `admin / admin123` account on startup.
+
+## Production Admin Bootstrap
+
+Create or reset the first production admin explicitly with:
+
+`npm run bootstrap:admin -- --email owner@example.com --password "StrongPassword123" --name "Owner" --role OWNER`
+
+Allowed roles for bootstrap are `OWNER` and `ADMIN`.

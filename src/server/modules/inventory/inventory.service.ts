@@ -9,7 +9,6 @@ export type RestockItemInput = {
   quantity: number;
   unit: string;
   costBasis: number;
-  retailPrice?: number;
   supplierId?: string | null;
   manufacturedDate: Date;
   expiryDate: Date;
@@ -22,7 +21,6 @@ export type PurchaseInvoiceImportItemInput = {
   unit: string;
   costBasis: number;
   wholesalePrice?: number | null;
-  retailPrice?: number | null;
   manufacturedDate: Date;
   expiryDate: Date;
 };
@@ -82,7 +80,7 @@ export class InventoryService {
           unit: input.unit,
           costBasis: input.costBasis,
           purchasePrice: input.costBasis,
-          retailPrice: input.retailPrice ?? null,
+          retailPrice: null,
           supplierId: input.supplierId || null,
           warehouseId: warehouse?.id ?? null,
           manufacturedDate: input.manufacturedDate,
@@ -109,7 +107,6 @@ export class InventoryService {
         data: {
           totalStock: newTotalStock,
           costPrice: input.costBasis || product.costPrice,
-          sellingPrice: input.retailPrice ?? product.sellingPrice,
           status: mapProductStatus(newTotalStock, product.minStock),
         },
       });
@@ -144,7 +141,6 @@ export class InventoryService {
           batchNumber: input.batchNumber,
           quantity: input.quantity,
           costBasis: input.costBasis,
-          retailPrice: input.retailPrice ?? null,
         },
       });
 
@@ -386,7 +382,6 @@ export class InventoryService {
             quantity: item.quantity,
             purchasePrice: item.costBasis,
             wholesalePrice: item.wholesalePrice ?? null,
-            retailPrice: item.retailPrice ?? null,
             lineTotal: Number(item.costBasis) * Number(item.quantity),
           },
         });
@@ -403,7 +398,7 @@ export class InventoryService {
             costBasis: item.costBasis,
             purchasePrice: item.costBasis,
             wholesalePrice: item.wholesalePrice ?? null,
-            retailPrice: item.retailPrice ?? null,
+            retailPrice: null,
             supplierId: supplier.id,
             warehouseId: warehouse.id,
             manufacturedDate: item.manufacturedDate,
@@ -448,7 +443,6 @@ export class InventoryService {
           data: {
             totalStock: newTotalStock,
             costPrice: item.costBasis,
-            sellingPrice: item.retailPrice ?? product.sellingPrice,
             status: mapProductStatus(newTotalStock, product.minStock),
           },
         });
@@ -482,7 +476,6 @@ export class InventoryService {
     batchId: string,
     updates: {
       costBasis?: number;
-      retailPrice?: number;
       quantity?: number;
     },
     userId: string,
@@ -512,10 +505,6 @@ export class InventoryService {
       if (updates.costBasis !== undefined) {
         updateData.costBasis = updates.costBasis;
         updateData.purchasePrice = updates.costBasis;
-      }
-
-      if (updates.retailPrice !== undefined) {
-        updateData.retailPrice = updates.retailPrice;
       }
 
       let quantityDelta = 0;
@@ -554,13 +543,10 @@ export class InventoryService {
         });
       }
 
-      // Update product if costBasis or retailPrice changed
+      // Update product if costBasis changed
       const productUpdateData: any = {};
       if (updates.costBasis !== undefined) {
         productUpdateData.costPrice = updates.costBasis;
-      }
-      if (updates.retailPrice !== undefined) {
-        productUpdateData.sellingPrice = updates.retailPrice;
       }
 
       // Update product total stock if quantity changed
@@ -616,12 +602,10 @@ export class InventoryService {
         entityId: batch.id,
         oldValue: {
           costBasis: batch.costBasis,
-          retailPrice: batch.retailPrice,
           quantity: batch.quantity,
         },
         newValue: {
           costBasis: updates.costBasis ?? batch.costBasis,
-          retailPrice: updates.retailPrice ?? batch.retailPrice,
           quantity: updates.quantity ?? batch.quantity,
         },
       }, tx);

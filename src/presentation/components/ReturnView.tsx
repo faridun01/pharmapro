@@ -73,7 +73,7 @@ function CreateReturnModal({
   onCreated: () => void;
 }) {
   const { t } = useTranslation();
-  const { products, suppliers } = usePharmacy();
+  const { products, suppliers, refreshProducts, refreshSuppliers } = usePharmacy();
   const currencyCode = useCurrencyCode();
   const [type, setType] = useState<'CUSTOMER' | 'SUPPLIER'>('CUSTOMER');
   const [customerName, setCustomerName] = useState('');
@@ -99,6 +99,22 @@ function CreateReturnModal({
       setError('');
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || suppliers.length > 0) {
+      return;
+    }
+
+    void refreshSuppliers();
+  }, [open, refreshSuppliers, suppliers.length]);
+
+  useEffect(() => {
+    if (!open || products.length > 0) {
+      return;
+    }
+
+    void refreshProducts();
+  }, [open, products.length, refreshProducts]);
 
   const updateItem = (idx: number, field: keyof ReturnFormItem, value: string | number) => {
     setFormItems((prev) => {

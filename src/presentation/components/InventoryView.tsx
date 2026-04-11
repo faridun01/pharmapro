@@ -2,10 +2,9 @@ import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useStat
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
-import { Search, Plus, Trash2, AlertTriangle, Package, X, PencilLine, Layers } from 'lucide-react';
+import { Search, Plus, Trash2, AlertTriangle, Package, X, PencilLine, Layers, Calendar, History } from 'lucide-react';
 import { Product } from '../../core/domain';
 import { buildApiHeaders } from '../../infrastructure/api';
-import { BatchesView } from './BatchesView';
 import { lazyNamedImport } from '../../lib/lazyLoadComponents';
 
 const ImportInvoiceModal = lazyNamedImport(() => import('./ImportInvoiceModal'), 'ImportInvoiceModal');
@@ -44,36 +43,39 @@ const DEFAULT_FORM: NewProductForm = {
 
 type InventoryRowProps = {
   index: number;
-  product: any;
+  product: Product;
   stockLabel: string;
   submitting: boolean;
-  selected: boolean;
-  onToggleSelect: (productId: string) => void;
+  onOpenBatchHistory: (product: Product) => void;
   onEditPrices: (product: Product) => void;
   onAddBarcode: (product: Product) => void;
   onDelete: (id: string, name: string) => void;
   t: (key: string) => string;
 };
 
-const InventoryRow = React.memo(function InventoryRow({ index, product, stockLabel, submitting, selected, onToggleSelect, onEditPrices, onAddBarcode, onDelete, t }: InventoryRowProps) {
+const InventoryRow = React.memo(function InventoryRow({ index, product, stockLabel, submitting, onOpenBatchHistory, onEditPrices, onAddBarcode, onDelete, t }: InventoryRowProps) {
   const isLowStock = product.totalStock < (product.minStock || 10);
+  const batches = Array.isArray(product.batches) ? product.batches : [];
+  const orderedBatches = [...batches].sort((left, right) => new Date(left.expiryDate).getTime() - new Date(right.expiryDate).getTime());
+  const primaryBatch = orderedBatches[0];
+  const riskyBatchCount = batches.filter((batch) => batch.status !== 'STABLE').length;
   return (
     <tr className="hover:bg-[#f5f5f0]/30 transition-colors group">
       <td className="px-4 py-3.5 text-xs font-bold text-[#5A5A40]/70">{index}</td>
-      <td className="px-4 py-3.5">
-        <label className="inline-flex items-center justify-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={() => onToggleSelect(product.id)}
-            className="w-4 h-4 rounded border-[#5A5A40]/20 text-[#5A5A40] focus:ring-[#5A5A40]/20"
-          />
-        </label>
-      </td>
       <td className="px-6 py-3.5">
         <div>
           <p className="text-sm font-bold leading-tight text-[#5A5A40]">{product.name}</p>
           <p className="mt-0.5 text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{product.sku}</p>
+          <p className="mt-1 text-[10px] text-[#5A5A40]/45">
+            {batches.length > 0
+              ? `Партий: ${batches.length}${primaryBatch ? ` • Ближайший срок: ${new Date(primaryBatch.expiryDate).toLocaleDateString('ru-RU')}` : ''}`
+              : 'Партий пока нет'}
+          </p>
+          {riskyBatchCount > 0 && (
+            <span className="inline-flex mt-1.5 items-center rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-rose-700 border border-rose-100">
+              Требует внимания: {riskyBatchCount}
+            </span>
+          )}
           {!product.barcode && (
             <span className="inline-flex mt-1.5 items-center rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-amber-700 border border-amber-100">
               Без штрихкода
@@ -114,6 +116,15 @@ const InventoryRow = React.memo(function InventoryRow({ index, product, stockLab
       </td>
       <td className="px-6 py-3.5 text-right">
         <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => onOpenBatchHistory(product)}
+            disabled={submitting}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#eef2e6] text-[#5A5A40] transition-all hover:bg-[#e2e8d6] disabled:opacity-50"
+            title="История партий"
+            aria-label="История партий"
+          >
+            <History size={14} />
+          </button>
           {!product.barcode && (
             <button
               onClick={() => onAddBarcode(product)}
@@ -155,13 +166,6 @@ type PriceEditModalState = {
   sellingPrice: string;
 };
 
-type BulkPriceModalState = {
-  costMode: 'keep' | 'set' | 'delta' | 'percent';
-  sellingMode: 'keep' | 'set' | 'delta' | 'percent';
-  costValue: string;
-  sellingValue: string;
-};
-
 type PriceHistoryEntry = {
   id: string;
   createdAt: string;
@@ -175,12 +179,20 @@ type BarcodeEditModalState = {
   barcode: string;
 };
 
-type InventorySection = 'catalog' | 'batches';
+type RestockModalState = {
+  open: boolean;
+  productId: string;
+  batchNumber: string;
+  quantity: string;
+  unit: string;
+  costBasis: string;
+  expiryDate: string;
+  error: string | null;
+};
 
-export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({ initialSection = 'catalog' }) => {
+export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }> = ({ initialSection = 'catalog' }) => {
   const { t } = useTranslation();
-  const { products, isLoading, createProduct, updateProduct, deleteProduct, refreshProducts, refreshSuppliers, refreshInvoices } = usePharmacy();
-  const [activeSection, setActiveSection] = useState<InventorySection>(initialSection);
+  const { products, isLoading, createProduct, updateProduct, deleteProduct, refreshProducts, refreshSuppliers, refreshInvoices, restockInventory } = usePharmacy();
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'low' | 'prescription'>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -196,19 +208,31 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
   const [form, setForm] = useState<NewProductForm>(DEFAULT_FORM);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [priceEditModal, setPriceEditModal] = useState<PriceEditModalState | null>(null);
-  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-  const [bulkPriceModal, setBulkPriceModal] = useState<BulkPriceModalState | null>(null);
   const [priceHistory, setPriceHistory] = useState<PriceHistoryEntry[]>([]);
   const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
-  const [openCreateBatchSignal, setOpenCreateBatchSignal] = useState(0);
   const [barcodeEditModal, setBarcodeEditModal] = useState<BarcodeEditModalState | null>(null);
+  const [batchHistoryProduct, setBatchHistoryProduct] = useState<Product | null>(null);
+  const [restockModal, setRestockModal] = useState<RestockModalState>({
+    open: false,
+    productId: '',
+    batchNumber: '',
+    quantity: '1',
+    unit: 'шт.',
+    costBasis: '0',
+    expiryDate: '',
+    error: null,
+  });
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogPageSize, setCatalogPageSize] = useState(10);
 
   useEffect(() => {
-    setActiveSection(initialSection);
-  }, [initialSection]);
+    if (products.length > 0) {
+      return;
+    }
+
+    void refreshProducts();
+  }, [products.length, refreshProducts]);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -251,19 +275,12 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     return matchesSearch && matchesFilter;
   }), [products, debouncedSearchTerm, filter]);
 
-  const selectedProducts = useMemo(
-    () => products.filter((product) => selectedProductIds.includes(product.id)),
-    [products, selectedProductIds],
-  );
-
   const totalCatalogPages = Math.max(1, Math.ceil(filteredProducts.length / catalogPageSize));
   const safeCatalogPage = Math.min(catalogPage, totalCatalogPages);
   const paginatedProducts = useMemo(() => {
     const startIndex = (safeCatalogPage - 1) * catalogPageSize;
     return filteredProducts.slice(startIndex, startIndex + catalogPageSize);
   }, [filteredProducts, safeCatalogPage, catalogPageSize]);
-
-  const allVisibleSelected = paginatedProducts.length > 0 && paginatedProducts.every((product) => selectedProductIds.includes(product.id));
 
   const productCounts = useMemo(() => ({
     all: products.length,
@@ -285,20 +302,10 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     setDeleteTarget({ id, name });
   }, []);
 
-  const toggleProductSelection = useCallback((productId: string) => {
-    setSelectedProductIds((prev) => prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]);
+  const openBatchHistory = useCallback((product: Product) => {
+    setBatchHistoryProduct(product);
+    setFormError('');
   }, []);
-
-  const toggleVisibleSelection = useCallback(() => {
-    setSelectedProductIds((prev) => {
-      const visibleIds = paginatedProducts.map((product) => product.id);
-      if (visibleIds.every((id) => prev.includes(id))) {
-        return prev.filter((id) => !visibleIds.includes(id));
-      }
-
-      return Array.from(new Set([...prev, ...visibleIds]));
-    });
-  }, [paginatedProducts]);
 
   const openPriceEditor = useCallback((product: Product) => {
     setPriceEditModal({
@@ -355,6 +362,69 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     setForm(DEFAULT_FORM);
     setFormError('');
     setIsAddOpen(true);
+  };
+
+  const openRestockModal = useCallback((product?: Product) => {
+    const resolvedSku = product?.sku || '';
+    setRestockModal({
+      open: true,
+      productId: product?.id || '',
+      batchNumber: generateBatchNumber(resolvedSku) || `B-${Date.now()}`,
+      quantity: '1',
+      unit: 'шт.',
+      costBasis: String(Number(product?.costPrice || 0)),
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      error: null,
+    });
+    setFormError('');
+  }, []);
+
+  useEffect(() => {
+    if (initialSection === 'batches') {
+      openRestockModal();
+    }
+  }, [initialSection, openRestockModal]);
+
+  const submitRestock = async () => {
+    const quantity = Number(restockModal.quantity);
+    const costBasis = Number(restockModal.costBasis);
+
+    if (!restockModal.productId) {
+      setRestockModal((prev) => ({ ...prev, error: 'Выберите товар' }));
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setRestockModal((prev) => ({ ...prev, error: 'Количество должно быть больше 0' }));
+      return;
+    }
+    if (!Number.isFinite(costBasis) || costBasis < 0) {
+      setRestockModal((prev) => ({ ...prev, error: 'Цена прихода должна быть неотрицательной' }));
+      return;
+    }
+    if (!restockModal.expiryDate) {
+      setRestockModal((prev) => ({ ...prev, error: 'Укажите срок годности' }));
+      return;
+    }
+
+    setSubmitting(true);
+    setRestockModal((prev) => ({ ...prev, error: null }));
+    try {
+      await restockInventory({
+        productId: restockModal.productId,
+        batchNumber: restockModal.batchNumber || `B-${Date.now()}`,
+        quantity: Math.floor(quantity),
+        unit: restockModal.unit || 'шт.',
+        costBasis,
+        manufacturedDate: new Date(),
+        expiryDate: new Date(restockModal.expiryDate),
+      });
+      await refreshProducts();
+      setRestockModal((prev) => ({ ...prev, open: false, error: null }));
+    } catch (e: any) {
+      setRestockModal((prev) => ({ ...prev, error: e?.message || 'Не удалось добавить приход' }));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const saveProduct = async () => {
@@ -501,198 +571,88 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
     }
   };
 
-  const applyBulkPrice = (baseValue: number, mode: BulkPriceModalState['costMode'], rawValue: string) => {
-    if (mode === 'keep') return baseValue;
-
-    const parsedValue = Number(rawValue);
-    if (!Number.isFinite(parsedValue)) {
-      throw new Error('Укажите корректное значение для массового изменения цен');
-    }
-
-    if (mode === 'set') return parsedValue;
-    if (mode === 'delta') return baseValue + parsedValue;
-    if (mode === 'percent') return baseValue + (baseValue * parsedValue / 100);
-    return baseValue;
-  };
-
-  const saveBulkPrices = async () => {
-    if (!bulkPriceModal || selectedProducts.length === 0) return;
-
-    setSubmitting(true);
-    setFormError('');
-    try {
-      const updates = selectedProducts.map((product) => {
-        const nextCostPrice = applyBulkPrice(Number(product.costPrice || 0), bulkPriceModal.costMode, bulkPriceModal.costValue);
-        const nextSellingPrice = applyBulkPrice(Number(product.sellingPrice || 0), bulkPriceModal.sellingMode, bulkPriceModal.sellingValue);
-
-        if (!Number.isFinite(nextCostPrice) || nextCostPrice < 0) {
-          throw new Error(`Себестоимость товара ${product.name} не может быть отрицательной`);
-        }
-
-        if (!Number.isFinite(nextSellingPrice) || nextSellingPrice <= 0) {
-          throw new Error(`Цена продажи товара ${product.name} должна быть больше 0`);
-        }
-
-        return updateProduct({
-          ...product,
-          costPrice: Number(nextCostPrice.toFixed(2)),
-          sellingPrice: Number(nextSellingPrice.toFixed(2)),
-        });
-      });
-
-      await Promise.all(updates);
-      setFeedbackModal({
-        open: true,
-        title: 'Массовое обновление завершено',
-        message: `Цены обновлены для ${selectedProducts.length} товар${selectedProducts.length === 1 ? 'а' : selectedProducts.length < 5 ? 'ов' : 'ов'}.`,
-        tone: 'success',
-      });
-      setBulkPriceModal(null);
-      setSelectedProductIds([]);
-    } catch (e: any) {
-      setFormError(e?.message || 'Не удалось выполнить массовое обновление цен');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex items-center gap-2 rounded-2xl border border-[#5A5A40]/10 bg-[#f8f6ef] p-1.5 shadow-sm">
-              <button
-                onClick={() => setActiveSection('catalog')}
-                className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeSection === 'catalog' ? 'bg-[#5A5A40] text-white shadow-sm' : 'text-[#5A5A40]/65 hover:bg-white'}`}
-              >
-                Каталог товаров
-              </button>
-              <button
-                onClick={() => setActiveSection('batches')}
-                className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeSection === 'batches' ? 'bg-[#5A5A40] text-white shadow-sm' : 'text-[#5A5A40]/65 hover:bg-white'}`}
-              >
-                Учет партий
-              </button>
+            <div className="inline-flex items-center gap-2 rounded-2xl border border-[#5A5A40]/10 bg-[#f8f6ef] px-4 py-2.5 shadow-sm">
+              <Package size={16} className="text-[#5A5A40]" />
+              <span className="text-sm font-semibold text-[#5A5A40]">Товары и партии</span>
             </div>
             <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
               Живые остатки и цены
             </span>
           </div>
 
-          {activeSection === 'batches' && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-              <button
-                onClick={() => setIsImportOpen(true)}
-                className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
-              >
-                <Package size={16} /> Импорт прихода
-              </button>
-              <button
-                onClick={openAdd}
-                className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
-              >
-                <Plus size={16} /> Добавить товар
-              </button>
-              <button
-                onClick={() => setOpenCreateBatchSignal((value) => value + 1)}
-                className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
-              >
-                <Layers size={16} /> Добавить партию
-              </button>
-            </div>
-          )}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <button
+              onClick={() => setIsImportOpen(true)}
+              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+            >
+              <Package size={16} /> Импорт прихода
+            </button>
+            <button
+              onClick={openAdd}
+              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+            >
+              <Plus size={16} /> Добавить товар
+            </button>
+            <button
+              onClick={() => openRestockModal()}
+              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+            >
+              <Layers size={16} /> Добавить партию
+            </button>
+          </div>
         </div>
 
-        {activeSection === 'catalog' && (
-          <div className="mt-4 rounded-[26px] border border-[#5A5A40]/10 bg-[#fcfbf7] p-4 shadow-sm">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="relative group w-full xl:w-[320px]">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={t('Search products...')}
-                  className="w-full rounded-2xl border border-[#5A5A40]/10 bg-white pl-12 pr-4 py-3 text-sm outline-none shadow-sm transition-all focus:ring-2 focus:ring-[#5A5A40]/20"
-                />
-              </div>
+        <div className="mt-4 rounded-[26px] border border-[#5A5A40]/10 bg-[#fcfbf7] p-4 shadow-sm">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="relative group w-full xl:w-[320px]">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder={t('Search products...')}
+                className="w-full rounded-2xl border border-[#5A5A40]/10 bg-white pl-12 pr-4 py-3 text-sm outline-none shadow-sm transition-all focus:ring-2 focus:ring-[#5A5A40]/20"
+              />
+            </div>
 
-              <div className="flex items-center gap-4 overflow-x-auto pb-1 custom-scrollbar">
-                {[
-                  { id: 'all', label: t('All Products'), count: productCounts.all },
-                  { id: 'low', label: t('Low Stock'), count: productCounts.low },
-                  { id: 'prescription', label: t('Prescription Only'), count: productCounts.prescription },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setFilter(item.id as 'all' | 'low' | 'prescription')}
-                    className={`px-6 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
-                      filter === item.id
-                        ? 'bg-[#5A5A40] text-white border-[#5A5A40] shadow-md'
-                        : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
-                    }`}
-                  >
-                    {item.label}
-                    <span className={`ml-2 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${filter === item.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
-                      {item.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center gap-4 overflow-x-auto pb-1 custom-scrollbar">
+              {[
+                { id: 'all', label: t('All Products'), count: productCounts.all },
+                { id: 'low', label: t('Low Stock'), count: productCounts.low },
+                { id: 'prescription', label: t('Prescription Only'), count: productCounts.prescription },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setFilter(item.id as 'all' | 'low' | 'prescription')}
+                  className={`px-6 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+                    filter === item.id
+                      ? 'bg-[#5A5A40] text-white border-[#5A5A40] shadow-md'
+                      : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
+                  }`}
+                >
+                  {item.label}
+                  <span className={`ml-2 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${filter === item.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
+                    {item.count}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {activeSection === 'catalog' && (
-        <>
-          {selectedProducts.length > 0 && (
-            <div className="bg-[#f5f5f0] border border-[#5A5A40]/10 rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                <p className="text-sm font-bold text-[#5A5A40]">Выбрано товаров: {selectedProducts.length}</p>
-                <p className="text-xs text-[#5A5A40]/60 mt-1">Можно массово изменить себестоимость и цену продажи сразу для выбранных позиций.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setFormError('');
-                    setBulkPriceModal({
-                      costMode: 'keep',
-                      sellingMode: 'delta',
-                      costValue: '0',
-                      sellingValue: '0',
-                    });
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-[#5A5A40] text-white text-sm hover:bg-[#4A4A30] transition-all"
-                >
-                  Массово изменить цены
-                </button>
-                <button
-                  onClick={() => setSelectedProductIds([])}
-                  className="px-4 py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm text-[#5A5A40] hover:bg-white transition-all"
-                >
-                  Снять выбор
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+      <>
+        <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/50 font-bold">
                     <th className="px-4 py-4">№</th>
-                    <th className="px-4 py-4">
-                      <input
-                        type="checkbox"
-                        checked={allVisibleSelected}
-                        onChange={toggleVisibleSelection}
-                        className="w-4 h-4 rounded border-[#5A5A40]/20 text-[#5A5A40] focus:ring-[#5A5A40]/20"
-                        title="Выбрать все видимые товары"
-                      />
-                    </th>
                     <th className="px-6 py-4">{t('Product Info')}</th>
                     <th className="px-6 py-4">{t('Stock Status')}</th>
                     <th className="px-6 py-4">{t('Price')}</th>
@@ -709,8 +669,7 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                         product={product}
                         stockLabel={formatStock(product.totalStock)}
                         submitting={submitting}
-                        selected={selectedProductIds.includes(product.id)}
-                        onToggleSelect={toggleProductSelection}
+                        onOpenBatchHistory={openBatchHistory}
                         onEditPrices={openPriceEditor}
                         onAddBarcode={openBarcodeEditor}
                         onDelete={openDeleteTarget}
@@ -720,7 +679,7 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                   })}
                   {filteredProducts.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-8 py-16 text-center text-[#5A5A40]/40">
+                      <td colSpan={6} className="px-8 py-16 text-center text-[#5A5A40]/40">
                         <Package size={36} className="mx-auto mb-3 opacity-40" />
                         {isLoading ? t('Loading...') : t('No products yet')}
                       </td>
@@ -773,18 +732,217 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
                 </div>
               </div>
             )}
+        </div>
+      </>
+
+      {batchHistoryProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-[#5A5A40]">История партий</h3>
+                <p className="text-sm text-[#5A5A40]/60 mt-1">{batchHistoryProduct.name} • {batchHistoryProduct.sku}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openRestockModal(batchHistoryProduct)}
+                  className="px-4 py-2 rounded-xl bg-[#5A5A40] text-white text-sm font-semibold hover:bg-[#4A4A30] transition-colors"
+                >
+                  Приход
+                </button>
+                <button onClick={() => setBatchHistoryProduct(null)} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">✕</button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4">
+              {(batchHistoryProduct.batches || []).length === 0 && (
+                <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#fcfbf7] px-5 py-10 text-center text-sm text-[#5A5A40]/50">
+                  По этому товару партий пока нет.
+                </div>
+              )}
+              {[...(batchHistoryProduct.batches || [])]
+                .sort((left, right) => new Date(right.expiryDate).getTime() - new Date(left.expiryDate).getTime())
+                .map((batch) => (
+                  <div key={batch.id} className="rounded-3xl border border-[#5A5A40]/10 bg-[#fcfbf7] p-5 shadow-sm">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-[#5A5A40]">Партия {batch.batchNumber}</p>
+                        <p className="text-[11px] text-[#5A5A40]/55 mt-1">{batch.supplierName || 'Без поставщика'} • Остаток {Math.max(0, Number(batch.quantity || 0))} ед.</p>
+                      </div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border bg-[#f5f5f0] text-[#5A5A40] border-[#5A5A40]/10">
+                        {batch.status.replace('_', ' ')}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                      <div className="rounded-2xl border border-[#5A5A40]/10 bg-white px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Срок годности</p>
+                        <p className="font-semibold text-[#5A5A40] mt-1">{new Date(batch.expiryDate).toLocaleDateString('ru-RU')}</p>
+                      </div>
+                      <div className="rounded-2xl border border-[#5A5A40]/10 bg-white px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Цена прихода</p>
+                        <p className="font-semibold text-[#5A5A40] mt-1">{Number(batch.costBasis || 0).toFixed(2)} TJS</p>
+                      </div>
+                      <div className="rounded-2xl border border-[#5A5A40]/10 bg-white px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Цена продажи</p>
+                        <p className="font-semibold text-[#5A5A40] mt-1">{Number(batchHistoryProduct.sellingPrice ?? 0).toFixed(2)} TJS</p>
+                      </div>
+                      <div className="rounded-2xl border border-[#5A5A40]/10 bg-white px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Движений</p>
+                        <p className="font-semibold text-[#5A5A40] mt-1">{batch.movements.length}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      {batch.movements.length === 0 && (
+                        <p className="text-sm text-[#5A5A40]/50">Движений по партии пока нет.</p>
+                      )}
+                      {[...batch.movements]
+                        .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+                        .map((movement) => (
+                          <div key={movement.id} className="rounded-2xl border border-[#5A5A40]/10 bg-white px-4 py-3">
+                            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-[#5A5A40]">{movement.type === 'RESTOCK' ? 'Приход' : movement.type}</p>
+                                <p className="text-[11px] text-[#5A5A40]/55 mt-1">{movement.description || 'Без описания'}</p>
+                              </div>
+                              <div className="text-right text-[11px] text-[#5A5A40]/60">
+                                <div className="inline-flex items-center gap-1 justify-end">
+                                  <Calendar size={12} />
+                                  {new Date(movement.date).toLocaleDateString('ru-RU')}
+                                </div>
+                                <div className="mt-1">{Math.max(0, Number(movement.quantity || 0))} ед.</div>
+                              </div>
+                            </div>
+                            {movement.type === 'RESTOCK' && (
+                              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 text-sm">
+                                <div className="rounded-xl bg-[#f5f5f0] px-3 py-2 text-[#5A5A40]">
+                                  Цена прихода: {Number(batch.costBasis || 0).toFixed(2)} TJS
+                                </div>
+                                <div className="rounded-xl bg-[#f5f5f0] px-3 py-2 text-[#5A5A40]">
+                                  Цена продажи: {Number(batchHistoryProduct.sellingPrice ?? 0).toFixed(2)} TJS
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
-        </>
+        </div>
       )}
 
-      {activeSection === 'batches' && (
-        <BatchesView
-          embedded
-          onOpenImportInvoice={() => setIsImportOpen(true)}
-          onOpenAddProduct={openAdd}
-          showActionBlock={false}
-          openCreateBatchSignal={openCreateBatchSignal}
-        />
+      {restockModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-[#5A5A40]">Добавление партии</h3>
+                <p className="text-sm text-[#5A5A40]/60 mt-1">Приход сохраняется прямо под товаром и попадает в историю партии.</p>
+              </div>
+              <button onClick={() => setRestockModal((prev) => ({ ...prev, open: false, error: null }))} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">✕</button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label>
+                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Товар</span>
+                  <select
+                    value={restockModal.productId}
+                    onChange={(e) => setRestockModal((prev) => ({ ...prev, productId: e.target.value }))}
+                    className="w-full px-3 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm"
+                  >
+                    <option value="">Выберите товар</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>{product.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Номер партии</span>
+                  <input
+                    type="text"
+                    value={restockModal.batchNumber}
+                    onChange={(e) => setRestockModal((prev) => ({ ...prev, batchNumber: e.target.value }))}
+                    className="w-full px-3 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm"
+                  />
+                </label>
+                <label>
+                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Количество</span>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={restockModal.quantity}
+                    onChange={(e) => setRestockModal((prev) => ({ ...prev, quantity: e.target.value }))}
+                    className="w-full px-3 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm"
+                  />
+                </label>
+                <label>
+                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Единица</span>
+                  <input
+                    type="text"
+                    value={restockModal.unit}
+                    onChange={(e) => setRestockModal((prev) => ({ ...prev, unit: e.target.value }))}
+                    className="w-full px-3 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm"
+                  />
+                </label>
+                <label>
+                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Цена прихода</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={restockModal.costBasis}
+                    onChange={(e) => setRestockModal((prev) => ({ ...prev, costBasis: e.target.value }))}
+                    className="w-full px-3 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm"
+                  />
+                </label>
+                <label className="md:col-span-2">
+                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Срок годности</span>
+                  <input
+                    type="date"
+                    value={restockModal.expiryDate}
+                    onChange={(e) => setRestockModal((prev) => ({ ...prev, expiryDate: e.target.value }))}
+                    className="w-full px-3 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm"
+                  />
+                </label>
+              </div>
+
+              {restockModal.error && (
+                <div className="p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100">
+                  {restockModal.error}
+                </div>
+              )}
+
+              {restockModal.productId && (() => {
+                const selectedProduct = products.find((product) => product.id === restockModal.productId);
+                if (!selectedProduct) return null;
+                return (
+                  <div className="rounded-2xl bg-[#f5f5f0] px-4 py-3 text-sm text-[#5A5A40]">
+                    Продажная цена будет взята из карточки товара: <span className="font-bold">{Number(selectedProduct.sellingPrice || 0).toFixed(2)} TJS</span>
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={() => setRestockModal((prev) => ({ ...prev, open: false, error: null }))}
+                  className="py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={submitRestock}
+                  disabled={submitting}
+                  className="py-2.5 rounded-xl bg-[#5A5A40] text-white text-sm font-semibold hover:bg-[#4A4A30] disabled:opacity-50 transition-colors"
+                >
+                  {submitting ? 'Сохраняю...' : 'Сохранить приход'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {isAddOpen && (
@@ -1153,110 +1311,6 @@ export const InventoryView: React.FC<{ initialSection?: InventorySection }> = ({
               <button onClick={() => setBarcodeEditModal(null)} className="px-5 py-2.5 border border-[#5A5A40]/20 rounded-xl">Отмена</button>
               <button onClick={saveBarcode} disabled={submitting} className="px-5 py-2.5 bg-[#5A5A40] text-white rounded-xl disabled:opacity-50">
                 {submitting ? 'Сохранение...' : 'Сохранить штрихкод'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {bulkPriceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-[#5A5A40]/10">
-            <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-[#5A5A40]">Массовое изменение цен</h3>
-                <p className="text-sm text-[#5A5A40]/60 mt-1">Выбрано товаров: {selectedProducts.length}</p>
-              </div>
-              <button
-                onClick={() => {
-                  setBulkPriceModal(null);
-                  setFormError('');
-                }}
-                className="text-[#5A5A40]/50 hover:text-[#5A5A40]"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="rounded-2xl border border-[#5A5A40]/10 p-4 space-y-3">
-                  <p className="text-sm font-bold text-[#5A5A40]">Себестоимость</p>
-                  <select
-                    value={bulkPriceModal.costMode}
-                    onChange={(e) => setBulkPriceModal((prev) => prev ? { ...prev, costMode: e.target.value as BulkPriceModalState['costMode'] } : prev)}
-                    className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                  >
-                    <option value="keep">Не менять</option>
-                    <option value="set">Задать новое значение</option>
-                    <option value="delta">Прибавить / вычесть сумму</option>
-                    <option value="percent">Изменить на %</option>
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={bulkPriceModal.costValue}
-                    onChange={(e) => setBulkPriceModal((prev) => prev ? { ...prev, costValue: e.target.value } : prev)}
-                    disabled={bulkPriceModal.costMode === 'keep'}
-                    className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 disabled:bg-[#f5f5f0]"
-                    placeholder="Например: 10 или -5 или 7.5"
-                  />
-                </div>
-
-                <div className="rounded-2xl border border-[#5A5A40]/10 p-4 space-y-3">
-                  <p className="text-sm font-bold text-[#5A5A40]">Цена продажи</p>
-                  <select
-                    value={bulkPriceModal.sellingMode}
-                    onChange={(e) => setBulkPriceModal((prev) => prev ? { ...prev, sellingMode: e.target.value as BulkPriceModalState['sellingMode'] } : prev)}
-                    className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                  >
-                    <option value="keep">Не менять</option>
-                    <option value="set">Задать новое значение</option>
-                    <option value="delta">Прибавить / вычесть сумму</option>
-                    <option value="percent">Изменить на %</option>
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={bulkPriceModal.sellingValue}
-                    onChange={(e) => setBulkPriceModal((prev) => prev ? { ...prev, sellingValue: e.target.value } : prev)}
-                    disabled={bulkPriceModal.sellingMode === 'keep'}
-                    className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 disabled:bg-[#f5f5f0]"
-                    placeholder="Например: 12 или -3 или 5"
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#f5f5f0]/60 p-4 text-sm text-[#5A5A40]">
-                <p className="font-semibold">Режимы массового изменения</p>
-                <p className="mt-2 text-[#5A5A40]/70">Задать новое значение заменяет цену у всех выбранных товаров.</p>
-                <p className="mt-1 text-[#5A5A40]/70">Прибавить или вычесть сумму изменяет цену на указанную сумму, например -5.</p>
-                <p className="mt-1 text-[#5A5A40]/70">Изменить на % повышает или снижает цену на процент, например 10 или -7.</p>
-              </div>
-
-              {formError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-600 text-sm font-semibold">{formError}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="p-6 border-t border-[#5A5A40]/10 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setBulkPriceModal(null);
-                  setFormError('');
-                }}
-                className="px-5 py-2.5 border border-[#5A5A40]/20 rounded-xl"
-              >
-                {t('Cancel')}
-              </button>
-              <button
-                onClick={saveBulkPrices}
-                disabled={submitting}
-                className="px-5 py-2.5 bg-[#5A5A40] text-white rounded-xl disabled:opacity-50"
-              >
-                {submitting ? 'Сохранение...' : 'Применить ко всем выбранным'}
               </button>
             </div>
           </div>

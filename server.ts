@@ -4,6 +4,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import { createApp } from './src/server/app/createApp';
 import { ensureAdminUser } from './src/server/common/auth';
+import { logStartupError } from './src/server/common/startup';
 
 dotenv.config();
 
@@ -52,5 +53,9 @@ if (isDev) {
 
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`PharmaPro server running on http://localhost:${PORT}`);
-  await ensureAdminUser();
+  try {
+    await ensureAdminUser();
+  } catch (err) {
+    logStartupError(err);
+  }
 });

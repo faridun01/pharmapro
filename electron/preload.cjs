@@ -1,7 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const startupStartedAtArg = process.argv.find((arg) => arg.startsWith('--pharmapro-started-at='));
+const startupStartedAt = startupStartedAtArg ? Number(startupStartedAtArg.split('=')[1]) : null;
+
 contextBridge.exposeInMainWorld('pharmaproDesktop', {
   platform: process.platform,
+  startupStartedAt: Number.isFinite(startupStartedAt) ? startupStartedAt : null,
   versions: {
     chrome: process.versions.chrome,
     electron: process.versions.electron,

@@ -13,6 +13,11 @@ type ShiftWithReportData = {
     totalAmount: number;
     paymentType?: string | null;
     status?: string | null;
+    payments?: Array<{
+      amount: number;
+      direction?: 'IN' | 'OUT' | null;
+      method?: string | null;
+    }>;
     items: Array<{
       quantity: number;
       batch?: { costBasis: number | null } | null;
@@ -31,6 +36,14 @@ type ShiftWithReportData = {
     type: 'CASH_IN' | 'CASH_OUT';
     amount: number;
   }>;
+};
+
+const getInvoicePaidAmount = (invoice: ShiftWithReportData['invoices'][number]) => {
+  const paid = (invoice.payments || [])
+    .filter((payment) => payment.direction !== 'OUT')
+    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+
+  return Math.min(Number(invoice.totalAmount || 0), paid);
 };
 
 async function getOrCreateDefaultWarehouse(): Promise<string> {
@@ -71,23 +84,36 @@ function calculateShiftSummary(shift: ShiftWithReportData) {
   const netSales = totalSales - returnedAmount;
   const netCogs = Math.max(0, salesCogs - returnedCogs);
   const grossProfit = netSales - netCogs;
-  const cashSales = shift.invoices
-    .filter((inv) => inv.paymentType === 'CASH' && inv.status !== 'RETURNED')
-    .reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
-  const cardSales = shift.invoices
-    .filter((inv) => inv.paymentType === 'CARD' && inv.status !== 'RETURNED')
-    .reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
+  const cashSales = shift.invoices.reduce((sum, inv) => {
+    if (inv.status === 'RETURNED') return sum;
+    const invoiceCash = (inv.payments || [])
+      .filter((payment) => payment.direction !== 'OUT' && payment.method === 'CASH')
+      .reduce((paymentSum, payment) => paymentSum + Number(payment.amount || 0), 0);
+    return sum + invoiceCash;
+  }, 0);
+  const cardSales = shift.invoices.reduce((sum, inv) => {
+    if (inv.status === 'RETURNED') return sum;
+    const invoiceCard = (inv.payments || [])
+      .filter((payment) => payment.direction !== 'OUT' && payment.method === 'CARD')
+      .reduce((paymentSum, payment) => paymentSum + Number(payment.amount || 0), 0);
+    return sum + invoiceCard;
+  }, 0);
+  const collectedSales = shift.invoices.reduce((sum, inv) => {
+    if (inv.status === 'RETURNED') return sum;
+    return sum + getInvoicePaidAmount(inv);
+  }, 0);
   const cashIn = shift.cashMovements
     .filter((movement) => movement.type === 'CASH_IN')
     .reduce((sum, movement) => sum + Number(movement.amount || 0), 0);
   const cashOut = shift.cashMovements
     .filter((movement) => movement.type === 'CASH_OUT')
     .reduce((sum, movement) => sum + Number(movement.amount || 0), 0);
-  const finalAmount = shift.openingCash + netSales + cashIn - cashOut;
+  const finalAmount = shift.openingCash + cashSales + cashIn - cashOut;
 
   return {
     totalInvoices: shift.invoices.length,
     totalSales,
+    collectedSales,
     returnedAmount,
     netSales,
     salesCogs,
@@ -210,6 +236,13 @@ shiftsRouter.post('/:id/close', authenticate, asyncHandler(async (req, res) => {
               },
             },
           },
+          payments: {
+            select: {
+              amount: true,
+              direction: true,
+              method: true,
+            },
+          },
         },
       },
       cashMovements: true,
@@ -319,6 +352,13 @@ shiftsRouter.get('/:id/report', authenticate, asyncHandler(async (req, res) => {
                   costBasis: true,
                 },
               },
+            },
+          },
+          payments: {
+            select: {
+              amount: true,
+              direction: true,
+              method: true,
             },
           },
         },

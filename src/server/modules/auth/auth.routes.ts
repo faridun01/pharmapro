@@ -5,6 +5,7 @@ import { prisma } from '../../infrastructure/prisma';
 import { asyncHandler } from '../../common/http';
 import { ValidationError } from '../../common/errors';
 import { getJwtSecret } from '../../common/jwt';
+import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseStartupError } from '../../common/startup';
 
 export const authRouter = Router();
 
@@ -44,19 +45,27 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     throw new ValidationError('login and password are required');
   }
 
-  // Match by username (case-insensitive) or email.
-  // We fetch candidates and verify password against each to avoid false negatives
-  // when duplicate usernames exist in legacy/dev datasets.
-  const candidates = await prisma.user.findMany({
-    where: {
-      OR: [
-        { email: loginField },
-        { username: { equals: loginField, mode: 'insensitive' } },
-      ],
-      isActive: true,
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+  let candidates;
+  try {
+    // Match by username (case-insensitive) or email.
+    // We fetch candidates and verify password against each to avoid false negatives
+    // when duplicate usernames exist in legacy/dev datasets.
+    candidates = await prisma.user.findMany({
+      where: {
+        OR: [
+          { email: loginField },
+          { username: { equals: loginField, mode: 'insensitive' } },
+        ],
+        isActive: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  } catch (error) {
+    if (isDatabaseStartupError(error)) {
+      return res.status(503).json({ error: DATABASE_UNAVAILABLE_MESSAGE, code: 'DATABASE_UNAVAILABLE' });
+    }
+    throw error;
+  }
 
   let user = null as (typeof candidates)[number] | null;
   for (const candidate of candidates) {

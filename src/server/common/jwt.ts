@@ -18,4 +18,6 @@ export const getJwtSecret = () => {
   return cachedDevSecret;
 };
 
-export const isDevAuthBypassEnabled = () => process.env.ALLOW_DEV_AUTH_BYPASS === 'true';
+export const isDevAuthBypassEnabled = () => (
+  process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_AUTH_BYPASS === 'true'
+);

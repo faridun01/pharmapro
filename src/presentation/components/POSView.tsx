@@ -44,7 +44,7 @@ type ClosedShiftSummary = {
 
 export const POSView: React.FC = () => {
   const { t } = useTranslation();
-  const { products, processTransaction, user } = usePharmacy();
+  const { products, refreshProducts, processTransaction, user } = usePharmacy();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -133,6 +133,14 @@ export const POSView: React.FC = () => {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [loadActiveShift]);
+
+  useEffect(() => {
+    if (products.length > 0) {
+      return;
+    }
+
+    void refreshProducts();
+  }, [products.length, refreshProducts]);
 
   // Global barcode listener (simulated)
   useEffect(() => {
@@ -253,6 +261,14 @@ export const POSView: React.FC = () => {
       setCreditCustomerPhone('');
     }
   }, [cart.length]);
+
+  useEffect(() => {
+    if (paymentType === 'CREDIT') {
+      return;
+    }
+
+    setPaidAmountInput(total > 0 ? total.toFixed(2) : '');
+  }, [paymentType, total]);
 
   const handleComplete = async () => {
     if (cart.length === 0) return;
@@ -582,7 +598,10 @@ export const POSView: React.FC = () => {
               Карта
             </button>
             <button
-              onClick={() => setPaymentType('CREDIT')}
+              onClick={() => {
+                setPaymentType('CREDIT');
+                setPaidAmountInput('');
+              }}
               className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[12px] transition-all ${paymentType === 'CREDIT' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}
             >
               <Wallet size={14} />

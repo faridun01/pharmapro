@@ -37,6 +37,29 @@ type ReturnInvoiceItem = {
   quantity: number;
 };
 
+type InvoiceDisplayItem = {
+  id: string;
+  productId?: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+};
+
+type DebtorGroup = {
+  key: string;
+  customer: string;
+  customerIds: string[];
+  invoices: any[];
+  invoiceCount: number;
+  totalAmount: number;
+  totalPaid: number;
+  totalOutstanding: number;
+  totalUnits: number;
+  overdueCount: number;
+  latestActivityAt: Date | null;
+};
+
 export const InvoicesView: React.FC<{
   viewMode?: 'history' | 'debtors';
   initialSearchTerm?: string;
@@ -60,6 +83,7 @@ export const InvoicesView: React.FC<{
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [detailsInvoice, setDetailsInvoice] = useState<any | null>(null);
+  const [detailsDebtor, setDetailsDebtor] = useState<DebtorGroup | null>(null);
   const [returnInvoiceTarget, setReturnInvoiceTarget] = useState<{
     invoice: any;
     items: ReturnInvoiceItem[];
@@ -102,6 +126,7 @@ export const InvoicesView: React.FC<{
   });
   const paymentAmountInputRef = useRef<HTMLInputElement | null>(null);
   const [invoicesScrollTop, setInvoicesScrollTop] = useState(0);
+  const [initialLoadPending, setInitialLoadPending] = useState(false);
   const resetPaymentModal = () => setPaymentModal({ open: false, invoice: null, amount: '', method: 'CASH', comment: '', error: null });
 
   const INVOICE_ROW_HEIGHT = 88;
@@ -116,6 +141,28 @@ export const InvoicesView: React.FC<{
       setSearchTerm(initialSearchTerm);
     }
   }, [initialSearchTerm]);
+
+  useEffect(() => {
+    if (invoices.length > 0) {
+      setInitialLoadPending(false);
+      return;
+    }
+
+    let cancelled = false;
+    setInitialLoadPending(true);
+
+    void refreshInvoices().finally(() => {
+      if (!cancelled) {
+        setInitialLoadPending(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [invoices.length, refreshInvoices]);
+
+  const isInitialInvoicesLoading = initialLoadPending && invoices.length === 0;
 
   const matchesDateFilter = useCallback((createdAt: string | Date) => {
     const invoiceDate = new Date(createdAt);
@@ -183,11 +230,83 @@ export const InvoicesView: React.FC<{
     return sorted;
   }, [invoices, debouncedSearchTerm, sortBy, sortOrder, matchesDateFilter, isDebtorsView, isDebtorInvoice, debtFilter, isOverdueInvoice]);
 
+  const debtorGroups = useMemo<DebtorGroup[]>(() => {
+    if (!isDebtorsView) {
+      return [];
+    }
+
+    const groups = new Map<string, DebtorGroup>();
+
+    for (const invoice of filteredInvoices) {
+      const customer = String(invoice.customer || 'Без имени').trim() || 'Без имени';
+      const key = customer.toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ');
+      const paidAmount = Number((invoice as any).paidAmountTotal ?? 0);
+      const outstandingAmount = getInvoiceOutstandingAmount(invoice);
+      const totalAmount = Number(invoice.totalAmount || 0);
+      const totalUnits = (invoice.items || []).reduce((sum: number, item: any) => sum + Math.max(0, Math.floor(Number(item?.quantity || 0))), 0);
+      const createdAt = new Date(invoice.createdAt);
+
+      const existing = groups.get(key);
+      if (existing) {
+        existing.invoices.push(invoice);
+        existing.invoiceCount += 1;
+        existing.totalAmount += totalAmount;
+        existing.totalPaid += paidAmount;
+        existing.totalOutstanding += outstandingAmount;
+        existing.totalUnits += totalUnits;
+        existing.overdueCount += isOverdueInvoice(invoice) ? 1 : 0;
+        if (invoice.customerId && !existing.customerIds.includes(invoice.customerId)) {
+          existing.customerIds.push(invoice.customerId);
+        }
+        if (!existing.latestActivityAt || createdAt > existing.latestActivityAt) {
+          existing.latestActivityAt = createdAt;
+        }
+        continue;
+      }
+
+      groups.set(key, {
+        key,
+        customer,
+        customerIds: invoice.customerId ? [invoice.customerId] : [],
+        invoices: [invoice],
+        invoiceCount: 1,
+        totalAmount,
+        totalPaid: paidAmount,
+        totalOutstanding: outstandingAmount,
+        totalUnits,
+        overdueCount: isOverdueInvoice(invoice) ? 1 : 0,
+        latestActivityAt: createdAt,
+      });
+    }
+
+    return [...groups.values()].sort((left, right) => {
+      if (sortBy === 'amount') {
+        return sortOrder === 'asc'
+          ? left.totalOutstanding - right.totalOutstanding
+          : right.totalOutstanding - left.totalOutstanding;
+      }
+
+      if (sortBy === 'id') {
+        return sortOrder === 'asc'
+          ? left.customer.localeCompare(right.customer, 'ru-RU')
+          : right.customer.localeCompare(left.customer, 'ru-RU');
+      }
+
+      const leftTime = left.latestActivityAt?.getTime() || 0;
+      const rightTime = right.latestActivityAt?.getTime() || 0;
+      return sortOrder === 'asc' ? leftTime - rightTime : rightTime - leftTime;
+    });
+  }, [filteredInvoices, getInvoiceOutstandingAmount, isDebtorsView, isOverdueInvoice, sortBy, sortOrder]);
+
   const invoicesSummary = useMemo(() => {
     const totalRevenue = filteredInvoices.reduce((acc, inv) => acc + inv.totalAmount, 0);
-    const totalCount = filteredInvoices.length;
-    const totalOutstanding = filteredInvoices.reduce((acc, inv) => acc + getInvoiceOutstandingAmount(inv), 0);
-    const overdueCount = filteredInvoices.filter((inv) => isOverdueInvoice(inv)).length;
+    const totalCount = isDebtorsView ? debtorGroups.length : filteredInvoices.length;
+    const totalOutstanding = isDebtorsView
+      ? debtorGroups.reduce((acc, debtor) => acc + debtor.totalOutstanding, 0)
+      : filteredInvoices.reduce((acc, inv) => acc + getInvoiceOutstandingAmount(inv), 0);
+    const overdueCount = isDebtorsView
+      ? debtorGroups.filter((debtor) => debtor.overdueCount > 0).length
+      : filteredInvoices.filter((inv) => isOverdueInvoice(inv)).length;
     return {
       totalRevenue,
       totalCount,
@@ -195,7 +314,7 @@ export const InvoicesView: React.FC<{
       overdueCount,
       averageOrder: totalRevenue / (totalCount || 1),
     };
-  }, [filteredInvoices, getInvoiceOutstandingAmount, isOverdueInvoice]);
+  }, [debtorGroups, filteredInvoices, getInvoiceOutstandingAmount, isDebtorsView, isOverdueInvoice]);
 
   const onInvoicesScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     setInvoicesScrollTop(event.currentTarget.scrollTop);
@@ -228,6 +347,37 @@ export const InvoicesView: React.FC<{
   const formatInvoiceQuantitySummary = (items: any[] = []) => {
     const totalUnits = items.reduce((sum, item) => sum + Math.max(0, Math.floor(Number(item?.quantity || 0))), 0);
     return `${totalUnits} ед.`;
+  };
+
+  const buildInvoiceDisplayItems = (items: any[] = []): InvoiceDisplayItem[] => {
+    const grouped = new Map<string, InvoiceDisplayItem>();
+
+    for (const item of items) {
+      const productName = String(item?.productName || '-').trim() || '-';
+      const productId = item?.productId ? String(item.productId) : undefined;
+      const key = productId || productName.toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ');
+      const quantity = Math.max(0, Math.floor(Number(item?.quantity || 0)));
+      const unitPrice = Number(item?.unitPrice || 0);
+      const totalPrice = Number(item?.totalPrice || 0);
+      const existing = grouped.get(key);
+
+      if (existing) {
+        existing.quantity += quantity;
+        existing.totalPrice += totalPrice;
+        continue;
+      }
+
+      grouped.set(key, {
+        id: String(item?.id || key),
+        productId,
+        productName,
+        quantity,
+        unitPrice,
+        totalPrice,
+      });
+    }
+
+    return [...grouped.values()];
   };
 
   const closeEditModal = () => setEditModal({ open: false, invoiceId: '', customer: '', taxAmount: 0, discount: 0, totalAmount: '', items: [], error: null });
@@ -441,6 +591,7 @@ export const InvoicesView: React.FC<{
     const displayInvoiceNo = invoice.invoiceNo || invoice.id;
     const createdAt = new Date(invoice.createdAt);
     const formatQuantityLabel = (item: any) => formatPackQuantity(Number(item?.quantity || 0));
+    const displayItems = buildInvoiceDisplayItems(invoice.items || []);
 
     const receiptHtml = `
       <html>
@@ -496,7 +647,7 @@ export const InvoicesView: React.FC<{
                 <tr><th class="num">№</th><th>Товар</th><th class="right">Кол-во</th><th class="right">${moneyLabel('Цена')}</th><th class="right">${moneyLabel('Сумма')}</th></tr>
               </thead>
               <tbody>
-                ${(invoice.items || []).map((item: any, index: number) => `<tr>
+                ${displayItems.map((item: any, index: number) => `<tr>
                   <td class="num">${index + 1}</td>
                   <td>${item.productName || '-'}</td>
                   <td class="right">${formatQuantityLabel(item)}</td>
@@ -795,11 +946,10 @@ export const InvoicesView: React.FC<{
             <thead>
               <tr className="bg-[#f5f5f0]/50 text-[9px] uppercase tracking-[0.2em] text-[#5A5A40]/45 font-bold">
                 <th className="px-4 py-3.5 text-center">№</th>
-                <th className="px-6 py-3.5">Номер чека</th>
-                {isDebtorsView && <th className="px-6 py-3.5">Покупатель</th>}
-                <th className="px-6 py-3.5">{t('Date & Time')}</th>
+                <th className="px-6 py-3.5">{isDebtorsView ? 'Должник' : 'Номер чека'}</th>
+                <th className="px-6 py-3.5">{isDebtorsView ? 'Последняя активность' : t('Date & Time')}</th>
                 <th className="px-6 py-3.5">{isDebtorsView ? 'Состояние долга' : t('Payment')}</th>
-                <th className="px-4 py-3.5 text-right">Количество</th>
+                <th className="px-4 py-3.5 text-right">{isDebtorsView ? 'Накладных' : 'Количество'}</th>
                 <th className="px-4 py-3.5 text-right">{moneyLabel('Сумма')}</th>
                 <th className="px-4 py-3.5 text-right">{moneyLabel('Оплачено')}</th>
                 <th className="px-4 py-3.5 text-right">{moneyLabel('Остаток')}</th>
@@ -807,12 +957,100 @@ export const InvoicesView: React.FC<{
               </tr>
             </thead>
             <tbody className="divide-y divide-[#5A5A40]/5">
-              {invoiceTopSpacerHeight > 0 && (
+              {isInitialInvoicesLoading && (
                 <tr>
-                  <td colSpan={isDebtorsView ? 10 : 9} style={{ height: invoiceTopSpacerHeight }} />
+                  <td colSpan={9} className="px-6 py-8">
+                    <div className="space-y-3">
+                      {Array.from({ length: 6 }).map((_, index) => (
+                        <div key={index} className="grid grid-cols-5 gap-3 rounded-2xl bg-[#f8f6ef] px-4 py-4 animate-pulse md:grid-cols-8">
+                          <div className="h-4 rounded-full bg-[#e6e0cf]" />
+                          <div className="h-4 rounded-full bg-[#e6e0cf] md:col-span-2" />
+                          <div className="h-4 rounded-full bg-[#e6e0cf]" />
+                          <div className="h-4 rounded-full bg-[#e6e0cf]" />
+                          <div className="h-4 rounded-full bg-[#e6e0cf]" />
+                        </div>
+                      ))}
+                    </div>
+                  </td>
                 </tr>
               )}
-              {visibleInvoices.map((invoice, index) => {
+              {!isDebtorsView && invoiceTopSpacerHeight > 0 && (
+                <tr>
+                  <td colSpan={9} style={{ height: invoiceTopSpacerHeight }} />
+                </tr>
+              )}
+              {!isInitialInvoicesLoading && isDebtorsView && debtorGroups.map((debtor, index) => {
+                const rowNumber = index + 1;
+                const debtorIsOverdue = debtor.overdueCount > 0;
+                const statusBadge = debtorIsOverdue
+                  ? { label: 'Просрочен', className: 'bg-rose-50 text-rose-700 border-rose-200' }
+                  : debtor.totalPaid > 0
+                    ? { label: 'Частично оплачено', className: 'bg-amber-50 text-amber-700 border-amber-200' }
+                    : { label: 'Долг', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+
+                return (
+                  <tr key={debtor.key} className="hover:bg-[#f5f5f0]/30 transition-colors group align-top">
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="inline-flex min-w-7 h-7 items-center justify-center rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-[12px] font-bold">
+                        {rowNumber}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 bg-[#f5f5f0] rounded-lg flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
+                          <UserIcon size={14} />
+                        </div>
+                        <div>
+                          <span className="font-semibold text-[#5A5A40] text-[13px] leading-none">{debtor.customer}</span>
+                          <p className="text-[10px] text-[#5A5A40]/45 mt-1">{debtor.invoiceCount} накладных • {debtor.totalUnits} ед.</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <div className="space-y-1 text-[12px] text-[#5A5A40]/60 leading-none">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={12} />
+                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleDateString('ru-RU') : '—'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={12} />
+                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${statusBadge.className}`}>
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
+                        {statusBadge.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <p className="text-[13px] font-semibold text-[#5A5A40] leading-none">{debtor.invoiceCount}</p>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <p className="text-[13px] font-bold text-[#5A5A40] leading-none">{debtor.totalAmount.toFixed(2)}</p>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <p className="text-[13px] font-semibold text-emerald-700 leading-none">{debtor.totalPaid.toFixed(2)}</p>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <p className={`text-[13px] font-semibold leading-none ${debtor.totalOutstanding > 0 ? 'text-rose-700' : 'text-[#5A5A40]/60'}`}>{debtor.totalOutstanding.toFixed(2)}</p>
+                    </td>
+                    <td className="px-6 py-3.5 text-right">
+                      <div className="ml-auto grid grid-cols-1 gap-1.5 w-fit justify-items-center">
+                        <button
+                          onClick={() => setDetailsDebtor(debtor)}
+                          className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
+                          title="Сверка: детали и суммы"
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!isInitialInvoicesLoading && !isDebtorsView && visibleInvoices.map((invoice, index) => {
                 const rowNumber = invoiceStartIndex + index + 1;
                 const totalAmount = Number(invoice.totalAmount || 0);
                 const returnedAmount = Number((invoice as any).returnedAmountTotal || 0);
@@ -851,14 +1089,6 @@ export const InvoicesView: React.FC<{
                       <span className="font-mono font-bold text-[#5A5A40] text-[13px] leading-none">{invoice.invoiceNo || invoice.id}</span>
                     </div>
                   </td>
-                  {isDebtorsView && (
-                    <td className="px-6 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <UserIcon size={13} className="text-[#5A5A40]/35" />
-                        <span className="text-[13px] font-medium text-[#5A5A40] leading-tight">{invoice.customer || '—'}</span>
-                      </div>
-                    </td>
-                  )}
                   <td className="px-6 py-3.5">
                     <div className="space-y-1 text-[12px] text-[#5A5A40]/60 leading-none">
                       <div className="flex items-center gap-1.5">
@@ -907,17 +1137,17 @@ export const InvoicesView: React.FC<{
                     <p className={`text-[13px] font-semibold leading-none ${outstandingAmount > 0 ? 'text-rose-700' : 'text-[#5A5A40]/60'}`}>{outstandingAmount.toFixed(2)}</p>
                   </td>
                   <td className="px-6 py-3.5 text-right">
-                    <div className="ml-auto grid grid-cols-2 gap-1 w-fit justify-items-center">
+                    <div className="ml-auto grid grid-cols-3 gap-1.5 w-fit justify-items-center">
                       <button
                         onClick={() => setDetailsInvoice(invoice)}
-                        className="p-1 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
+                        className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
                         title="Сверка: детали и суммы"
                       >
                         <ChevronRight size={14} />
                       </button>
                       <button
                         onClick={() => printInvoice(invoice)}
-                        className="p-1 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
+                        className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
                         title={t('Print invoice')}
                       >
                         <Printer size={14} />
@@ -926,7 +1156,7 @@ export const InvoicesView: React.FC<{
                         <button
                           onClick={() => addInvoicePayment(invoice)}
                             disabled={busyId === invoice.id || isReturnLocked(invoice.status)}
-                          className="p-1 text-[#5A5A40]/30 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-all disabled:opacity-40"
+                          className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-all disabled:opacity-40"
                           title={t('Add payment')}
                         >
                           <DollarSign size={14} />
@@ -935,7 +1165,7 @@ export const InvoicesView: React.FC<{
                       <button
                         onClick={() => editInvoice(invoice)}
                         disabled={busyId === invoice.id || isEditLocked(invoice.status)}
-                        className="p-1 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all disabled:opacity-40"
+                        className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all disabled:opacity-40"
                         title={t('Edit invoice')}
                       >
                         <Pencil size={14} />
@@ -943,7 +1173,7 @@ export const InvoicesView: React.FC<{
                       <button
                         onClick={() => openReturnModal(invoice)}
                         disabled={busyId === invoice.id || isReturnLocked(invoice.status)}
-                        className="p-1 text-[#5A5A40]/30 hover:text-amber-700 hover:bg-amber-50 rounded-md transition-all disabled:opacity-40"
+                        className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-amber-700 hover:bg-amber-50 rounded-md transition-all disabled:opacity-40"
                         title={t('Create return')}
                       >
                         <RotateCcw size={14} />
@@ -951,7 +1181,7 @@ export const InvoicesView: React.FC<{
                       <button
                         onClick={() => setDeleteInvoiceTarget(invoice)}
                         disabled={busyId === invoice.id || isEditLocked(invoice.status)}
-                        className="p-1 text-[#5A5A40]/30 hover:text-red-700 hover:bg-red-50 rounded-md transition-all disabled:opacity-40"
+                        className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-red-700 hover:bg-red-50 rounded-md transition-all disabled:opacity-40"
                         title={t('Delete invoice')}
                       >
                         <Trash2 size={14} />
@@ -963,13 +1193,107 @@ export const InvoicesView: React.FC<{
               })}
               {invoiceBottomSpacerHeight > 0 && (
                 <tr>
-                  <td colSpan={isDebtorsView ? 10 : 9} style={{ height: invoiceBottomSpacerHeight }} />
+                  <td colSpan={9} style={{ height: invoiceBottomSpacerHeight }} />
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {detailsDebtor && (
+        <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl border border-[#5A5A40]/10 overflow-hidden">
+            <div className="px-6 py-4 bg-[#5A5A40] text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold">Сверка: детали и суммы</h3>
+                <p className="text-xs text-white/70 mt-1">{detailsDebtor.customer}</p>
+              </div>
+              <button
+                onClick={() => setDetailsDebtor(null)}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-auto">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+                <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Накладных</p>
+                  <p className="font-semibold text-[#5A5A40]">{detailsDebtor.invoiceCount}</p>
+                </div>
+                <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Сумма</p>
+                  <p className="font-semibold text-[#5A5A40]">{detailsDebtor.totalAmount.toFixed(2)} {currencyCode}</p>
+                </div>
+                <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Оплачено</p>
+                  <p className="font-semibold text-emerald-700">{detailsDebtor.totalPaid.toFixed(2)} {currencyCode}</p>
+                </div>
+                <div className="rounded-2xl bg-[#f5f5f0]/60 px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/45 mb-1">Остаток</p>
+                  <p className="font-semibold text-rose-700">{detailsDebtor.totalOutstanding.toFixed(2)} {currencyCode}</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[#5A5A40]/10 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-[#f5f5f0]/60 text-[#5A5A40]/70 text-xs uppercase">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Накладная</th>
+                      <th className="px-3 py-2 text-left">Дата</th>
+                      <th className="px-3 py-2 text-left">Статус</th>
+                      <th className="px-3 py-2 text-right">Сумма</th>
+                      <th className="px-3 py-2 text-right">Оплачено</th>
+                      <th className="px-3 py-2 text-right">Остаток</th>
+                      <th className="px-3 py-2 text-right">Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...detailsDebtor.invoices]
+                      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+                      .map((invoice: any) => {
+                        const paidAmount = Number((invoice as any).paidAmountTotal ?? 0);
+                        const outstandingAmount = Number((invoice as any).outstandingAmount ?? getInvoiceOutstandingAmount(invoice));
+                        const paymentState = String(invoice.paymentStatus || 'UNPAID');
+                        return (
+                          <tr key={invoice.id} className="border-t border-[#5A5A40]/10">
+                            <td className="px-3 py-2 font-semibold text-[#5A5A40]">{invoice.invoiceNo || invoice.id}</td>
+                            <td className="px-3 py-2">{new Date(invoice.createdAt).toLocaleString('ru-RU')}</td>
+                            <td className="px-3 py-2">{paymentState}</td>
+                            <td className="px-3 py-2 text-right">{Number(invoice.totalAmount || 0).toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right text-emerald-700">{paidAmount.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right text-rose-700">{outstandingAmount.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">
+                              <div className="inline-flex items-center gap-2">
+                                <button
+                                  onClick={() => setDetailsInvoice(invoice)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#5A5A40]/35 hover:bg-[#f5f5f0] hover:text-[#5A5A40] transition-all"
+                                  title="Открыть накладную"
+                                >
+                                  <FileText size={14} />
+                                </button>
+                                {outstandingAmount > 0 && ['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'].includes(paymentState) && (
+                                  <button
+                                    onClick={() => addInvoicePayment(invoice)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#5A5A40]/35 hover:bg-emerald-50 hover:text-emerald-700 transition-all"
+                                    title="Погасить долг"
+                                  >
+                                    <DollarSign size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {detailsInvoice && (
         <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1005,7 +1329,7 @@ export const InvoicesView: React.FC<{
                     </tr>
                   </thead>
                   <tbody>
-                    {(detailsInvoice.items || []).map((item: any, idx: number) => (
+                    {buildInvoiceDisplayItems(detailsInvoice.items || []).map((item: any, idx: number) => (
                       <tr key={item.id || idx} className="border-t border-[#5A5A40]/10">
                         <td className="px-3 py-2">{idx + 1}</td>
                         <td className="px-3 py-2">{item.productName || '-'}</td>

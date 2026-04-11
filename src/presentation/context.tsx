@@ -39,7 +39,6 @@ interface PharmacyContextType {
     quantity: number;
     unit: string;
     costBasis: number;
-    retailPrice?: number;
     supplierId?: string;
     manufacturedDate: Date;
     expiryDate: Date;
@@ -113,8 +112,11 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login, password })
       });
-      if (!response.ok) throw new Error('Invalid credentials');
-      const data = await response.json();
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || (response.status === 401 ? 'Invalid credentials' : 'Login failed'));
+      }
+      const data = payload;
       window.sessionStorage.setItem('pharmapro_token', data.token);
       window.sessionStorage.setItem('pharmapro_user', JSON.stringify(data.user));
       localStorage.setItem('pharmapro_token', data.token);
@@ -202,7 +204,6 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     quantity: number;
     unit: string;
     costBasis: number;
-    retailPrice?: number;
     supplierId?: string;
     manufacturedDate: Date;
     expiryDate: Date;
@@ -307,27 +308,37 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   useEffect(() => {
     const loadKey = getBootstrapLoadKey(user);
+    let isActive = true;
 
     const init = async () => {
-      setIsLoading(true);
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(false);
 
       let bootstrapPromise = bootstrapLoads.get(loadKey);
       if (!bootstrapPromise) {
-        bootstrapPromise = runRefreshTasks(refreshProducts, refreshInvoices, refreshSuppliers).catch((error) => {
+        bootstrapPromise = Promise.resolve().catch((error) => {
           bootstrapLoads.delete(loadKey);
           throw error;
         });
         bootstrapLoads.set(loadKey, bootstrapPromise);
       }
 
-      try {
-        await bootstrapPromise;
-      } finally {
-        setIsLoading(false);
-      }
+      void bootstrapPromise.finally(() => {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      });
     };
 
-    init();
+    void init();
+
+    return () => {
+      isActive = false;
+    };
   }, [user]);
 
   return (

@@ -13,6 +13,12 @@ type JwtUser = {
 
 export type AuthedRequest = Request & { user: JwtUser };
 
+const DEV_ADMIN_EMAIL = 'admin@pharmapro.com';
+const DEV_ADMIN_USERNAME = 'admin';
+const DEV_ADMIN_PASSWORD = 'admin123';
+const DEV_ADMIN_PASSWORD_HASH = '$2b$10$wnlS.eRxOglKIuDgS8Nycu.g/VcgDSHkwTRNjvIx9ZSPoJZww9/ey';
+const PRODUCTION_BOOTSTRAP_HINT = 'Run `npm run bootstrap:admin -- --email owner@example.com --password <strong-password> --name "Owner" --role OWNER` before first production login.';
+
 const isTrustedDesktopRequest = (req: Request) => {
   const desktopSecret = process.env.ELECTRON_DESKTOP_AUTH_SECRET;
   const desktopHeader = req.headers['x-pharmapro-desktop-auth'];
@@ -27,17 +33,33 @@ const isTrustedDesktopRequest = (req: Request) => {
 };
 
 export const ensureAdminUser = async () => {
+  if (process.env.NODE_ENV === 'production') {
+    const privilegedUsers = await prisma.user.count({
+      where: {
+        isActive: true,
+        role: { in: ['OWNER', 'ADMIN'] },
+      },
+    });
+
+    if (privilegedUsers === 0) {
+      console.warn('[auth] No active OWNER or ADMIN user exists in production.');
+      console.warn(`[auth] ${PRODUCTION_BOOTSTRAP_HINT}`);
+    }
+
+    return;
+  }
+
   const existing = await prisma.user.findFirst({
-    where: { email: 'admin@pharmapro.com' },
-    select: { id: true, username: true, isActive: true },
+    where: { email: DEV_ADMIN_EMAIL },
+    select: { id: true, username: true, password: true, isActive: true },
   });
 
   if (!existing) {
     await prisma.user.create({
       data: {
-        email: 'admin@pharmapro.com',
-        username: 'admin',
-        password: await bcrypt.hash('admin123', 10),
+        email: DEV_ADMIN_EMAIL,
+        username: DEV_ADMIN_USERNAME,
+        password: DEV_ADMIN_PASSWORD_HASH,
         name: 'Admin',
         role: 'ADMIN',
       },
@@ -47,21 +69,21 @@ export const ensureAdminUser = async () => {
     const updateData: { username?: string; password?: string; isActive?: boolean } = {};
 
     if (!existing.username) {
-      updateData.username = 'admin';
+      updateData.username = DEV_ADMIN_USERNAME;
     }
     if (!existing.isActive) {
       updateData.isActive = true;
     }
 
     // In development, keep deterministic local credentials for quick login.
-    if (process.env.NODE_ENV !== 'production') {
-      updateData.password = await bcrypt.hash('admin123', 10);
-      updateData.username = 'admin';
+    if (process.env.NODE_ENV !== 'production' && existing.password !== DEV_ADMIN_PASSWORD_HASH) {
+      updateData.password = DEV_ADMIN_PASSWORD_HASH;
+      updateData.username = DEV_ADMIN_USERNAME;
     }
 
     if (Object.keys(updateData).length > 0) {
       await prisma.user.update({
-        where: { email: 'admin@pharmapro.com' },
+        where: { email: DEV_ADMIN_EMAIL },
         data: updateData,
       });
       console.log('[auth] Admin credentials synchronized');
@@ -71,13 +93,13 @@ export const ensureAdminUser = async () => {
 
 const ensureDevUser = async () => {
   const devUser = await prisma.user.findFirst({
-    where: { email: 'admin@pharmapro.com' },
+    where: { email: DEV_ADMIN_EMAIL },
     select: { id: true, email: true, role: true },
   });
   if (!devUser) {
     await ensureAdminUser();
     return prisma.user.findFirst({
-      where: { email: 'admin@pharmapro.com' },
+      where: { email: DEV_ADMIN_EMAIL },
       select: { id: true, email: true, role: true },
     }) as Promise<{ id: string; email: string; role: string }>;
   }

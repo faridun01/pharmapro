@@ -2,23 +2,18 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
-import { buildApiHeaders } from '../../infrastructure/api';
 import { 
   Search, 
-  History, 
-  Calendar,
   X,
-  Trash2,
   Layers,
   Plus,
   ArrowDownUp,
-  ChevronDown,
-  ChevronUp,
   Package
 } from 'lucide-react';
 import { Batch, BatchStatus } from '../../core/domain';
 
 type BatchSortMode = 'name' | 'quantity_desc' | 'quantity_asc';
+type VisibleBatchStatus = Extract<BatchStatus, 'NEAR_EXPIRY' | 'CRITICAL' | 'EXPIRED'>;
 
 type BatchWithProductName = Batch & { productName: string; productId: string; minStock?: number };
 type BatchGroup = {
@@ -27,90 +22,13 @@ type BatchGroup = {
   productId: string;
   minStock: number;
   batches: BatchWithProductName[];
+  primaryBatch: BatchWithProductName | null;
   totalQuantity: number;
   soonestExpiry: Date | null;
   worstStatus: BatchStatus;
   suppliers: string[];
   averageCostBasis: number;
-  averageRetailPrice: number;
 };
-
-type BatchRowProps = {
-  batch: BatchWithProductName;
-  isLowStock: boolean;
-  busyBatchId: string | null;
-  getStatusColor: (status: BatchStatus) => string;
-  formatPackQuantity: (quantity: number) => string;
-  onHistory: (batch: BatchWithProductName) => void;
-  onRestock: (batch: BatchWithProductName) => void;
-  onDelete: (batch: BatchWithProductName) => void;
-  t: (key: string) => string;
-};
-
-const BatchRow = React.memo(function BatchRow({ batch, isLowStock, busyBatchId, getStatusColor, formatPackQuantity, onHistory, onRestock, onDelete, t }: BatchRowProps) {
-  return (
-    <tr className={`transition-colors group ${isLowStock ? 'bg-amber-50/60 hover:bg-amber-50' : 'hover:bg-[#f5f5f0]/30'}`}>
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-[#f5f5f0] rounded-lg flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
-            <History size={16} />
-          </div>
-          <span className="font-mono font-bold text-[#5A5A40] text-sm">{batch.batchNumber}</span>
-        </div>
-      </td>
-      <td className="px-6 py-4">
-        <p className="text-sm font-medium text-[#5A5A40]">{batch.supplierName || '—'}</p>
-      </td>
-      <td className="px-6 py-4">
-        <p className={`text-sm font-bold ${isLowStock ? 'text-amber-700' : 'text-[#5A5A40]'}`}>{formatPackQuantity(batch.quantity)}</p>
-        <p className="text-[10px] text-[#5A5A40]/40 mt-0.5">
-          {`${t('Unit')}: ${batch.unit}`}
-        </p>
-        {isLowStock && (
-          <p className="text-[10px] text-amber-700 font-bold mt-1">Низкий остаток</p>
-        )}
-      </td>
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-2 text-sm text-[#5A5A40]/60">
-          <Calendar size={14} />
-          {new Date(batch.expiryDate).toLocaleDateString()}
-        </div>
-      </td>
-      <td className="px-6 py-4">
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${getStatusColor(batch.status)}`}>
-          {t(batch.status.replace('_', ' '))}
-        </span>
-      </td>
-      <td className="px-6 py-4 text-right">
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => onHistory(batch)}
-            className="p-2 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-xl transition-all"
-            title="История партии"
-          >
-            <History size={18} />
-          </button>
-          <button
-            onClick={() => onRestock(batch)}
-            disabled={busyBatchId === batch.id}
-            className="p-2 text-[#5A5A40]/30 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all disabled:opacity-40"
-            title="Пополнить"
-          >
-            <Layers size={18} />
-          </button>
-          <button
-            onClick={() => onDelete(batch)}
-            disabled={busyBatchId === batch.id}
-            className="p-2 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-40"
-            title="Удалить партию"
-          >
-            <Trash2 size={18} />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-});
 
 export const BatchesView: React.FC<{
   embedded?: boolean;
@@ -122,9 +40,8 @@ export const BatchesView: React.FC<{
   const { t } = useTranslation();
   const { products, refreshProducts, restockInventory } = usePharmacy();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<BatchStatus | 'ALL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<VisibleBatchStatus>('NEAR_EXPIRY');
   const [sortMode, setSortMode] = useState<BatchSortMode>('name');
-  const [historyBatch, setHistoryBatch] = useState<BatchWithProductName | null>(null);
   const [restockModal, setRestockModal] = useState({
     open: false,
     productId: '',
@@ -132,13 +49,19 @@ export const BatchesView: React.FC<{
     quantity: '0',
     unit: 'шт.',
     costBasis: '0',
-    retailPrice: '0',
     expiryDate: '',
     error: null as string | null,
   });
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyBatchId, setBusyBatchId] = useState<string | null>(null);
-  const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (products.length > 0) {
+      return;
+    }
+
+    void refreshProducts();
+  }, [products.length, refreshProducts]);
 
   // Debounce search to 300ms to avoid filtering on every keystroke
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -155,29 +78,23 @@ export const BatchesView: React.FC<{
   const formatMoney = (value: number) => `${Number(value || 0).toFixed(2)} TJS`;
 
   const filteredBatches = useMemo(() => allBatches.filter((b) => {
-    const matchesSearch = b.productName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || 
-                         b.batchNumber.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || b.status === statusFilter;
+    const matchesSearch = b.productName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      (b.supplierName || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+    const matchesStatus = b.status === statusFilter;
     return matchesSearch && matchesStatus;
   }), [allBatches, debouncedSearchTerm, statusFilter]);
 
   const statusCounts = useMemo(() => ({
-    ALL: allBatches.length,
-    STABLE: allBatches.filter((b) => b.status === 'STABLE').length,
     NEAR_EXPIRY: allBatches.filter((b) => b.status === 'NEAR_EXPIRY').length,
     CRITICAL: allBatches.filter((b) => b.status === 'CRITICAL').length,
     EXPIRED: allBatches.filter((b) => b.status === 'EXPIRED').length,
   }), [allBatches]);
 
-  const statusOptions: Array<{ id: BatchStatus | 'ALL'; label: string }> = [
-    { id: 'ALL', label: 'Все партии' },
-    { id: 'STABLE', label: 'Стабильные' },
+  const statusOptions: Array<{ id: VisibleBatchStatus; label: string }> = [
     { id: 'NEAR_EXPIRY', label: 'Скоро истекают' },
     { id: 'CRITICAL', label: 'Критические' },
     { id: 'EXPIRED', label: 'Просроченные' },
   ];
-
-  const openHistoryModal = useCallback((batch: BatchWithProductName) => setHistoryBatch(batch), []);
 
   const getStatusColor = (status: BatchStatus) => {
     switch (status) {
@@ -233,19 +150,18 @@ export const BatchesView: React.FC<{
       const suppliers = [...new Set(orderedBatches.map((batch) => batch.supplierName).filter(Boolean) as string[])];
       const totalQuantity = orderedBatches.reduce((sum, batch) => sum + Number(batch.quantity || 0), 0);
       const totalCostValue = orderedBatches.reduce((sum, batch) => sum + Number(batch.quantity || 0) * Number(batch.costBasis || 0), 0);
-      const totalRetailValue = orderedBatches.reduce((sum, batch) => sum + Number(batch.quantity || 0) * Number(batch.retailPrice || 0), 0);
       return {
         key,
         productName: firstBatch?.productName || '',
         productId: firstBatch?.productId || '',
         minStock: Number(firstBatch?.minStock || 0),
         batches: orderedBatches,
+        primaryBatch: firstBatch || null,
         totalQuantity,
         soonestExpiry: firstBatch ? new Date(firstBatch.expiryDate) : null,
         worstStatus: getWorstStatus(orderedBatches),
         suppliers,
         averageCostBasis: totalQuantity > 0 ? totalCostValue / totalQuantity : 0,
-        averageRetailPrice: totalQuantity > 0 ? totalRetailValue / totalQuantity : 0,
       };
     }).sort((left, right) => {
       if (sortMode === 'quantity_desc') return right.totalQuantity - left.totalQuantity;
@@ -253,35 +169,6 @@ export const BatchesView: React.FC<{
       return left.productName.localeCompare(right.productName, 'ru-RU');
     });
   }, [filteredBatches, sortMode]);
-
-  const toggleGroup = useCallback((key: string) => {
-    setExpandedGroupKeys((prev) => prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]);
-  }, []);
-
-  const handleDeleteBatch = async (batch: BatchWithProductName) => {
-    const confirmed = window.confirm(`Удалить партию ${batch.batchNumber}?`);
-    if (!confirmed) return;
-
-    setActionError(null);
-    setBusyBatchId(batch.id);
-    try {
-      const response = await fetch(`/api/inventory/batches/${batch.id}`, {
-        method: 'DELETE',
-        headers: await buildApiHeaders(),
-      });
-
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(body.error || 'Не удалось удалить партию');
-      }
-
-      await refreshProducts();
-    } catch (error: any) {
-      setActionError(error.message || 'Не удалось удалить партию');
-    } finally {
-      setBusyBatchId(null);
-    }
-  };
 
   const openRestockModalForBatch = (batch: BatchWithProductName) => {
     setRestockModal({
@@ -291,7 +178,6 @@ export const BatchesView: React.FC<{
       quantity: '1',
       unit: batch.unit || 'шт.',
       costBasis: String(batch.costBasis ?? 0),
-      retailPrice: String(batch.retailPrice ?? 0),
       expiryDate: batch.expiryDate ? new Date(batch.expiryDate).toISOString().slice(0, 10) : '',
       error: null,
     });
@@ -306,7 +192,6 @@ export const BatchesView: React.FC<{
       quantity: '1',
       unit: 'шт.',
       costBasis: '0',
-      retailPrice: '0',
       expiryDate: '',
       error: null,
     });
@@ -322,7 +207,6 @@ export const BatchesView: React.FC<{
   const submitRestock = async () => {
     const quantity = Number(restockModal.quantity);
     const costBasis = Number(restockModal.costBasis);
-    const retailPrice = Number(restockModal.retailPrice);
 
     if (!restockModal.productId) {
       setRestockModal((prev) => ({ ...prev, error: 'Выберите товар' }));
@@ -334,10 +218,6 @@ export const BatchesView: React.FC<{
     }
     if (!Number.isFinite(costBasis) || costBasis < 0) {
       setRestockModal((prev) => ({ ...prev, error: 'Себестоимость должна быть неотрицательной' }));
-      return;
-    }
-    if (!Number.isFinite(retailPrice) || retailPrice < 0) {
-      setRestockModal((prev) => ({ ...prev, error: 'Цена продажи должна быть неотрицательной' }));
       return;
     }
     if (!restockModal.expiryDate) {
@@ -354,7 +234,6 @@ export const BatchesView: React.FC<{
         quantity: Math.floor(quantity),
         unit: restockModal.unit || 'шт.',
         costBasis,
-        retailPrice,
         manufacturedDate: new Date(),
         expiryDate: new Date(restockModal.expiryDate),
       });
@@ -411,7 +290,7 @@ export const BatchesView: React.FC<{
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/45">Сортировка и фильтр</p>
-            <p className="text-xs text-[#5A5A40]/60 mt-1">Сначала выберите порядок, затем отфильтруйте партии по статусу.</p>
+            <p className="text-xs text-[#5A5A40]/60 mt-1">Показываем только товары, которым нужно внимание.</p>
           </div>
           <div className="flex items-center gap-2">
             <ArrowDownUp size={16} className="text-[#5A5A40]/40" />
@@ -454,7 +333,7 @@ export const BatchesView: React.FC<{
             type="text" 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Поиск по товару или партии"
+            placeholder="Поиск по товару или поставщику"
             className="w-64 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 transition-all shadow-sm"
           />
         </div>
@@ -476,7 +355,7 @@ export const BatchesView: React.FC<{
                 <th className="px-8 py-5">Цены</th>
                 <th className="px-8 py-5">Ближайший срок</th>
                 <th className="px-8 py-5">{t('Status')}</th>
-                <th className="px-8 py-5 text-right">Развернуть</th>
+                <th className="px-8 py-5 text-right">Действие</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#5A5A40]/5">
@@ -488,94 +367,59 @@ export const BatchesView: React.FC<{
                 </tr>
               )}
               {groupedBatches.map((group) => {
-                const isExpanded = expandedGroupKeys.includes(group.key);
                 const isLowStock = group.minStock > 0 && group.totalQuantity <= group.minStock;
                 const groupStatus = getGroupStatusMeta(group);
 
                 return (
-                  <React.Fragment key={group.key}>
-                    <tr className={`transition-colors ${isLowStock ? 'bg-amber-50/70 hover:bg-amber-50' : 'hover:bg-[#f5f5f0]/30'}`}>
-                      <td className="px-8 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isLowStock ? 'bg-amber-100 text-amber-700' : 'bg-[#f5f5f0] text-[#5A5A40]'}`}>
-                            <Package size={18} />
-                          </div>
-                          <div>
-                            <p className={`text-sm font-bold ${isLowStock ? 'text-amber-800' : 'text-[#5A5A40]'}`}>{group.productName}</p>
-                            <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">
-                              {group.suppliers.length > 0 ? `${t('Supplier')}: ${group.suppliers.join(', ')}` : 'Без поставщика'}
-                            </p>
-                            {isLowStock && (
-                              <p className="text-[10px] font-bold text-amber-700 mt-1">Низкий остаток: минимум {group.minStock} шт.</p>
-                            )}
-                          </div>
+                  <tr key={group.key} className={`transition-colors ${isLowStock ? 'bg-amber-50/70 hover:bg-amber-50' : 'hover:bg-[#f5f5f0]/30'}`}>
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isLowStock ? 'bg-amber-100 text-amber-700' : 'bg-[#f5f5f0] text-[#5A5A40]'}`}>
+                          <Package size={18} />
                         </div>
-                      </td>
-                      <td className="px-8 py-5 text-sm font-semibold text-[#5A5A40]">{group.batches.length}</td>
-                      <td className="px-8 py-5 text-sm font-semibold text-[#5A5A40]">
-                        <span className={`inline-flex items-center rounded-full px-3 py-1 ${isLowStock ? 'bg-amber-100 text-amber-800' : 'bg-[#f5f5f0] text-[#5A5A40]'}`}>
-                          {formatPackQuantity(group.totalQuantity)}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5">
-                        <div className="text-sm text-[#5A5A40] font-semibold">Себест.: {formatMoney(group.averageCostBasis)}</div>
-                        <div className="text-[11px] text-[#5A5A40]/55 mt-0.5">Розн.: {formatMoney(group.averageRetailPrice)}</div>
-                      </td>
-                      <td className="px-8 py-5 text-sm text-[#5A5A40]/65">
-                        {group.soonestExpiry ? group.soonestExpiry.toLocaleDateString() : '—'}
-                      </td>
-                      <td className="px-8 py-5">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${groupStatus.className}`}>
-                          {groupStatus.label}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5 text-right">
-                        <button
-                          onClick={() => toggleGroup(group.key)}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#5A5A40]/10 text-sm font-medium text-[#5A5A40] hover:bg-[#f5f5f0] transition-all"
-                        >
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                          {isExpanded ? 'Скрыть партии' : 'Показать партии'}
-                        </button>
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr>
-                        <td colSpan={7} className="px-6 pb-6">
-                          <div className="mx-2 rounded-2xl border border-[#5A5A40]/10 overflow-hidden bg-[#faf9f6]">
-                            <table className="w-full text-left border-collapse">
-                              <thead>
-                                <tr className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 bg-white/80 font-bold">
-                                  <th className="px-6 py-4">{t('Batch Info')}</th>
-                                  <th className="px-6 py-4">{t('Supplier')}</th>
-                                  <th className="px-6 py-4">{t('Quantity')}</th>
-                                  <th className="px-6 py-4">{t('Expiry Date')}</th>
-                                  <th className="px-6 py-4">{t('Status')}</th>
-                                  <th className="px-6 py-4 text-right">{t('Actions')}</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-[#5A5A40]/5 bg-white">
-                                {group.batches.map((batch) => (
-                                  <BatchRow
-                                    key={batch.id}
-                                    batch={batch}
-                                    isLowStock={Number(group.minStock || 0) > 0 && Number(batch.quantity || 0) <= Number(group.minStock || 0)}
-                                    busyBatchId={busyBatchId}
-                                    getStatusColor={getStatusColor}
-                                    formatPackQuantity={formatPackQuantity}
-                                    onHistory={openHistoryModal}
-                                    onRestock={openRestockModalForBatch}
-                                    onDelete={handleDeleteBatch}
-                                    t={t}
-                                  />
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                        <div>
+                          <p className={`text-sm font-bold ${isLowStock ? 'text-amber-800' : 'text-[#5A5A40]'}`}>{group.productName}</p>
+                          <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">
+                            {group.suppliers.length > 0 ? `${t('Supplier')}: ${group.suppliers.join(', ')}` : 'Без поставщика'}
+                          </p>
+                          <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">
+                            {group.primaryBatch ? `Основная партия: ${group.primaryBatch.batchNumber}` : 'Партии не указаны'}
+                          </p>
+                          {isLowStock && (
+                            <p className="text-[10px] font-bold text-amber-700 mt-1">Низкий остаток: минимум {group.minStock} шт.</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5 text-sm font-semibold text-[#5A5A40]">{group.batches.length}</td>
+                    <td className="px-8 py-5 text-sm font-semibold text-[#5A5A40]">
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 ${isLowStock ? 'bg-amber-100 text-amber-800' : 'bg-[#f5f5f0] text-[#5A5A40]'}`}>
+                        {formatPackQuantity(group.totalQuantity)}
+                      </span>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className="text-sm text-[#5A5A40] font-semibold">Себест.: {formatMoney(group.averageCostBasis)}</div>
+                      <div className="text-[11px] text-[#5A5A40]/55 mt-0.5">Розн.: {formatMoney(Number(products.find((product) => product.id === group.productId)?.sellingPrice || 0))}</div>
+                    </td>
+                    <td className="px-8 py-5 text-sm text-[#5A5A40]/65">
+                      {group.soonestExpiry ? group.soonestExpiry.toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-8 py-5">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${groupStatus.className}`}>
+                        {groupStatus.label}
+                      </span>
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      <button
+                        onClick={() => group.primaryBatch && openRestockModalForBatch(group.primaryBatch)}
+                        disabled={!group.primaryBatch || busyBatchId === group.primaryBatch.id}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#5A5A40]/10 text-sm font-medium text-[#5A5A40] hover:bg-[#f5f5f0] transition-all disabled:opacity-40"
+                      >
+                        <Layers size={16} />
+                        Пополнить
+                      </button>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
@@ -583,49 +427,13 @@ export const BatchesView: React.FC<{
         </div>
       </div>
 
-      {historyBatch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
-          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl border border-[#5A5A40]/10 overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#5A5A40]/10">
-              <div>
-                <h3 className="text-lg font-bold text-[#5A5A40]">История партии {historyBatch.batchNumber}</h3>
-                <p className="text-xs text-[#5A5A40]/50 mt-1">{historyBatch.productName}</p>
-              </div>
-              <button
-                onClick={() => setHistoryBatch(null)}
-                className="p-2 rounded-xl text-[#5A5A40]/40 hover:text-[#5A5A40] hover:bg-[#f5f5f0] transition-all"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="max-h-[60vh] overflow-y-auto px-6 py-4 space-y-2">
-              {historyBatch.movements.length === 0 && (
-                <p className="text-sm text-[#5A5A40]/50">Движений по партии пока нет</p>
-              )}
-              {historyBatch.movements.map((movement) => (
-                <div key={movement.id} className="flex items-center justify-between rounded-xl border border-[#5A5A40]/10 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[#5A5A40]">{movement.type}</p>
-                    <p className="text-[11px] text-[#5A5A40]/50 mt-0.5">
-                      {new Date(movement.date).toLocaleDateString('ru-RU')} {new Date(movement.date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                  <span className="text-sm font-bold text-[#5A5A40]">{movement.quantity} {historyBatch.unit}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {restockModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
           <div className="w-full max-w-xl bg-white rounded-3xl shadow-xl border border-[#5A5A40]/10 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#5A5A40]/10">
               <div>
                 <h3 className="text-lg font-bold text-[#5A5A40]">{restockModal.productId ? 'Пополнение партии' : 'Добавление новой партии'}</h3>
-                <p className="text-xs text-[#5A5A40]/50 mt-1">Укажите товар, количество, срок годности и цены. Партия сразу попадет в учет остатков.</p>
+                <p className="text-xs text-[#5A5A40]/50 mt-1">Укажите товар, количество, срок годности и цену прихода. Продажная цена берется из карточки товара.</p>
               </div>
               <button
                 onClick={() => setRestockModal((prev) => ({ ...prev, open: false, error: null }))}
@@ -690,17 +498,6 @@ export const BatchesView: React.FC<{
                     className="w-full px-3 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm"
                   />
                 </label>
-                <label>
-                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Цена продажи</span>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={restockModal.retailPrice}
-                    onChange={(e) => setRestockModal((prev) => ({ ...prev, retailPrice: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm"
-                  />
-                </label>
                 <label className="md:col-span-2">
                   <span className="block text-xs font-semibold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Срок годности</span>
                   <input
@@ -718,8 +515,8 @@ export const BatchesView: React.FC<{
                   <p className="font-bold mt-1">{formatMoney(Number(restockModal.quantity || 0) * Number(restockModal.costBasis || 0))}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">По рознице</p>
-                  <p className="font-bold mt-1">{formatMoney(Number(restockModal.quantity || 0) * Number(restockModal.retailPrice || 0))}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Продажная цена</p>
+                  <p className="font-bold mt-1">{formatMoney(Number(products.find((product) => product.id === restockModal.productId)?.sellingPrice || 0))}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Тип действия</p>

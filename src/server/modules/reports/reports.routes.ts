@@ -100,6 +100,31 @@ const addToAging = (aging: AgingBuckets, dueDate: Date | null, amount: number, n
   aging.bucket90Plus += value;
 };
 
+const getPaymentsTotal = (payments?: Array<{ amount?: number | null }>) => (
+  payments || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+
+const getInvoicePaidAmount = (invoice: { totalAmount?: number | null; payments?: Array<{ amount?: number | null }> }) => (
+  Math.min(Number(invoice.totalAmount || 0), getPaymentsTotal(invoice.payments))
+);
+
+const getInvoiceOutstandingAmount = (invoice: {
+  totalAmount?: number | null;
+  receivables?: Array<{ remainingAmount?: number | null }>;
+  payments?: Array<{ amount?: number | null }>;
+}) => {
+  const receivableRemaining = Number(invoice.receivables?.[0]?.remainingAmount ?? NaN);
+  if (Number.isFinite(receivableRemaining)) {
+    return Math.max(0, receivableRemaining);
+  }
+
+  return Math.max(0, Number(invoice.totalAmount || 0) - getInvoicePaidAmount(invoice));
+};
+
+const getDebtorCustomerKey = (invoice: { id: string; customerId?: string | null; customer?: string | null }) => {
+  const normalizedName = String(invoice.customer || '').trim().toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ');
+  return invoice.customerId || (normalizedName ? `name:${normalizedName}` : invoice.id);
+};
+
 const canManageCompanyProfile = (role: string | undefined) => {
   const normalized = String(role || '').toUpperCase();
   return normalized === 'ADMIN' || normalized === 'OWNER';
@@ -286,6 +311,16 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
         createdAt: true,
         totalAmount: true,
         taxAmount: true,
+        receivables: {
+          select: {
+            remainingAmount: true,
+          },
+        },
+        payments: {
+          select: {
+            amount: true,
+          },
+        },
         items: {
           select: {
             productId: true,
@@ -341,12 +376,10 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     prisma.payment.findMany({
       where: {
         paymentDate: { gte: from, lte: to },
-        OR: [
-          { invoiceId: null },
-          { invoice: { paymentType: { not: 'CREDIT' } } },
-        ],
       },
       select: {
+        invoiceId: true,
+        paymentDate: true,
         direction: true,
         amount: true,
         method: true,
@@ -355,10 +388,6 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     prisma.receivable.findMany({
       where: {
         createdAt: { lte: to },
-        OR: [
-          { invoiceId: null },
-          { invoice: { paymentType: { not: 'CREDIT' } } },
-        ],
       },
       select: {
         originalAmount: true,
@@ -416,8 +445,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
           lte: new Date(),
         },
         paymentType: { not: 'CREDIT' },
-        paymentStatus: 'PAID',
-        status: { not: 'CANCELLED' },
+        status: { notIn: ['CANCELLED', 'RETURNED'] },
       },
       select: {
         id: true,
@@ -426,6 +454,16 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
         customer: true,
         paymentType: true,
         totalAmount: true,
+        receivables: {
+          select: {
+            remainingAmount: true,
+          },
+        },
+        payments: {
+          select: {
+            amount: true,
+          },
+        },
         paymentStatus: true,
         status: true,
         items: {
@@ -447,8 +485,11 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     }),
   ]);
 
-  const paidInvoices = invoices.filter((inv) => inv.paymentStatus === 'PAID' && inv.status !== 'CANCELLED');
-  const revenueGross = paidInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
+  const recognizedInvoices = invoices.filter((inv) => inv.status !== 'CANCELLED' && inv.status !== 'RETURNED');
+  const paidInvoices = recognizedInvoices.filter((inv) => inv.paymentStatus === 'PAID');
+  const revenueGross = payments
+    .filter((payment) => payment.direction === 'IN' && payment.invoiceId)
+    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
 
   const customerReturnsAmount = returns.reduce((sum, ret) => {
     const totalByItems = ret.items.reduce((iSum, item) => {
@@ -461,11 +502,11 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     return sum + Math.max(topLevel, totalByItems);
   }, 0);
 
-  const taxSales = paidInvoices.reduce((sum, inv) => sum + Number(inv.taxAmount || 0), 0);
+  const taxSales = recognizedInvoices.reduce((sum, inv) => sum + Number(inv.taxAmount || 0), 0);
   const taxPurchases = purchaseInvoices.reduce((sum, inv) => sum + Number(inv.taxAmount || 0), 0);
   const netRevenue = Math.max(0, revenueGross - customerReturnsAmount);
 
-  const cogs = paidInvoices.reduce((sum, inv) => {
+  const cogs = recognizedInvoices.reduce((sum, inv) => {
     const invoiceCost = inv.items.reduce((itemSum, item) => {
       const unitCost = Number(item.batch?.costBasis || 0);
       return itemSum + unitCost * Number(item.quantity || 0);
@@ -557,7 +598,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     });
   }
 
-  for (const invoice of paidInvoices) {
+  for (const invoice of recognizedInvoices) {
     for (const item of invoice.items) {
       const row = inventoryDetailMap.get(String(item.productId || ''));
       if (!row) continue;
@@ -596,6 +637,8 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
       customer: String(invoice.customer || '—'),
       paymentType: String(invoice.paymentType || 'CASH'),
       totalAmount: Number(invoice.totalAmount || 0),
+      paidAmount: getInvoicePaidAmount(invoice),
+      outstandingAmount: getInvoiceOutstandingAmount(invoice),
       itemCount: invoice.items.length,
       soldUnits: invoice.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
       items: invoice.items.map((item) => ({
@@ -644,10 +687,11 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     monthlyTrendMap.set(key, { month: key, revenue: 0, expenses: 0, purchases: 0 });
   }
 
-  for (const inv of paidInvoices) {
-    const key = `${inv.createdAt.getFullYear()}-${String(inv.createdAt.getMonth() + 1).padStart(2, '0')}`;
+  for (const payment of payments.filter((item) => item.direction === 'IN' && item.invoiceId)) {
+    const paymentDate = new Date(payment.paymentDate);
+    const key = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
     const row = monthlyTrendMap.get(key);
-    if (row) row.revenue += Number(inv.totalAmount || 0);
+    if (row) row.revenue += Number(payment.amount || 0);
   }
   for (const exp of expenses) {
     const key = `${exp.date.getFullYear()}-${String(exp.date.getMonth() + 1).padStart(2, '0')}`;
@@ -704,13 +748,13 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
       taxNet: taxSales - taxPurchases,
     },
     invoices: {
-      totalCount: paidInvoices.length,
+      totalCount: recognizedInvoices.length,
       paidCount: paidInvoices.length,
-      pendingCount: 0,
-      returnedCount: paidInvoices.filter((i) => i.status === 'RETURNED').length,
-      cancelledCount: 0,
-      avgTicket: paidInvoices.length
-        ? paidInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0) / paidInvoices.length
+      pendingCount: recognizedInvoices.filter((invoice) => invoice.paymentStatus !== 'PAID').length,
+      returnedCount: invoices.filter((invoice) => invoice.status === 'RETURNED').length,
+      cancelledCount: invoices.filter((invoice) => invoice.status === 'CANCELLED').length,
+      avgTicket: recognizedInvoices.length
+        ? recognizedInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0) / recognizedInvoices.length
         : 0,
     },
     cashflow: {
@@ -768,7 +812,12 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
  * Includes: low stock, expiring soon, unpaid invoices, daily revenue
  */
 reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, res) => {
-  const cacheKey = CACHE_KEYS.dashboardMetrics('global');
+  const presetRaw = String(req.query.preset || 'month').toLowerCase();
+  const preset: PeriodPreset = ['month', 'q1', 'q2', 'q3', 'q4', 'year', 'all'].includes(presetRaw)
+    ? (presetRaw as PeriodPreset)
+    : 'month';
+  const { from, to } = resolveRange(preset, req.query.from, req.query.to);
+  const cacheKey = CACHE_KEYS.dashboardMetrics(`${preset}:${from.toISOString().slice(0, 10)}:${to.toISOString().slice(0, 10)}`);
 
   // Check cache first
   const cachedResult = reportCache.get(cacheKey);
@@ -779,8 +828,12 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
 
   res.set('X-Cache', 'MISS');
 
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
+  const chartMode = preset === 'month' ? 'day' : 'month';
+
   // Fetch needed data for dashboard
-  const [products, invoices, batches] = await Promise.all([
+  const [products, salesInvoicesInRange, salesPaymentsInRange, ordinaryOpenInvoices, creditInvoices, batches, writeoffsMonth, monthlySalesInvoices] = await Promise.all([
     prisma.product.findMany({
       where: { isActive: true },
       select: {
@@ -788,42 +841,182 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         name: true,
         totalStock: true,
         minStock: true,
+        costPrice: true,
+        sellingPrice: true,
       },
     }),
     prisma.invoice.findMany({
       where: {
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // Last 7 days
+        createdAt: { gte: from, lte: to },
         paymentType: { not: 'CREDIT' },
+        status: { notIn: ['CANCELLED', 'RETURNED'] },
       },
       select: {
         id: true,
+        invoiceNo: true,
         status: true,
         paymentStatus: true,
         totalAmount: true,
+        customer: true,
+        customerId: true,
         createdAt: true,
+        receivables: {
+          select: {
+            remainingAmount: true,
+            dueDate: true,
+          },
+        },
+        payments: {
+          select: {
+            amount: true,
+          },
+        },
+      },
+    }),
+    prisma.payment.findMany({
+      where: {
+        paymentDate: { gte: from, lte: to },
+        direction: 'IN',
+        invoiceId: { not: null },
+      },
+      select: {
+        amount: true,
+        paymentDate: true,
+      },
+    }),
+    prisma.invoice.findMany({
+      where: {
+        paymentType: { not: 'CREDIT' },
+        status: { in: ['PENDING', 'PAID'] },
+        paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] },
+      },
+      select: {
+        id: true,
+        invoiceNo: true,
+        customer: true,
+        customerId: true,
+        createdAt: true,
+        totalAmount: true,
+        paymentStatus: true,
+        receivables: {
+          select: {
+            remainingAmount: true,
+            dueDate: true,
+          },
+        },
+        payments: {
+          select: {
+            amount: true,
+          },
+        },
+      },
+    }),
+    prisma.invoice.findMany({
+      where: {
+        paymentType: 'CREDIT',
+        status: { in: ['PENDING', 'PAID'] },
+      },
+      select: {
+        id: true,
+        invoiceNo: true,
+        customer: true,
+        customerId: true,
+        totalAmount: true,
+        receivables: {
+          select: {
+            remainingAmount: true,
+            dueDate: true,
+          },
+        },
+        payments: {
+          select: {
+            amount: true,
+          },
+        },
       },
     }),
     prisma.batch.findMany({
-      where: { quantity: { gt: 0 } },
+      where: {},
       select: {
         id: true,
         productId: true,
+        batchNumber: true,
+        product: {
+          select: {
+            name: true,
+          },
+        },
         expiryDate: true,
         status: true,
+      },
+    }),
+    prisma.writeOff.findMany({
+      where: { createdAt: { gte: monthStart, lte: monthEnd } },
+      select: {
+        totalAmount: true,
+        items: {
+          select: {
+            quantity: true,
+            unitCost: true,
+            lineTotal: true,
+          },
+        },
+      },
+    }),
+    prisma.invoice.findMany({
+      where: {
+        createdAt: { gte: monthStart, lte: monthEnd },
+        paymentType: { not: 'CREDIT' },
+        status: { notIn: ['CANCELLED', 'RETURNED'] },
+      },
+      select: {
+        id: true,
+        totalAmount: true,
+        items: {
+          select: {
+            quantity: true,
+            batch: {
+              select: {
+                costBasis: true,
+              },
+            },
+          },
+        },
       },
     }),
   ]);
 
   const now = new Date();
   const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const tomorrowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
+
+  const getInvoiceOutstanding = (invoice: { totalAmount?: number | null; receivables?: Array<{ remainingAmount?: number | null }>; payments?: Array<{ amount?: number | null }> }) => getInvoiceOutstandingAmount(invoice);
 
   // Calculate low stock products
-  const lowStockProducts = products.filter(p => p.totalStock < (p.minStock || 10)).map(p => ({
-    productId: p.id,
-    name: p.name,
-    currentStock: p.totalStock,
-    minStock: p.minStock || 10,
-  }));
+  const lowStockProducts = products
+    .filter((p) => p.totalStock < (p.minStock || 10))
+    .map((p) => ({
+      productId: p.id,
+      name: p.name,
+      currentStock: p.totalStock,
+      minStock: p.minStock || 10,
+    }))
+    .sort((left, right) => {
+      const leftGap = Number(left.currentStock || 0) - Number(left.minStock || 10);
+      const rightGap = Number(right.currentStock || 0) - Number(right.minStock || 10);
+      if (leftGap !== rightGap) {
+        return leftGap - rightGap;
+      }
+
+      const leftCoverage = Number(left.minStock || 10) > 0 ? Number(left.currentStock || 0) / Number(left.minStock || 10) : Number(left.currentStock || 0);
+      const rightCoverage = Number(right.minStock || 10) > 0 ? Number(right.currentStock || 0) / Number(right.minStock || 10) : Number(right.currentStock || 0);
+      if (leftCoverage !== rightCoverage) {
+        return leftCoverage - rightCoverage;
+      }
+
+      return String(left.name || '').localeCompare(String(right.name || ''), 'ru-RU');
+    });
 
   // Calculate expiring/expired batches
   const expiredBatches = batches.filter(b => new Date(b.expiryDate) < now).length;
@@ -831,21 +1024,153 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     const expDate = new Date(b.expiryDate);
     return expDate >= now && expDate <= thirtyDaysLater;
   }).length;
+  const expiringItems = batches
+    .map((batch) => {
+      const expiryDate = new Date(batch.expiryDate);
+      const daysLeft = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysLeft > 90) return null;
+      return {
+        id: batch.id,
+        name: batch.product?.name || 'Товар',
+        batchNumber: batch.batchNumber,
+        daysLeft,
+        severityRank: daysLeft <= 0 ? 0 : daysLeft <= 30 ? 1 : 2,
+        severityLabel: daysLeft <= 0 ? 'Просрочено' : daysLeft <= 30 ? 'Критично' : 'Скоро истекает',
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((left, right) => {
+      if (left.severityRank !== right.severityRank) return left.severityRank - right.severityRank;
+      return left.daysLeft - right.daysLeft;
+    })
+    .slice(0, 5);
 
-  // Calculate unpaid invoices
-  const unpaidInvoices = invoices.filter(inv => 
-    inv.paymentStatus === 'UNPAID' || inv.paymentStatus === 'PARTIALLY_PAID'
-  );
-  const unpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
+  // Calculate ordinary unpaid invoices by real outstanding amount
+  const unpaidInvoices = ordinaryOpenInvoices.filter(inv => getInvoiceOutstanding(inv) > 0);
+  const unpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + getInvoiceOutstanding(inv), 0);
 
-  // Calculate daily revenue (last 7 days)
-  const paidInvoices7d = invoices.filter(inv => 
-    inv.status === 'PAID' || inv.paymentStatus === 'PAID'
-  );
-  const revenue7d = paidInvoices7d.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
-  const avgDailyRevenue = paidInvoices7d.length > 0 ? revenue7d / 7 : 0;
+  const debtorOpenInvoices = [...creditInvoices, ...ordinaryOpenInvoices]
+    .map((invoice) => ({
+      ...invoice,
+      customer: String(invoice.customer || '').trim(),
+    }))
+    .filter((invoice) => invoice.customer && getInvoiceOutstanding(invoice) > 0);
+
+  const totalDebtorOutstanding = debtorOpenInvoices.reduce((sum, invoice) => sum + getInvoiceOutstanding(invoice), 0);
+  const totalDebtorCustomersCount = new Set(debtorOpenInvoices.map((invoice) => getDebtorCustomerKey(invoice))).size;
+
+  const revenueInRange = salesPaymentsInRange.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const rangeDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  const avgDailyRevenue = revenueInRange / rangeDays;
+
+  const writeOffAmountMonth = writeoffsMonth.reduce((sum, writeoff) => {
+    const itemsTotal = writeoff.items.reduce((itemSum, item) => {
+      const lineTotal = item.lineTotal != null && Number(item.lineTotal) > 0
+        ? Number(item.lineTotal)
+        : Number(item.quantity || 0) * Number(item.unitCost || 0);
+      return itemSum + lineTotal;
+    }, 0);
+    return sum + Math.max(Number(writeoff.totalAmount || 0), itemsTotal);
+  }, 0);
+
+  const grossMarginMonth = monthlySalesInvoices.reduce((sum, invoice) => {
+    const invoiceCost = invoice.items.reduce((itemSum, item) => {
+      return itemSum + Number(item.quantity || 0) * Number(item.batch?.costBasis || 0);
+    }, 0);
+    return sum + (Number(invoice.totalAmount || 0) - invoiceCost);
+  }, 0);
+
+  const overdueReceivables = debtorOpenInvoices
+    .map((invoice) => {
+      const receivable = invoice.receivables?.[0];
+      const remainingAmount = getInvoiceOutstanding(invoice);
+      if (remainingAmount <= 0) return null;
+      const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
+      if (!dueDate || Number.isNaN(dueDate.getTime()) || dueDate >= now) return null;
+      const daysOverdue = Math.ceil((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+      return {
+        invoiceId: invoice.id,
+        invoiceNo: invoice.invoiceNo || invoice.id,
+        customerName: invoice.customer || 'Покупатель',
+        customerKey: invoice.customerId || invoice.customer || invoice.id,
+        remainingAmount,
+        daysOverdue,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((left, right) => right.daysOverdue - left.daysOverdue || right.remainingAmount - left.remainingAmount);
+
+  const dueTomorrowReceivables = debtorOpenInvoices
+    .map((invoice) => {
+      const receivable = invoice.receivables?.[0];
+      const remainingAmount = getInvoiceOutstanding(invoice);
+      if (remainingAmount <= 0) return null;
+      const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
+      if (!dueDate || Number.isNaN(dueDate.getTime()) || dueDate < tomorrowStart || dueDate >= tomorrowEnd) return null;
+      return {
+        invoiceId: invoice.id,
+        invoiceNo: invoice.invoiceNo || invoice.id,
+        customerName: invoice.customer || 'Покупатель',
+        remainingAmount,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((left, right) => right.remainingAmount - left.remainingAmount);
+
+  const revenueTrend = chartMode === 'day'
+    ? (() => {
+        const daysInRange = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+        return Array.from({ length: daysInRange }, (_, index) => {
+          const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + index);
+          const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+          const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+          const sales = salesPaymentsInRange.reduce((sum, payment) => {
+            const paymentDate = new Date(payment.paymentDate);
+            if (paymentDate >= dayStart && paymentDate < dayEnd) {
+              return sum + Number(payment.amount || 0);
+            }
+            return sum;
+          }, 0);
+          return {
+            key: day.toISOString().slice(0, 10),
+            name: day.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }),
+            sales,
+          };
+        });
+      })()
+    : (() => {
+        const trendMap = new Map<string, { key: string; name: string; sales: number }>();
+        const cursor = new Date(from.getFullYear(), from.getMonth(), 1);
+        const endCursor = new Date(to.getFullYear(), to.getMonth(), 1);
+
+        while (cursor <= endCursor) {
+          const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+          trendMap.set(key, {
+            key,
+            name: cursor.toLocaleDateString('ru-RU', { month: 'short' }),
+            sales: 0,
+          });
+          cursor.setMonth(cursor.getMonth() + 1);
+        }
+
+        for (const payment of salesPaymentsInRange) {
+          const paymentDate = new Date(payment.paymentDate);
+          const key = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
+          const bucket = trendMap.get(key);
+          if (bucket) {
+            bucket.sales += Number(payment.amount || 0);
+          }
+        }
+
+        return Array.from(trendMap.values());
+      })();
 
   const result = {
+    range: {
+      preset,
+      from,
+      to,
+    },
     lowStock: {
       count: lowStockProducts.length,
       items: lowStockProducts.slice(0, 10), // Top 10
@@ -860,9 +1185,36 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
       averageUnpaid: unpaidInvoices.length > 0 ? unpaidAmount / unpaidInvoices.length : 0,
     },
     revenue: {
-      last7Days: revenue7d,
+      total: revenueInRange,
       averageDaily: avgDailyRevenue,
-      paidInvoiceCount: paidInvoices7d.length,
+      recognizedInvoiceCount: salesInvoicesInRange.length,
+    },
+    revenueTrend: {
+      mode: chartMode,
+      items: revenueTrend,
+    },
+    finance: {
+      outstandingOrdinarySales: unpaidAmount,
+      totalDebtorOutstanding,
+      writeOffAmountMonth,
+      grossMarginMonth,
+    },
+    creditReceivables: {
+      totalOutstandingAmount: totalDebtorOutstanding,
+      totalCustomersCount: totalDebtorCustomersCount,
+      openCount: debtorOpenInvoices.length,
+      overdueAmountTotal: overdueReceivables.reduce((sum, item) => sum + item.remainingAmount, 0),
+      overdueCount: overdueReceivables.length,
+      overdueCustomersCount: new Set(overdueReceivables.map((item) => item.customerKey)).size,
+      overdueItems: overdueReceivables.slice(0, 4),
+      dueTomorrowAmountTotal: dueTomorrowReceivables.reduce((sum, item) => sum + item.remainingAmount, 0),
+      dueTomorrowCount: dueTomorrowReceivables.length,
+      dueTomorrowItems: dueTomorrowReceivables.slice(0, 4),
+    },
+    inventoryHighlights: {
+      totalInventoryUnits: products.reduce((sum, product) => sum + Number(product.totalStock || 0), 0),
+      lowStockItems: lowStockProducts.slice(0, 5),
+      expiringItems,
     },
     summary: {
       totalProducts: products.length,

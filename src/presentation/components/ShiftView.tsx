@@ -395,14 +395,14 @@ function ShiftReportPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
       <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: t('Total Sales'), value: summary.totalSales.toFixed(2), icon: TrendingUp, color: 'text-emerald-500' },
+              { label: 'Продано всего', value: summary.totalSales.toFixed(2), icon: TrendingUp, color: 'text-emerald-500' },
               { label: 'Возвраты', value: summary.returnedAmount.toFixed(2), icon: RotateCcw, color: 'text-orange-500' },
-              { label: 'Чистые продажи', value: summary.netSales.toFixed(2), icon: TrendingUp, color: 'text-emerald-600' },
-              { label: t('Cash Sales'), value: summary.cashSales.toFixed(2), icon: DollarSign, color: 'text-blue-500' },
-              { label: t('Card Sales'), value: summary.cardSales.toFixed(2), icon: BarChart3, color: 'text-purple-500' },
-              { label: t('Total Invoices'), value: String(summary.totalInvoices), icon: BarChart3, color: 'text-[#5A5A40]' },
-              { label: t('Cash In'), value: summary.cashIn.toFixed(2), icon: ArrowUpCircle, color: 'text-emerald-500' },
-              { label: t('Cash Out'), value: summary.cashOut.toFixed(2), icon: ArrowDownCircle, color: 'text-red-500' },
+              { label: 'После возвратов', value: summary.netSales.toFixed(2), icon: TrendingUp, color: 'text-emerald-600' },
+              { label: 'Получено наличными', value: summary.cashSales.toFixed(2), icon: DollarSign, color: 'text-blue-500' },
+              { label: 'Получено картой', value: summary.cardSales.toFixed(2), icon: BarChart3, color: 'text-purple-500' },
+              { label: 'Чеков', value: String(summary.totalInvoices), icon: BarChart3, color: 'text-[#5A5A40]' },
+              { label: 'Доп. приход наличных', value: summary.cashIn.toFixed(2), icon: ArrowUpCircle, color: 'text-emerald-500' },
+              { label: 'Выдача наличных', value: summary.cashOut.toFixed(2), icon: ArrowDownCircle, color: 'text-red-500' },
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="bg-[#f5f5f0] rounded-2xl p-4">
                 <div className={`${color} mb-1`}><Icon size={16} /></div>
@@ -414,11 +414,11 @@ function ShiftReportPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
 
           <div className="bg-[#151619] rounded-2xl p-4 text-white">
             <div className="flex justify-between mb-2">
-              <span className="text-white/60 text-sm">{t('Opening Cash')}</span>
+              <span className="text-white/60 text-sm">Наличные в начале смены</span>
               <span className="font-bold">{shift.openingCash.toFixed(2)}</span>
             </div>
             <div className="flex justify-between mb-2">
-              <span className="text-white/60 text-sm">{t('Expected Cash')}</span>
+              <span className="text-white/60 text-sm">Должно быть в кассе</span>
               <span className="font-bold">{(shift.expectedCash ?? summary.netCash).toFixed(2)}</span>
             </div>
             <div className="flex justify-between mb-2">
@@ -426,17 +426,17 @@ function ShiftReportPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
               <span className="font-bold text-red-400">{summary.cashOut.toFixed(2)}</span>
             </div>
             <div className="flex justify-between border-t border-white/20 pt-2 mt-2 mb-2 font-bold text-lg">
-              <span className="text-white">{t('Final Amount')}</span>
+              <span className="text-white">Ожидаемый остаток</span>
               <span className="text-emerald-400">{summary.finalAmount.toFixed(2)}</span>
             </div>
             {shift.closingCash !== undefined && shift.closingCash !== null && (
               <>
                 <div className="flex justify-between mb-2">
-                  <span className="text-white/60 text-sm">{t('Actual Cash')}</span>
+                  <span className="text-white/60 text-sm">Фактически в кассе</span>
                   <span className="font-bold">{shift.closingCash.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t border-white/10 pt-2 mt-2">
-                  <span className="text-white/60 text-sm">{t('Discrepancy')}</span>
+                  <span className="text-white/60 text-sm">Разница</span>
                   <span className={`font-bold ${disc < 0 ? 'text-red-400' : disc > 0 ? 'text-emerald-400' : 'text-white'}`}>
                     {disc > 0 ? '+' : ''}{disc.toFixed(2)}
                   </span>

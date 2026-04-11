@@ -6,6 +6,13 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   loadEnv(mode, '.', '');
   const isProd = mode === 'production';
+  const warmupClientFiles = [
+    './index.html',
+    './src/main.tsx',
+    './src/AppRoot.tsx',
+    './src/App.tsx',
+    './src/index.css',
+  ];
 
   return {
     base: './',
@@ -20,6 +27,26 @@ export default defineConfig(({mode}) => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
+      warmup: {
+        clientFiles: warmupClientFiles,
+      },
+    },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react/jsx-runtime',
+        'react-dom/client',
+        'react-i18next',
+        'i18next',
+        'lucide-react',
+        'motion/react',
+        'recharts',
+        'clsx',
+        'tailwind-merge',
+        'xlsx',
+        'jspdf',
+        'jspdf-autotable',
+      ],
     },
     build: {
       // Production optimizations

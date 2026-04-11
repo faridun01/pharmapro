@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { lazyNamedImport } from '../../lib/lazyLoadComponents';
+import { buildApiHeaders } from '../../infrastructure/api';
 import { 
   TrendingUp, 
   Package, 
@@ -16,20 +17,45 @@ import {
 
 type DashboardPeriodPreset = 'month' | 'q1' | 'q2' | 'q3' | 'q4' | 'year';
 
-const DashboardSalesChart = lazyNamedImport(() => import('./DashboardSalesChart'), 'DashboardSalesChart');
-
-const startOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
-
-const diffInDays = (left: Date, right: Date) => {
-  const msPerDay = 24 * 60 * 60 * 1000;
-  return Math.round((startOfDay(left).getTime() - startOfDay(right).getTime()) / msPerDay);
+type DashboardMetricsResponse = {
+  lowStock?: { count: number; items: Array<{ productId: string; name: string; currentStock: number; minStock: number }> };
+  expiry?: { expired: number; expiringSoon: number };
+  invoices?: { unpaidCount: number; unpaidAmount: number; averageUnpaid: number };
+  revenue?: { total: number; averageDaily: number; recognizedInvoiceCount: number };
+  revenueTrend?: { mode: 'day' | 'month'; items: Array<{ key: string; name: string; sales: number }> };
+  finance?: { outstandingOrdinarySales: number; totalDebtorOutstanding: number; writeOffAmountMonth: number; grossMarginMonth: number };
+  creditReceivables?: {
+    totalOutstandingAmount: number;
+    totalCustomersCount: number;
+    openCount: number;
+    overdueAmountTotal: number;
+    overdueCount: number;
+    overdueCustomersCount: number;
+    overdueItems: Array<{ invoiceId: string; invoiceNo: string; customerName: string; remainingAmount: number; daysOverdue: number }>;
+    dueTomorrowAmountTotal: number;
+    dueTomorrowCount: number;
+    dueTomorrowItems: Array<{ invoiceId: string; invoiceNo: string; customerName: string; remainingAmount: number }>;
+  };
+  inventoryHighlights?: {
+    totalInventoryUnits: number;
+    lowStockItems: Array<{ productId: string; name: string; currentStock: number; minStock: number }>;
+    expiringItems: Array<{ id: string; name: string; batchNumber: string; daysLeft: number; severityRank: number; severityLabel: string }>;
+  };
+  summary?: {
+    totalProducts: number;
+    totalBatches: number;
+    alertCount: number;
+  };
 };
+
+const DashboardSalesChart = lazyNamedImport(() => import('./DashboardSalesChart'), 'DashboardSalesChart');
 
 export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: string) => void }> = ({ onOpenInvoicePayment }) => {
   const { t } = useTranslation();
   const { products, invoices, user } = usePharmacy();
   const [selectedPeriodPreset, setSelectedPeriodPreset] = useState<DashboardPeriodPreset>('month');
   const [showChart, setShowChart] = useState(false);
+  const [serverMetrics, setServerMetrics] = useState<DashboardMetricsResponse | null>(null);
 
   const formatMoney = (value: number) => `${Number(value || 0).toFixed(2)} TJS`;
 
@@ -38,9 +64,34 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/reports/metrics/dashboard?preset=${selectedPeriodPreset}`, {
+          headers: await buildApiHeaders(),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Не удалось загрузить метрики дашборда');
+        }
+        if (!cancelled) {
+          setServerMetrics(payload as DashboardMetricsResponse);
+        }
+      } catch {
+        if (!cancelled) {
+          setServerMetrics(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPeriodPreset]);
+
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
   const dashboardPeriod = useMemo(() => {
     if (selectedPeriodPreset === 'month') {
@@ -80,35 +131,6 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
     };
   }, [now, selectedPeriodPreset]);
 
-  const paidInvoices = invoices.filter(
-    (inv) => inv.paymentType !== 'CREDIT' && (inv.status === 'PAID' || inv.paymentStatus === 'PAID')
-  );
-
-  const paidInvoicesInPeriod = paidInvoices.filter((inv) => {
-    const created = new Date(inv.createdAt as any);
-    if (Number.isNaN(created.getTime())) return false;
-    return created >= dashboardPeriod.from && created <= dashboardPeriod.to;
-  });
-
-  const unpaidInvoices = invoices.filter(
-    (inv) =>
-      inv.paymentType !== 'CREDIT' && (
-      inv.status === 'PENDING' ||
-      inv.paymentStatus === 'UNPAID' ||
-      inv.paymentStatus === 'PARTIALLY_PAID'
-      )
-  );
-
-  const outstandingAmount = unpaidInvoices.reduce(
-    (sum, inv) => sum + Number(inv.totalAmount || 0),
-    0
-  );
-
-  const salesInPeriod = paidInvoicesInPeriod.reduce(
-    (sum, inv) => sum + Number(inv.totalAmount || 0),
-    0
-  );
-
   const totalStock = products.reduce((acc, p) => acc + p.totalStock, 0);
   const lowStockCount = products.filter(p => p.totalStock < (p.minStock || 10)).length;
 
@@ -125,83 +147,6 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
     return acc + expiring.length;
   }, 0);
 
-  const writeOffAmount = products.reduce((total, p) => {
-    const productWriteOff = p.batches.reduce((batchSum, b) => {
-      const movementCost = b.movements
-        .filter((m) => {
-          if (m.type !== 'WRITE_OFF') return false;
-          const movementDate = new Date(m.date as any);
-          return !Number.isNaN(movementDate.getTime()) && movementDate >= monthStart && movementDate <= monthEnd;
-        })
-        .reduce((sum, m) => sum + Number(m.quantity || 0) * Number(b.costBasis || 0), 0);
-      return batchSum + movementCost;
-    }, 0);
-    return total + productWriteOff;
-  }, 0);
-
-  const monthlyPaidInvoices = paidInvoices.filter((inv) => {
-    const created = new Date(inv.createdAt as any);
-    return !Number.isNaN(created.getTime()) && created >= monthStart && created <= monthEnd;
-  });
-
-  const grossMarginInPeriod = monthlyPaidInvoices.reduce((sum, inv) => {
-    const created = new Date(inv.createdAt as any);
-    if (Number.isNaN(created.getTime()) || created < monthStart || created > monthEnd) return sum;
-
-    const invoiceCost = (inv.items || []).reduce((itemSum, item) => {
-      const product = products.find((p) => p.id === item.productId);
-      const costPrice = Number(product?.costPrice || 0);
-      return itemSum + Number(item.quantity || 0) * costPrice;
-    }, 0);
-
-    return sum + (Number(inv.totalAmount || 0) - invoiceCost);
-  }, 0);
-
-  const salesTrendData = useMemo(() => {
-    if (dashboardPeriod.chartMode === 'day') {
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      return Array.from({ length: daysInMonth }, (_, index) => {
-        const day = new Date(now.getFullYear(), now.getMonth(), index + 1);
-        const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-        const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
-        const sales = paidInvoicesInPeriod.reduce((sum, inv) => {
-          const created = new Date(inv.createdAt as any);
-          if (Number.isNaN(created.getTime())) return sum;
-          if (created >= dayStart && created < dayEnd) {
-            return sum + Number(inv.totalAmount || 0);
-          }
-          return sum;
-        }, 0);
-
-        return {
-          name: day.toLocaleDateString(undefined, { day: '2-digit', month: 'short' }),
-          sales,
-        };
-      }).filter((_, index) => index < now.getDate());
-    }
-
-    const startMonth = dashboardPeriod.from.getMonth();
-    const endMonth = dashboardPeriod.to.getMonth();
-    return Array.from({ length: endMonth - startMonth + 1 }, (_, index) => {
-      const monthIndex = startMonth + index;
-      const monthStartPoint = new Date(now.getFullYear(), monthIndex, 1);
-      const monthEndPoint = new Date(now.getFullYear(), monthIndex + 1, 1);
-      const sales = paidInvoicesInPeriod.reduce((sum, inv) => {
-        const created = new Date(inv.createdAt as any);
-        if (Number.isNaN(created.getTime())) return sum;
-        if (created >= monthStartPoint && created < monthEndPoint) {
-          return sum + Number(inv.totalAmount || 0);
-        }
-        return sum;
-      }, 0);
-
-      return {
-        name: monthStartPoint.toLocaleDateString(undefined, { month: 'short' }),
-        sales,
-      };
-    });
-  }, [dashboardPeriod.chartMode, dashboardPeriod.from, dashboardPeriod.to, now, paidInvoicesInPeriod]);
-
   const toRelativeTime = (dateValue: Date | string) => {
     const date = new Date(dateValue as any);
     if (Number.isNaN(date.getTime())) return t('unknown');
@@ -214,15 +159,6 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
     const days = Math.floor(hours / 24);
     return `${days} дн. ${t('ago')}`;
   };
-
-  const invoiceActivity = invoices.slice(0, 20).map((inv) => ({
-    id: `inv-${inv.id}`,
-    type: 'sale' as const,
-    title: `${t('Invoice')} ${inv.invoiceNo || inv.id}`,
-    time: toRelativeTime(inv.createdAt),
-    amount: Number(inv.totalAmount || 0),
-    date: new Date(inv.createdAt as any),
-  }));
 
   const movementActivity = products.flatMap((p) =>
     p.batches.flatMap((b) =>
@@ -243,9 +179,64 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
         time: toRelativeTime(m.date),
         amount: Number(m.quantity || 0),
         date: new Date(m.date as any),
+        subtitle: m.type === 'RESTOCK' ? `Приход ${Number(m.quantity || 0)} ед.` : `Изменение ${Number(m.quantity || 0)} ед.`,
       }))
     )
   );
+
+  const getInvoiceOutstandingAmount = (invoice: { totalAmount?: number; receivables?: Array<{ remainingAmount?: number }>; paymentStatus?: string }) => {
+    const remaining = Number(invoice.receivables?.[0]?.remainingAmount ?? NaN);
+    if (Number.isFinite(remaining)) {
+      return Math.max(0, remaining);
+    }
+
+    if (invoice.paymentStatus === 'PAID') {
+      return 0;
+    }
+
+    return Math.max(0, Number(invoice.totalAmount || 0));
+  };
+
+  const invoiceActivity = invoices.map((invoice) => {
+    const outstandingAmount = getInvoiceOutstandingAmount(invoice);
+    const isReturned = invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED';
+    const isDebtSale = outstandingAmount > 0.009 && Boolean(invoice.customer);
+    const soldUnits = (invoice.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+    if (isReturned) {
+      return {
+        id: `inv-${invoice.id}`,
+        type: 'return' as const,
+        title: `Возврат по накладной ${invoice.invoiceNo || invoice.id}`,
+        subtitle: `${soldUnits} ед. • ${Number(invoice.totalAmount || 0).toFixed(2)} TJS`,
+        amount: Number(invoice.totalAmount || 0),
+        time: toRelativeTime(invoice.createdAt),
+        date: new Date(invoice.createdAt as any),
+      };
+    }
+
+    if (isDebtSale) {
+      return {
+        id: `inv-${invoice.id}`,
+        type: 'debt' as const,
+        title: invoice.customer ? `Продажа в долг: ${invoice.customer}` : 'Продажа в долг',
+        subtitle: `Остаток долга ${outstandingAmount.toFixed(2)} TJS`,
+        amount: outstandingAmount,
+        time: toRelativeTime(invoice.createdAt),
+        date: new Date(invoice.createdAt as any),
+      };
+    }
+
+    return {
+      id: `inv-${invoice.id}`,
+      type: 'sale' as const,
+      title: `Продажа ${invoice.paymentType === 'CARD' ? 'по карте' : 'за наличные'}`,
+      subtitle: `${soldUnits} ед. • ${Number(invoice.totalAmount || 0).toFixed(2)} TJS`,
+      amount: Number(invoice.totalAmount || 0),
+      time: toRelativeTime(invoice.createdAt),
+      date: new Date(invoice.createdAt as any),
+    };
+  });
 
   const recentActivity = [...invoiceActivity, ...movementActivity]
     .filter((a) => !Number.isNaN(a.date.getTime()))
@@ -296,82 +287,46 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
     })
     .slice(0, 5);
 
-  const overdueReceivables = useMemo(() => {
-    return invoices
-      .map((invoice) => {
-        const receivable = invoice.receivables?.[0];
-        const remainingAmount = Number((invoice as any).outstandingAmount ?? receivable?.remainingAmount ?? 0);
-        if (remainingAmount <= 0) return null;
-
-        const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
-
-        if (!dueDate || Number.isNaN(dueDate.getTime())) return null;
-
-        const daysUntilDue = diffInDays(dueDate, now);
-        if (daysUntilDue >= 0) return null;
-
-        return {
-          invoiceId: invoice.id,
-          invoiceNo: invoice.invoiceNo || invoice.id,
-          customerName: invoice.customer || 'Покупатель',
-          customerKey: invoice.customerId || invoice.customer || invoice.id,
-          remainingAmount,
-          daysOverdue: Math.abs(daysUntilDue),
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .sort((left, right) => {
-        if (right.daysOverdue !== left.daysOverdue) return right.daysOverdue - left.daysOverdue;
-        return right.remainingAmount - left.remainingAmount;
-      });
-  }, [invoices, now]);
-
-  const dueTomorrowReceivables = useMemo(() => {
-    return invoices
-      .map((invoice) => {
-        const receivable = invoice.receivables?.[0];
-        const remainingAmount = Number((invoice as any).outstandingAmount ?? receivable?.remainingAmount ?? 0);
-        if (remainingAmount <= 0) return null;
-
-        const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
-
-        if (!dueDate || Number.isNaN(dueDate.getTime())) return null;
-
-        const daysUntilDue = diffInDays(dueDate, now);
-        if (daysUntilDue !== 1) return null;
-
-        return {
-          invoiceId: invoice.id,
-          invoiceNo: invoice.invoiceNo || invoice.id,
-          customerName: invoice.customer || 'Покупатель',
-          remainingAmount,
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .sort((left, right) => right.remainingAmount - left.remainingAmount);
-  }, [invoices, now]);
-
-  const overdueAmountTotal = overdueReceivables.reduce((sum, item) => sum + item.remainingAmount, 0);
-  const overdueCustomersCount = new Set(overdueReceivables.map((item) => item.customerKey)).size;
-  const dueTomorrowAmountTotal = dueTomorrowReceivables.reduce((sum, item) => sum + item.remainingAmount, 0);
+  const statTotalInventory = serverMetrics?.inventoryHighlights?.totalInventoryUnits ?? totalStock;
+  const statTotalProducts = serverMetrics?.summary?.totalProducts ?? products.length;
+  const statLowStockCount = serverMetrics?.lowStock?.count ?? lowStockCount;
+  const statExpiringSoonCount = serverMetrics?.expiry?.expiringSoon ?? expiringSoonCount;
+  const statSalesInPeriod = serverMetrics?.revenue?.total ?? 0;
+  const statSalesCountInPeriod = serverMetrics?.revenue?.recognizedInvoiceCount ?? 0;
+  const adminOutstandingOrdinarySales = serverMetrics?.finance?.outstandingOrdinarySales ?? 0;
+  const adminTotalDebtorOutstanding = serverMetrics?.creditReceivables?.totalOutstandingAmount ?? serverMetrics?.finance?.totalDebtorOutstanding ?? adminOutstandingOrdinarySales;
+  const adminTotalDebtorCustomers = serverMetrics?.creditReceivables?.totalCustomersCount ?? 0;
+  const adminWriteOffAmount = serverMetrics?.finance?.writeOffAmountMonth ?? 0;
+  const adminGrossMargin = serverMetrics?.finance?.grossMarginMonth ?? 0;
+  const overdueWidgetItems = serverMetrics?.creditReceivables?.overdueItems ?? [];
+  const overdueWidgetAmount = serverMetrics?.creditReceivables?.overdueAmountTotal ?? 0;
+  const overdueWidgetCount = serverMetrics?.creditReceivables?.overdueCount ?? 0;
+  const overdueWidgetCustomers = serverMetrics?.creditReceivables?.overdueCustomersCount ?? 0;
+  const dueTomorrowWidgetItems = serverMetrics?.creditReceivables?.dueTomorrowItems ?? [];
+  const dueTomorrowWidgetAmount = serverMetrics?.creditReceivables?.dueTomorrowAmountTotal ?? 0;
+  const dueTomorrowWidgetCount = serverMetrics?.creditReceivables?.dueTomorrowCount ?? 0;
+  const lowStockWidgetItems = serverMetrics?.inventoryHighlights?.lowStockItems ?? lowStockProducts.map((product) => ({ productId: product.id, name: product.name, currentStock: product.totalStock, minStock: product.minStock || 10 }));
+  const expiringWidgetItems = serverMetrics?.inventoryHighlights?.expiringItems ?? expiringProducts;
+  const chartData = serverMetrics?.revenueTrend?.items ?? [];
 
   const stats = [
-    { label: t('Total Inventory'), value: totalStock.toLocaleString(), icon: Package, color: 'bg-blue-500', trend: '+12%' },
-    { label: t('Low Stock Items'), value: lowStockCount.toString(), icon: AlertTriangle, color: 'bg-amber-500', trend: lowStockCount > 0 ? `${lowStockCount}` : '0' },
-    { label: t('Expiring Soon'), value: expiringSoonCount.toString(), icon: Clock, color: 'bg-red-500', trend: expiringSoonCount > 0 ? `${expiringSoonCount}` : '0' },
+    { label: 'Наименований товаров', value: statTotalProducts.toLocaleString(), icon: Package, color: 'bg-sky-500', trend: statTotalProducts > 0 ? `${statTotalProducts}` : '0' },
+    { label: 'Общий остаток, шт.', value: statTotalInventory.toLocaleString(), icon: Package, color: 'bg-blue-500', trend: statTotalInventory > 0 ? `${statTotalInventory}` : '0' },
+    { label: t('Low Stock Items'), value: statLowStockCount.toString(), icon: AlertTriangle, color: 'bg-amber-500', trend: statLowStockCount > 0 ? `${statLowStockCount}` : '0' },
+    { label: t('Expiring Soon'), value: statExpiringSoonCount.toString(), icon: Clock, color: 'bg-red-500', trend: statExpiringSoonCount > 0 ? `${statExpiringSoonCount}` : '0' },
     {
       label: `${t('Sales')} (${dashboardPeriod.label})`,
-      value: formatMoney(salesInPeriod),
+      value: formatMoney(statSalesInPeriod),
       icon: TrendingUp,
       color: 'bg-emerald-500',
-      trend: paidInvoicesInPeriod.length > 0 ? `${paidInvoicesInPeriod.length}` : '0',
+      trend: statSalesCountInPeriod > 0 ? `${statSalesCountInPeriod}` : '0',
     },
   ];
 
   const adminCards = [
     {
-      label: 'Неоплаченные обычные продажи',
-      value: formatMoney(outstandingAmount),
+      label: adminTotalDebtorCustomers > 0 ? `Общая сумма должников (${adminTotalDebtorCustomers})` : 'Общая сумма должников',
+      value: formatMoney(adminTotalDebtorOutstanding),
       icon: Receipt,
       tone: 'bg-amber-100 text-amber-700',
     },
@@ -383,13 +338,13 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
     },
     {
       label: `${t('Write-off Cost')} за месяц`,
-      value: formatMoney(writeOffAmount),
+      value: formatMoney(adminWriteOffAmount),
       icon: AlertTriangle,
       tone: 'bg-orange-100 text-orange-700',
     },
     {
       label: `${t('Gross Margin')} за месяц`,
-      value: formatMoney(grossMarginInPeriod),
+      value: formatMoney(adminGrossMargin),
       icon: Activity,
       tone: 'bg-emerald-100 text-emerald-700',
     },
@@ -404,7 +359,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {stats.map((stat, i) => (
           <div key={i} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-4">
@@ -456,37 +411,37 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
                 </div>
                 <button
                   type="button"
-                  onClick={() => onOpenInvoicePayment?.(overdueReceivables[0]?.invoiceId)}
-                  disabled={overdueReceivables.length === 0}
+                  onClick={() => onOpenInvoicePayment?.(overdueWidgetItems[0]?.invoiceId)}
+                  disabled={overdueWidgetItems.length === 0}
                   className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
                 >
-                  {overdueReceivables.length > 0 ? 'Открыть оплату' : 'Просрочек нет'}
+                  {overdueWidgetItems.length > 0 ? 'Открыть оплату' : 'Просрочек нет'}
                 </button>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="rounded-2xl border border-red-100 bg-white/80 p-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Сумма просрочки</p>
-                  <p className="mt-2 text-3xl font-bold text-red-700">{formatMoney(overdueAmountTotal)}</p>
+                  <p className="mt-2 text-3xl font-bold text-red-700">{formatMoney(overdueWidgetAmount)}</p>
                 </div>
                 <div className="rounded-2xl border border-red-100 bg-white/80 p-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Просроченных счетов</p>
-                  <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{overdueReceivables.length}</p>
+                  <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{overdueWidgetCount}</p>
                 </div>
                 <div className="rounded-2xl border border-red-100 bg-white/80 p-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Покупателей с просрочкой</p>
-                  <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{overdueCustomersCount}</p>
+                  <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{overdueWidgetCustomers}</p>
                 </div>
               </div>
 
               <div className="mt-6 space-y-3">
-                {overdueReceivables.length === 0 && (
+                {overdueWidgetItems.length === 0 && (
                   <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
                     Сейчас нет покупателей с просроченными долгами.
                   </div>
                 )}
 
-                {overdueReceivables.slice(0, 4).map((item) => (
+                {overdueWidgetItems.map((item) => (
                   <button
                     key={item.invoiceId}
                     type="button"
@@ -518,33 +473,33 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
                 </div>
                 <button
                   type="button"
-                  onClick={() => onOpenInvoicePayment?.(dueTomorrowReceivables[0]?.invoiceId)}
-                  disabled={dueTomorrowReceivables.length === 0}
+                  onClick={() => onOpenInvoicePayment?.(dueTomorrowWidgetItems[0]?.invoiceId)}
+                  disabled={dueTomorrowWidgetItems.length === 0}
                   className="inline-flex items-center justify-center rounded-2xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-amber-300"
                 >
-                  {dueTomorrowReceivables.length > 0 ? 'Открыть счет' : 'Счетов нет'}
+                  {dueTomorrowWidgetItems.length > 0 ? 'Открыть счет' : 'Счетов нет'}
                 </button>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-amber-100 bg-white/80 p-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Сумма к оплате</p>
-                  <p className="mt-2 text-3xl font-bold text-amber-700">{formatMoney(dueTomorrowAmountTotal)}</p>
+                  <p className="mt-2 text-3xl font-bold text-amber-700">{formatMoney(dueTomorrowWidgetAmount)}</p>
                 </div>
                 <div className="rounded-2xl border border-amber-100 bg-white/80 p-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Счетов на завтра</p>
-                  <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{dueTomorrowReceivables.length}</p>
+                  <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{dueTomorrowWidgetCount}</p>
                 </div>
               </div>
 
               <div className="mt-6 space-y-3">
-                {dueTomorrowReceivables.length === 0 && (
+                {dueTomorrowWidgetItems.length === 0 && (
                   <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
                     На завтра счетов к оплате нет.
                   </div>
                 )}
 
-                {dueTomorrowReceivables.slice(0, 4).map((item) => (
+                {dueTomorrowWidgetItems.map((item) => (
                   <button
                     key={item.invoiceId}
                     type="button"
@@ -587,7 +542,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
           <div className="h-75 w-full">
             {showChart ? (
               <Suspense fallback={<div className="h-full w-full rounded-2xl bg-[#f5f5f0] animate-pulse" />}>
-                <DashboardSalesChart data={salesTrendData} />
+                <DashboardSalesChart data={chartData} />
               </Suspense>
             ) : (
               <div className="h-full w-full rounded-2xl bg-[#f5f5f0] animate-pulse" />
@@ -599,22 +554,30 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
           <h3 className="text-xl font-bold text-[#5A5A40] mb-6">Последняя активность</h3>
           <div className="space-y-6">
             {recentActivity.length === 0 && (
-              <p className="text-sm text-[#5A5A40]/60">Пока нет последних операций</p>
+              <p className="text-sm text-[#5A5A40]/60">Пока нет свежих продаж, долгов или складских событий</p>
             )}
             {recentActivity.map((activity) => (
               <div key={activity.id} className="flex gap-4">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  activity.type === 'sale' ? 'bg-emerald-100 text-emerald-600' : 
-                  activity.type === 'restock' ? 'bg-blue-100 text-blue-600' : 
-                  'bg-amber-100 text-amber-600'
+                  activity.type === 'sale' ? 'bg-emerald-100 text-emerald-700' :
+                  activity.type === 'debt' ? 'bg-amber-100 text-amber-700' :
+                  activity.type === 'return' ? 'bg-orange-100 text-orange-700' :
+                  activity.type === 'restock' ? 'bg-blue-100 text-blue-600' :
+                  'bg-stone-100 text-stone-700'
                 }`}>
-                  {activity.type === 'sale' ? <ArrowUpRight size={20} /> : 
-                   activity.type === 'restock' ? <ArrowDownLeft size={20} /> : 
+                  {activity.type === 'sale' ? <TrendingUp size={20} /> :
+                   activity.type === 'debt' ? <Receipt size={20} /> :
+                   activity.type === 'return' ? <ArrowUpRight size={20} /> :
+                   activity.type === 'restock' ? <ArrowDownLeft size={20} /> :
                    <AlertTriangle size={20} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-[#5A5A40] truncate">{t(activity.title)}</p>
-                  <p className="text-xs text-[#5A5A40]/60 mt-0.5">{activity.time}</p>
+                  <p className="text-xs text-[#5A5A40]/60 mt-0.5">{activity.subtitle}</p>
+                  <p className="text-xs text-[#5A5A40]/45 mt-1">{activity.time}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-bold text-[#5A5A40]">{formatMoney(activity.amount)}</p>
                 </div>
               </div>
             ))}
@@ -626,11 +589,11 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
           <h3 className="text-xl font-bold text-[#5A5A40] mb-6">Товары с низким остатком</h3>
           <div className="space-y-4">
-            {lowStockProducts.length === 0 && (
+            {lowStockWidgetItems.length === 0 && (
               <p className="text-sm text-[#5A5A40]/60">Критически низких остатков нет</p>
             )}
-            {lowStockProducts.map((product, index) => (
-              <div key={product.id} className="flex items-center justify-between gap-4 border-b border-[#5A5A40]/10 pb-4 last:border-b-0 last:pb-0">
+            {lowStockWidgetItems.map((product, index) => (
+              <div key={product.productId} className="flex items-center justify-between gap-4 border-b border-[#5A5A40]/10 pb-4 last:border-b-0 last:pb-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">{index + 1}</div>
                   <div className="min-w-0">
@@ -638,7 +601,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
                     <p className="text-xs text-[#5A5A40]/60">Минимум: {product.minStock || 10}</p>
                   </div>
                 </div>
-                <span className="text-sm font-bold text-amber-700">{product.totalStock}</span>
+                <span className="text-sm font-bold text-amber-700">{product.currentStock}</span>
               </div>
             ))}
           </div>
@@ -647,10 +610,10 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
           <h3 className="text-xl font-bold text-[#5A5A40] mb-6">Скоро просроченные товары</h3>
           <div className="space-y-4">
-            {expiringProducts.length === 0 && (
+            {expiringWidgetItems.length === 0 && (
               <p className="text-sm text-[#5A5A40]/60">Товаров с близким сроком годности нет</p>
             )}
-            {expiringProducts.map((item, index) => (
+            {expiringWidgetItems.map((item, index) => (
               <div key={item.id} className="flex items-center justify-between gap-4 border-b border-[#5A5A40]/10 pb-4 last:border-b-0 last:pb-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${item.severityRank === 0 ? 'bg-red-100 text-red-700' : item.severityRank === 1 ? 'bg-orange-100 text-orange-700' : 'bg-amber-100 text-amber-700'}`}>{index + 1}</div>

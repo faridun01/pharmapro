@@ -190,16 +190,16 @@ productsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   const productData = {
     name: String(body.name ?? ''),
     sku: normalizeSku(body.sku) || undefined,
-    description: body.description != null ? String(body.description) : undefined,
     category: body.category != null ? String(body.category) : undefined,
     manufacturer: body.manufacturer != null ? String(body.manufacturer) : undefined,
     barcode: body.barcode != null ? String(body.barcode) : undefined,
-    unit: body.unit != null ? String(body.unit) : undefined,
     minStock: body.minStock != null ? Number(body.minStock) : undefined,
-    retailPrice: body.retailPrice != null ? Number(body.retailPrice) : undefined,
-    wholesalePrice: body.wholesalePrice != null ? Number(body.wholesalePrice) : undefined,
     costPrice: body.costPrice != null ? Number(body.costPrice) : 0,
     sellingPrice: body.sellingPrice != null ? Number(body.sellingPrice) : 0,
+    image: body.image != null ? String(body.image) : undefined,
+    prescription: body.prescription != null ? Boolean(body.prescription) : undefined,
+    markingRequired: body.markingRequired != null ? Boolean(body.markingRequired) : undefined,
+    analogs: Array.isArray(body.analogs) ? JSON.stringify(body.analogs) : body.analogs != null ? String(body.analogs) : undefined,
   };
 
   const existingProduct = await findExistingProductByName(productData.name);
@@ -280,6 +280,10 @@ productsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
       include: { batches: true },
     });
   } catch (error) {
+    if (isBarcodeConflictError(error)) {
+      return res.status(409).json({ error: 'Штрихкод уже используется другим товаром', code: 'BARCODE_ALREADY_EXISTS' });
+    }
+
     if (!isSkuConflictError(error)) {
       throw error;
     }
@@ -335,17 +339,17 @@ productsRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
   const allowedFields = {
     name: body.name,
     sku: body.sku,
-    description: body.description,
     category: body.category,
     manufacturer: body.manufacturer,
     barcode: body.barcode,
-    unit: body.unit,
     minStock: body.minStock !== undefined ? Number(body.minStock) : undefined,
     costPrice: body.costPrice !== undefined ? Number(body.costPrice) : undefined,
     sellingPrice: body.sellingPrice !== undefined ? Number(body.sellingPrice) : undefined,
-    retailPrice: body.retailPrice !== undefined ? Number(body.retailPrice) : undefined,
-    wholesalePrice: body.wholesalePrice !== undefined ? Number(body.wholesalePrice) : undefined,
     status: mapProductStatus(body.status) ?? undefined,
+    image: body.image !== undefined ? String(body.image) : undefined,
+    prescription: body.prescription !== undefined ? Boolean(body.prescription) : undefined,
+    markingRequired: body.markingRequired !== undefined ? Boolean(body.markingRequired) : undefined,
+    analogs: body.analogs !== undefined ? (Array.isArray(body.analogs) ? JSON.stringify(body.analogs) : String(body.analogs)) : undefined,
   };
   // Remove undefined keys
   const productData = Object.fromEntries(

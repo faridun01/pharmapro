@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { 
   LayoutDashboard, 
   Minus,
@@ -27,6 +27,8 @@ import { useTranslation } from 'react-i18next';
 import { getShiftClosedEventName, loadLatestClosedShiftNotice } from './lib/shiftCloseNotice';
 import { lazyNamedImport } from './lib/lazyLoadComponents';
 import { BootSplash } from './presentation/components/BootSplash';
+import { LoginView } from './presentation/components/LoginView';
+import { buildApiHeaders } from './infrastructure/api';
 
 type ViewErrorBoundaryState = { hasError: boolean; message: string };
 
@@ -37,6 +39,18 @@ type AppNotification = {
   type: 'EXPIRY' | 'LOW_STOCK' | 'SYSTEM' | 'PAYMENT_DUE' | 'OVERDUE_PAYMENT';
   time: string;
   read: boolean;
+  invoiceNo?: string;
+};
+
+type AppNotificationMetrics = {
+  creditReceivables?: {
+    overdueItems: Array<{ invoiceId: string; invoiceNo: string; customerName: string; remainingAmount: number; daysOverdue: number }>;
+    dueTomorrowItems: Array<{ invoiceId: string; invoiceNo: string; customerName: string; remainingAmount: number }>;
+  };
+  inventoryHighlights?: {
+    lowStockItems: Array<{ productId: string; name: string; currentStock: number; minStock: number }>;
+    expiringItems: Array<{ id: string; name: string; batchNumber: string; daysLeft: number; severityRank: number; severityLabel: string }>;
+  };
 };
 
 const startOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
@@ -93,7 +107,6 @@ class ViewErrorBoundary extends React.Component<{ children: React.ReactNode; onR
 
 type View = 'dashboard' | 'notifications' | 'pos' | 'inventory' | 'batches' | 'invoices' | 'debtors' | 'suppliers' | 'reports' | 'settings' | 'returns' | 'writeoffs' | 'shifts';
 
-const LoginView = lazyNamedImport(() => import('./presentation/components/LoginView'), 'LoginView');
 const DashboardView = lazyNamedImport(() => import('./presentation/components/DashboardView'), 'DashboardView');
 const NotificationsView = lazyNamedImport(() => import('./presentation/components/NotificationsView'), 'NotificationsView');
 const POSView = lazyNamedImport(() => import('./presentation/components/POSView'), 'POSView');
@@ -165,12 +178,15 @@ const AppLoader: React.FC<{
 
 const App: React.FC = () => {
   const { t } = useTranslation();
-  const { user, logout, isLoading, error, invoices, products } = usePharmacy();
-  const [bootStartedAt] = useState(() => Date.now());
+  const { user, logout, isLoading, error } = usePharmacy();
+  const [bootStartedAt] = useState(() => (window as Window & {
+    pharmaproDesktop?: { startupStartedAt?: number | null };
+  }).pharmaproDesktop?.startupStartedAt || Date.now());
   const [hasShownStartupIntro, setHasShownStartupIntro] = useState(false);
   const [isStartupFadingOut, setIsStartupFadingOut] = useState(false);
   const desktopControls = (window as Window & {
     pharmaproDesktop?: {
+      startupStartedAt?: number | null;
       controls?: {
         minimize: () => void;
         toggleMaximize: () => void;
@@ -186,6 +202,7 @@ const App: React.FC = () => {
   const [invoiceDetailsPrefillId, setInvoiceDetailsPrefillId] = useState('');
   const [shiftReportPrefillId, setShiftReportPrefillId] = useState('');
   const [latestClosedShiftNotice, setLatestClosedShiftNotice] = useState(loadLatestClosedShiftNotice());
+  const [notificationMetrics, setNotificationMetrics] = useState<AppNotificationMetrics | null>(null);
 
   React.useEffect(() => {
     const refreshShiftNotice = () => setLatestClosedShiftNotice(loadLatestClosedShiftNotice());
@@ -200,20 +217,68 @@ const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const prebootSplash = document.getElementById('preboot-splash');
+    if (!prebootSplash) {
+      return;
+    }
+
+    if (!hasShownStartupIntro) {
+      prebootSplash.classList.remove('preboot-splash--hidden');
+      return;
+    }
+
+    prebootSplash.classList.add('preboot-splash--hidden');
+    const timer = window.setTimeout(() => prebootSplash.remove(), 260);
+    return () => window.clearTimeout(timer);
+  }, [hasShownStartupIntro]);
+
   React.useEffect(() => {
     if (hasShownStartupIntro) {
       return;
     }
 
     const remainingMs = Math.max(0, 5000 - (Date.now() - bootStartedAt));
-    const fadeTimer = window.setTimeout(() => setIsStartupFadingOut(true), remainingMs);
-    const completeTimer = window.setTimeout(() => setHasShownStartupIntro(true), remainingMs + 420);
+    const fadeTimer = window.setTimeout(() => setIsStartupFadingOut(true), Math.max(0, remainingMs - 320));
+    const completeTimer = window.setTimeout(() => setHasShownStartupIntro(true), remainingMs);
 
     return () => {
       window.clearTimeout(fadeTimer);
       window.clearTimeout(completeTimer);
     };
   }, [bootStartedAt, hasShownStartupIntro]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    if (!user) {
+      setNotificationMetrics(null);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/reports/metrics/dashboard?preset=month', {
+          headers: await buildApiHeaders(),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Не удалось загрузить уведомления');
+        }
+        if (!cancelled) {
+          setNotificationMetrics(payload as AppNotificationMetrics);
+        }
+      } catch {
+        if (!cancelled) {
+          setNotificationMetrics(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
 
   const menuItems = [
@@ -248,85 +313,79 @@ const App: React.FC = () => {
         ]
       : [];
 
-    const paymentNotifications = invoices
-      .filter((invoice) => Number(invoice.receivables?.[0]?.remainingAmount || 0) > 0)
-      .map((invoice) => {
-        const receivable = invoice.receivables?.[0];
-        const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
+    const overduePaymentNotifications = (notificationMetrics?.creditReceivables?.overdueItems || []).map((item) => ({
+      id: `payment-overdue-${item.invoiceId}`,
+      title: 'Просроченная оплата покупателя',
+      description: `${item.customerName || 'Покупатель'}: счет ${item.invoiceNo} просрочен на ${Math.abs(Number(item.daysOverdue || 0))} дн. Сумма долга ${Number(item.remainingAmount || 0).toFixed(2)}.`,
+      type: 'OVERDUE_PAYMENT' as const,
+      time: `${Math.abs(Number(item.daysOverdue || 0))} дн.`,
+      read: false,
+      invoiceNo: item.invoiceNo,
+    }));
 
-        if (!dueDate || Number.isNaN(dueDate.getTime())) return null;
-        const daysUntilDue = diffInDays(dueDate, now);
+    const dueTomorrowNotifications = (notificationMetrics?.creditReceivables?.dueTomorrowItems || []).map((item) => ({
+      id: `payment-due-${item.invoiceId}`,
+      title: 'Оплата от покупателя завтра',
+      description: `${item.customerName || 'Покупатель'}: счет ${item.invoiceNo} требует оплаты ${formatDueLabel(1)} на сумму ${Number(item.remainingAmount || 0).toFixed(2)}.`,
+      type: 'PAYMENT_DUE' as const,
+      time: '1 день',
+      read: false,
+      invoiceNo: item.invoiceNo,
+    }));
 
-        if (daysUntilDue === 1) {
-          return {
-            id: `payment-due-${invoice.id}`,
-            title: 'Оплата от покупателя завтра',
-            description: `${invoice.customer || 'Покупатель'}: счет ${invoice.invoiceNo} требует оплаты ${formatDueLabel(daysUntilDue)} на сумму ${Number(receivable?.remainingAmount || 0).toFixed(2)}.`,
-            type: 'PAYMENT_DUE' as const,
-            time: '1 день',
-            read: false,
-          };
+    const paymentNotifications = [...dueTomorrowNotifications, ...overduePaymentNotifications];
+
+    const lowStockNotifications = [...(notificationMetrics?.inventoryHighlights?.lowStockItems || [])]
+      .sort((left, right) => {
+        const leftGap = Number(left.currentStock || 0) - Number(left.minStock || 10);
+        const rightGap = Number(right.currentStock || 0) - Number(right.minStock || 10);
+        if (leftGap !== rightGap) {
+          return leftGap - rightGap;
         }
 
-        if (daysUntilDue < 0) {
-          return {
-            id: `payment-overdue-${invoice.id}`,
-            title: 'Просроченная оплата покупателя',
-            description: `${invoice.customer || 'Покупатель'}: счет ${invoice.invoiceNo} просрочен на ${Math.abs(daysUntilDue)} дн. Сумма долга ${Number(receivable?.remainingAmount || 0).toFixed(2)}.`,
-            type: 'OVERDUE_PAYMENT' as const,
-            time: `${Math.abs(daysUntilDue)} дн.`,
-            read: false,
-          };
+        const leftCoverage = Number(left.minStock || 10) > 0 ? Number(left.currentStock || 0) / Number(left.minStock || 10) : Number(left.currentStock || 0);
+        const rightCoverage = Number(right.minStock || 10) > 0 ? Number(right.currentStock || 0) / Number(right.minStock || 10) : Number(right.currentStock || 0);
+        if (leftCoverage !== rightCoverage) {
+          return leftCoverage - rightCoverage;
         }
 
-        return null;
+        return String(left.name || '').localeCompare(String(right.name || ''), 'ru-RU');
       })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-    const lowStockNotifications = products
-      .filter((product) => Number(product.totalStock || 0) > 0 && Number(product.totalStock || 0) <= Number(product.minStock || 0))
       .slice(0, 4)
       .map((product) => ({
-        id: `low-stock-${product.id}`,
+        id: `low-stock-${product.productId}`,
         title: t('Low Stock Alert'),
-        description: `${product.name} ниже минимального остатка. Осталось ${product.totalStock} ед.`,
+        description: `${product.name} ниже минимального остатка. Осталось ${product.currentStock} ед.`,
         type: 'LOW_STOCK' as const,
         time: 'сейчас',
         read: false,
       }));
 
-    const expiryNotifications = products
-      .flatMap((product) => product.batches.map((batch) => ({ product, batch })))
-      .map(({ product, batch }) => ({
-        product,
-        batch,
-        daysUntilExpiry: diffInDays(new Date(batch.expiryDate), now),
-      }))
-      .filter(({ daysUntilExpiry }) => daysUntilExpiry >= 0 && daysUntilExpiry <= 30)
-      .sort((left, right) => left.daysUntilExpiry - right.daysUntilExpiry)
+    const expiryNotifications = (notificationMetrics?.inventoryHighlights?.expiringItems || [])
+      .filter((item) => Number(item.daysLeft) >= 0 && Number(item.daysLeft) <= 30)
+      .sort((left, right) => left.daysLeft - right.daysLeft)
       .slice(0, 4)
-      .map(({ product, batch, daysUntilExpiry }) => ({
-        id: `expiry-${batch.id}`,
+      .map((item) => ({
+        id: `expiry-${item.id}`,
         title: t('Expiry Warning'),
-        description: `Партия ${batch.batchNumber} (${product.name}) истекает ${formatDueLabel(daysUntilExpiry)}.`,
+        description: `Партия ${item.batchNumber} (${item.name}) истекает ${formatDueLabel(item.daysLeft)}.`,
         type: 'EXPIRY' as const,
-        time: `${daysUntilExpiry} дн.`,
+        time: `${item.daysLeft} дн.`,
         read: false,
       }));
 
     return [...systemNotifications, ...paymentNotifications, ...lowStockNotifications, ...expiryNotifications];
-  }, [invoices, latestClosedShiftNotice, products, t]);
+  }, [latestClosedShiftNotice, notificationMetrics, t]);
 
   const notificationsCount = notifications.length;
 
-  const openInvoicePaymentFlow = (invoiceId?: string) => {
+  const openInvoicePaymentFlow = (invoiceId?: string, invoiceNo?: string) => {
     if (!invoiceId) {
       setCurrentView('debtors');
       return;
     }
 
-    const invoice = invoices.find((item) => item.id === invoiceId);
-    setInvoiceSearchPrefill(invoice?.invoiceNo || '');
+    setInvoiceSearchPrefill(invoiceNo || '');
     setInvoicePaymentPrefillId(invoiceId);
     setCurrentView('debtors');
   };
@@ -345,7 +404,7 @@ const App: React.FC = () => {
   const handleNotificationClick = (notification: AppNotification) => {
     if (notification.type === 'PAYMENT_DUE' || notification.type === 'OVERDUE_PAYMENT') {
       const invoiceId = notification.id.replace('payment-due-', '').replace('payment-overdue-', '');
-      openInvoicePaymentFlow(invoiceId);
+      openInvoicePaymentFlow(invoiceId, notification.invoiceNo);
       return;
     }
 
@@ -390,19 +449,18 @@ const App: React.FC = () => {
     }
   };
 
-  if (!hasShownStartupIntro || isLoading) {
+  if (!hasShownStartupIntro) {
     return (
-      <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">
-        {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
-        <div className="flex-1 min-h-0">
-          <div className={isStartupFadingOut ? 'pharma-startup-fade-out' : 'pharma-startup-fade-in'}>
-            <BootSplash
-              subtitle={hasShownStartupIntro ? 'Проверяем рабочее пространство и подготавливаем вход' : 'Готовим премиальное рабочее пространство и запускаем приложение'}
-              note="Решение ITFORCE"
-              showProgress={!hasShownStartupIntro}
-              durationMs={5000}
-            />
-          </div>
+      <div className="h-screen bg-[#f5f5f0] overflow-hidden">
+        <div className={isStartupFadingOut ? 'pharma-startup-fade-out' : 'pharma-startup-fade-in'}>
+          <BootSplash
+            subtitle={user
+              ? 'Подключаем данные и восстанавливаем рабочее пространство'
+              : 'Готовим рабочее пространство и открываем вход в систему'}
+            note="Решение ITFORCE"
+            showProgress
+            durationMs={5000}
+          />
         </div>
       </div>
     );
@@ -413,11 +471,7 @@ const App: React.FC = () => {
       <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">
         {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
         <div className="flex-1 min-h-0">
-          <Suspense
-            fallback={<AppLoader label="Открываем форму входа" />}
-          >
-            <LoginView embedded={Boolean(desktopControls)} />
-          </Suspense>
+          <LoginView embedded={Boolean(desktopControls)} />
         </div>
       </div>
     );

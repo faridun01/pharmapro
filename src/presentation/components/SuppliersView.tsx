@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
@@ -36,6 +36,27 @@ export const SuppliersView: React.FC = () => {
   const [error, setError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState<SupplierForm>(INITIAL_FORM);
+  const [initialLoadPending, setInitialLoadPending] = useState(false);
+
+  useEffect(() => {
+    if (suppliers.length > 0) {
+      setInitialLoadPending(false);
+      return;
+    }
+
+    let cancelled = false;
+    setInitialLoadPending(true);
+
+    void refreshSuppliers().finally(() => {
+      if (!cancelled) {
+        setInitialLoadPending(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshSuppliers, suppliers.length]);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -149,6 +170,27 @@ export const SuppliersView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {initialLoadPending && suppliers.length === 0 && Array.from({ length: 6 }).map((_, index) => (
+          <div key={`supplier-skeleton-${index}`} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 animate-pulse">
+            <div className="flex justify-between items-start mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-[#f5f5f0]" />
+              <div className="flex gap-2">
+                <div className="h-9 w-9 rounded-xl bg-[#f5f5f0]" />
+                <div className="h-9 w-9 rounded-xl bg-[#f5f5f0]" />
+              </div>
+            </div>
+            <div className="h-6 w-2/3 rounded-full bg-[#f5f5f0] mb-5" />
+            <div className="space-y-3 mb-6">
+              <div className="h-4 rounded-full bg-[#f5f5f0]" />
+              <div className="h-4 rounded-full bg-[#f5f5f0]" />
+              <div className="h-4 rounded-full bg-[#f5f5f0]" />
+            </div>
+            <div className="grid grid-cols-2 gap-4 pt-6 border-t border-[#5A5A40]/5">
+              <div className="h-16 rounded-2xl bg-[#f5f5f0]" />
+              <div className="h-16 rounded-2xl bg-[#f5f5f0]" />
+            </div>
+          </div>
+        ))}
         {filteredSuppliers.map((supplier) => (
           <div key={supplier.id} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 hover:-translate-y-1 hover:shadow-xl transition-all group">
             <div className="flex justify-between items-start mb-6">
@@ -210,6 +252,12 @@ export const SuppliersView: React.FC = () => {
             </div>
           </div>
         ))}
+
+        {!initialLoadPending && filteredSuppliers.length === 0 && (
+          <div className="md:col-span-2 xl:col-span-3 rounded-3xl border border-[#5A5A40]/10 bg-white px-6 py-12 text-center text-[#5A5A40]/50">
+            Поставщики не найдены.
+          </div>
+        )}
       </div>
 
       {isAddOpen && (

@@ -5,23 +5,54 @@ const fs = require('fs');
 const http = require('http');
 const { spawn } = require('child_process');
 
+const resolveRuntimeEnvPath = () => {
+  const exeDir = app.isPackaged ? path.dirname(app.getPath('exe')) : null;
+  const userDataDir = (() => {
+    try {
+      return app.getPath('userData');
+    } catch {
+      return null;
+    }
+  })();
+
+  const envCandidates = [
+    process.env.PHARMAPRO_ENV_FILE,
+    userDataDir ? path.join(userDataDir, '.env') : null,
+    exeDir ? path.join(exeDir, '.env') : null,
+    process.resourcesPath ? path.join(process.resourcesPath, '.env') : null,
+    path.join(__dirname, '../.env'),
+    path.join(process.cwd(), '.env'),
+  ].filter(Boolean);
+
+  for (const envFile of envCandidates) {
+    try {
+      if (fs.existsSync(envFile)) {
+        return envFile;
+      }
+    } catch {
+      // Continue checking other candidates.
+    }
+  }
+
+  return null;
+};
+
+const resolveRuntimeLogPath = () => {
+  try {
+    const userDataDir = app.getPath('userData');
+    return path.join(userDataDir, 'logs', 'electron-runtime.log');
+  } catch {
+    return path.join(process.cwd(), 'data', 'electron-runtime.log');
+  }
+};
+
 // ─── Load .env early, before anything reads process.env ──────────────────────
 // This ensures DATABASE_URL and other config reach the spawned backend process.
 try {
   const dotenv = require('dotenv');
-  const envCandidates = [
-    // Packaged app: resources-level .env (place via extraResources or beside the exe)
-    process.resourcesPath ? path.join(process.resourcesPath, '.env') : null,
-    // Dev / launched from project root: standard project root .env
-    path.join(__dirname, '../.env'),
-    // Absolute current-working-directory fallback
-    path.join(process.cwd(), '.env'),
-  ].filter(Boolean);
-  for (const envFile of envCandidates) {
-    if (fs.existsSync(envFile)) {
-      dotenv.config({ path: envFile, override: false });
-      break;
-    }
+  const envFile = resolveRuntimeEnvPath();
+  if (envFile) {
+    dotenv.config({ path: envFile, override: false });
   }
 } catch {
   // dotenv not available or .env not found — continue, env vars may be set by OS
@@ -29,12 +60,15 @@ try {
 
 const isDev = process.env.NODE_ENV === 'development';
 const APP_PORT = Number(process.env.PORT || 3921);
+const DEV_SERVER_URL = 'http://127.0.0.1:3000';
+const DEV_SERVER_HEALTH_URL = 'http://127.0.0.1:3000/api/health';
 const desktopAuthSecret = randomBytes(24).toString('hex');
+const appStartupStartedAt = Date.now();
 
 let mainWindow = null;
 let backendProcess = null;
 let backendReady = false;
-const runtimeLogPath = path.join(process.cwd(), 'data', 'electron-runtime.log');
+const runtimeLogPath = resolveRuntimeLogPath();
 
 const stringifyLogPayload = (payload) => {
   try {
@@ -120,6 +154,120 @@ const waitForServer = (url, timeoutMs = 20000) => {
   });
 };
 
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const buildDevSplashHtml = () => `<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PharmaPro</title>
+    <style>
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(circle at top left, rgba(196, 171, 104, 0.28), transparent 30%),
+          radial-gradient(circle at bottom right, rgba(90, 90, 64, 0.24), transparent 28%),
+          linear-gradient(135deg, #fbf8f0 0%, #efe8d8 42%, #e5ddcb 100%);
+        font-family: "Segoe UI", sans-serif;
+      }
+      .card {
+        width: min(520px, calc(100vw - 32px));
+        padding: 30px 28px 26px;
+        border-radius: 32px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 252, 245, 0.64));
+        border: 1px solid rgba(122, 109, 69, 0.14);
+        box-shadow: 0 30px 90px rgba(74, 65, 36, 0.16);
+        backdrop-filter: blur(22px);
+        text-align: center;
+      }
+      .badge {
+        display: inline-flex;
+        gap: 8px;
+        margin-bottom: 18px;
+        padding: 8px 14px;
+        border-radius: 9999px;
+        background: rgba(255, 250, 241, 0.75);
+        border: 1px solid rgba(140, 122, 63, 0.16);
+        color: rgba(75, 67, 39, 0.76);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .eyebrow {
+        margin-bottom: 10px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.28em;
+        color: rgba(90, 90, 64, 0.58);
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 4vw, 2.8rem);
+        line-height: 1.02;
+        color: #363726;
+      }
+      p {
+        margin: 12px auto 0;
+        max-width: 340px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: rgba(54, 55, 38, 0.72);
+      }
+      .loader { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 24px; }
+      .loader span {
+        width: 10px; height: 10px; border-radius: 9999px;
+        background: linear-gradient(180deg, #827d57 0%, #5a5a40 100%);
+        animation: pulse 1.1s ease-in-out infinite;
+      }
+      .loader span:nth-child(2) { animation-delay: 0.16s; }
+      .loader span:nth-child(3) { animation-delay: 0.32s; }
+      .progress { position: relative; width: 100%; height: 8px; margin-top: 18px; overflow: hidden; border-radius: 9999px; background: rgba(90, 90, 64, 0.08); }
+      .bar { position: absolute; inset: 0; width: 100%; border-radius: inherit; background: linear-gradient(90deg, #8a7e52 0%, #d0b97a 52%, #6f6b4b 100%); transform: translateX(-100%); animation: progress 5s linear forwards; }
+      .meta { display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(90, 90, 64, 0.6); }
+      @keyframes pulse { 0%, 80%, 100% { transform: translateY(0); opacity: 0.35; } 40% { transform: translateY(-8px); opacity: 1; } }
+      @keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(0%); } }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="badge">Решение ITFORCE</div>
+      <div class="eyebrow">АПТЕЧНАЯ СИСТЕМА УПРАВЛЕНИЯ</div>
+      <h1>PharmaPro</h1>
+      <p>Запускаем приложение и подключаем рабочее пространство.</p>
+      <div class="loader" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="progress" aria-hidden="true"><div class="bar"></div></div>
+      <div class="meta"><span>Запуск</span><span>0-100%</span></div>
+    </div>
+  </body>
+</html>`;
+
+const loadDevAppWithRetry = async (window, timeoutMs = 15000) => {
+  const startedAt = Date.now();
+
+  while (window && !window.isDestroyed()) {
+    try {
+      await waitForServer(DEV_SERVER_HEALTH_URL, 2500);
+      await window.loadURL(DEV_SERVER_URL);
+      writeRuntimeLog('dev-server-loaded', { url: DEV_SERVER_URL });
+
+      if (process.env.PHARMAPRO_OPEN_DEVTOOLS === '1') {
+        window.webContents.openDevTools({ mode: 'detach' });
+      }
+      return;
+    } catch (error) {
+      if (Date.now() - startedAt > timeoutMs) {
+        throw error;
+      }
+      await delay(350);
+    }
+  }
+};
+
 const resolveWindowIcon = () => {
   const candidates = [
     path.join(process.cwd(), 'build', 'icon.png'),
@@ -170,6 +318,8 @@ const startInternalBackend = async () => {
   };
   const prismaEngine = findPrismaEngine(path.dirname(serverEntry));
 
+  const runtimeEnvFile = resolveRuntimeEnvPath();
+
   backendProcess = spawn(process.execPath, [serverEntry], {
     env: {
       ...process.env,
@@ -184,9 +334,7 @@ const startInternalBackend = async () => {
       PHARMAPRO_DIST_PATH: path.join(app.getAppPath(), 'dist'),
       // Tell the backend's env.ts where to find the .env file so dotenv.config()
       // can load DATABASE_URL even in standalone (non-project-root) deployments.
-      ...(process.env.DATABASE_URL ? {} : {
-        PHARMAPRO_ENV_FILE: path.join(app.getAppPath(), '.env'),
-      }),
+      ...(runtimeEnvFile ? { PHARMAPRO_ENV_FILE: runtimeEnvFile } : {}),
       ...(prismaEngine ? { PRISMA_QUERY_ENGINE_LIBRARY: prismaEngine } : {}),
     },
     windowsHide: true,
@@ -214,14 +362,36 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
       preload: preloadPath,
+      additionalArguments: [`--pharmapro-started-at=${appStartupStartedAt}`],
     },
     icon: windowIcon,
     title: 'PharmaPro Management System',
+    backgroundColor: '#f5f5f0',
+    show: false,
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    if (!mainWindow.isMaximized()) {
+      mainWindow.maximize();
+    }
+
+    mainWindow.show();
+    mainWindow.focus();
   });
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
-    mainWindow.webContents.openDevTools();
+    const devSplashUrl = `data:text/html;charset=UTF-8,${encodeURIComponent(buildDevSplashHtml())}`;
+    mainWindow.loadURL(devSplashUrl).catch(() => {});
+    loadDevAppWithRetry(mainWindow)
+      .catch((error) => {
+        writeRuntimeLog('dev-server-wait-failed', {
+          message: error?.message,
+        });
+      });
   } else if (backendReady) {
     mainWindow.loadURL(`http://127.0.0.1:${APP_PORT}`);
   } else {
@@ -297,6 +467,10 @@ app.whenReady().then(async () => {
       await startInternalBackend();
     } catch {
       backendReady = false;
+      writeRuntimeLog('backend-start-failed', {
+        appPort: APP_PORT,
+        envFile: resolveRuntimeEnvPath(),
+      });
     }
   }
 

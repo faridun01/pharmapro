@@ -8,6 +8,7 @@ coverage/
 *.log
 .env*
 !.env.example
+!.env.production.example
 data/report-settings.json
 data/system-settings.json
 prisma/dev.db.corrupted-backup-20260402-015619

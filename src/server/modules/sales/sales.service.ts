@@ -70,21 +70,23 @@ export class SalesService {
           throw new ValidationError('Customer name is required for credit sale');
         }
 
-        const existingCustomer = requestedCustomerPhone
-          ? await tx.customer.findFirst({
-              where: {
-                isActive: true,
-                phone: requestedCustomerPhone,
+        const existingCustomer = await tx.customer.findFirst({
+          where: {
+            isActive: true,
+            OR: [
+              {
+                name: {
+                  equals: requestedCustomerName,
+                  mode: 'insensitive',
+                },
               },
-              select: { id: true, name: true },
-            })
-          : await tx.customer.findFirst({
-              where: {
-                isActive: true,
-                name: requestedCustomerName,
-              },
-              select: { id: true, name: true },
-            });
+              ...(requestedCustomerPhone
+                ? [{ phone: requestedCustomerPhone }]
+                : []),
+            ],
+          },
+          select: { id: true, name: true },
+        });
 
         if (existingCustomer) {
           resolvedCustomerId = existingCustomer.id;

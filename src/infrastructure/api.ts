@@ -72,13 +72,13 @@ export class ApiProductRepository extends BaseApi implements IProductRepository 
   private readonly baseUrl = '/api/products';
 
   async getAll(): Promise<Product[]> {
-    const response = await fetch(this.baseUrl);
+    const response = await fetch(this.baseUrl, { headers: await this.getHeaders() });
     const data = await this.handleResponse(response);
     return data.map((p: any) => this.mapToEntity(p));
   }
 
   async getById(id: string): Promise<Product | null> {
-    const response = await fetch(`${this.baseUrl}/${id}`);
+    const response = await fetch(`${this.baseUrl}/${id}`, { headers: await this.getHeaders() });
     if (response.status === 404) return null;
     const data = await this.handleResponse(response);
     return this.mapToEntity(data);

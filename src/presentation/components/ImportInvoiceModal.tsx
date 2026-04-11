@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Upload, Trash2, FileText, Truck, Calendar, CheckCircle2, AlertCircle, Search, Pill, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -101,7 +101,7 @@ const formatVisibleError = (message: string | null) => {
 
 export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
-  const { suppliers, products, importPurchaseInvoice, refreshProducts, createProduct } = usePharmacy();
+  const { suppliers, products, importPurchaseInvoice, refreshProducts, refreshSuppliers, createProduct } = usePharmacy();
 
   const [supplierId, setSupplierId] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -121,6 +121,22 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
   const [pendingOcrItems, setPendingOcrItems] = useState<InvoiceImportItem[] | null>(null);
   const [excelPreviewItems, setExcelPreviewItems] = useState<InvoiceImportItem[] | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
+
+  useEffect(() => {
+    if (!isOpen || suppliers.length > 0) {
+      return;
+    }
+
+    void refreshSuppliers();
+  }, [isOpen, refreshSuppliers, suppliers.length]);
+
+  useEffect(() => {
+    if (!isOpen || products.length > 0) {
+      return;
+    }
+
+    void refreshProducts();
+  }, [isOpen, products.length, refreshProducts]);
 
   // Debounce search to 300ms to avoid filtering on every keystroke
   const debouncedSearchTerm = useDebounce(searchTerm, 300);

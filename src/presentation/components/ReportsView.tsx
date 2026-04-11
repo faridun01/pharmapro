@@ -97,6 +97,8 @@ type FinanceReport = {
       customer: string;
       paymentType: string;
       totalAmount: number;
+      paidAmount: number;
+      outstandingAmount: number;
       itemCount: number;
       soldUnits: number;
       items: Array<{
@@ -240,6 +242,8 @@ const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceReport => 
           customer: String(row?.customer || 'Розничный покупатель'),
           paymentType: String(row?.paymentType || ''),
           totalAmount: toNumber(row?.totalAmount),
+          paidAmount: toNumber(row?.paidAmount),
+          outstandingAmount: toNumber(row?.outstandingAmount),
           itemCount: toNumber(row?.itemCount),
           soldUnits: toNumber(row?.soldUnits),
           items: Array.isArray(row?.items)
@@ -386,11 +390,11 @@ export const ReportsView: React.FC = () => {
   const kpiCards = useMemo(() => {
     if (!report) return [];
     return [
-      { label: 'Выручка нетто', value: formatMoney(report.kpi.netRevenue) },
+      { label: 'Получено денег', value: formatMoney(report.kpi.netRevenue) },
+      { label: 'Осталось в долг', value: formatMoney(report.debts.receivableTotal) },
       { label: 'Валовая прибыль', value: formatMoney(report.kpi.grossProfit) },
       { label: 'Валовая маржа', value: `${toNumber(report.kpi.grossMarginPct).toFixed(1)} %` },
       { label: 'Возвраты', value: formatMoney(report.kpi.customerReturnsAmount) },
-      { label: 'Дебиторка', value: formatMoney(report.debts.receivableTotal) },
       { label: 'Кредиторка', value: formatMoney(report.debts.payableTotal) },
     ];
   }, [report]);
@@ -405,18 +409,18 @@ export const ReportsView: React.FC = () => {
 
       const summarySheet = XLSX.utils.aoa_to_sheet([
         ['Показатель', 'Значение'],
-        ['Выручка нетто', report.kpi.netRevenue],
+        ['Получено денег', report.kpi.netRevenue],
+        ['Осталось в долг', report.debts.receivableTotal],
         ['Валовая прибыль', report.kpi.grossProfit],
         ['Валовая маржа %', toNumber(report.kpi.grossMarginPct)],
         ['Возвраты', report.kpi.customerReturnsAmount],
-        ['Сумма задолженности', report.debts.receivableTotal],
         ['Кредиторская задолженность', report.debts.payableTotal],
         ['Итоговая стоимость товаров', reportTotals?.totalRetailValue ?? 0],
       ]);
       XLSX.utils.book_append_sheet(wb, summarySheet, 'Сводка');
 
       const trendSheet = XLSX.utils.aoa_to_sheet([
-        ['Месяц', 'Выручка', 'Расходы', 'Закупки'],
+        ['Месяц', 'Получено денег', 'Расходы', 'Закупки'],
         ...report.trend.map((row) => [row.month, row.revenue, row.expenses, row.purchases]),
       ]);
       XLSX.utils.book_append_sheet(wb, trendSheet, 'Тренды');
@@ -482,7 +486,8 @@ export const ReportsView: React.FC = () => {
         </div>
       </div>`;
 
-    const detailedSalesRevenue = report.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.totalAmount), 0);
+    const detailedSalesRevenue = report.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.paidAmount), 0);
+    const detailedSalesDebt = report.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.outstandingAmount), 0);
     const detailedSalesUnits = report.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.soldUnits), 0);
     const detailedSalesItems = report.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.itemCount), 0);
 
@@ -506,7 +511,9 @@ export const ReportsView: React.FC = () => {
           <div class="sale-card-badges">
             <span class="badge">Позиций: ${sale.itemCount}</span>
             <span class="badge">Единиц: ${sale.soldUnits}</span>
-            <span class="badge success">Сумма: ${formatMoney(sale.totalAmount)}</span>
+            <span class="badge">Сумма: ${formatMoney(sale.totalAmount)}</span>
+            <span class="badge success">Оплачено: ${formatMoney(sale.paidAmount)}</span>
+            <span class="badge ${sale.outstandingAmount > 0 ? 'warn' : ''}">В долг: ${formatMoney(sale.outstandingAmount)}</span>
           </div>
         </div>
         <table>
@@ -680,7 +687,8 @@ ${toolbar}
     <div class="kpi"><div class="lbl">Позиций</div><div class="val">${detailedSalesItems}</div></div>
     <div class="kpi"><div class="lbl">Единиц</div><div class="val">${detailedSalesUnits}</div></div>
     <div class="kpi"><div class="lbl">Товаров</div><div class="val">${report.currentMonthSales.productTotals.length}</div></div>
-    <div class="kpi"><div class="lbl">Выручка</div><div class="val">${formatMoney(detailedSalesRevenue)}</div></div>
+    <div class="kpi"><div class="lbl">Оплачено</div><div class="val">${formatMoney(detailedSalesRevenue)}</div></div>
+    <div class="kpi"><div class="lbl">В долг</div><div class="val">${formatMoney(detailedSalesDebt)}</div></div>
   </div>
 
   ${currentMonthProductRows ? `
@@ -1050,7 +1058,9 @@ ${toolbar}
               <div className="flex flex-wrap gap-2 text-xs font-semibold">
                 <span className="rounded-full bg-white px-3 py-1.5 text-[#5A5A40]">Позиций: {sale.itemCount}</span>
                 <span className="rounded-full bg-white px-3 py-1.5 text-[#5A5A40]">Единиц: {sale.soldUnits}</span>
-                <span className="rounded-full bg-white px-3 py-1.5 text-emerald-700">Сумма: {formatMoney(sale.totalAmount)}</span>
+                <span className="rounded-full bg-white px-3 py-1.5 text-[#5A5A40]">Сумма: {formatMoney(sale.totalAmount)}</span>
+                <span className="rounded-full bg-white px-3 py-1.5 text-emerald-700">Оплачено: {formatMoney(sale.paidAmount)}</span>
+                <span className={`rounded-full px-3 py-1.5 ${sale.outstandingAmount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-white text-[#5A5A40]'}`}>В долг: {formatMoney(sale.outstandingAmount)}</span>
               </div>
             </div>
             <table className="w-full text-sm min-w-160">
@@ -1085,7 +1095,8 @@ ${toolbar}
     const totalSales = report?.currentMonthSales.saleDetails.length ?? 0;
     const totalItems = report?.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.itemCount), 0) ?? 0;
     const totalUnits = report?.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.soldUnits), 0) ?? 0;
-    const totalRevenue = report?.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.totalAmount), 0) ?? 0;
+    const totalRevenue = report?.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.paidAmount), 0) ?? 0;
+    const totalDebt = report?.currentMonthSales.saleDetails.reduce((sum, sale) => sum + toNumber(sale.outstandingAmount), 0) ?? 0;
     const periodFrom = report?.currentMonthSales.from ? new Date(report.currentMonthSales.from).toLocaleDateString('ru-RU') : '—';
     const periodTo = report?.currentMonthSales.to ? new Date(report.currentMonthSales.to).toLocaleDateString('ru-RU') : '—';
 
@@ -1094,12 +1105,13 @@ ${toolbar}
         <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 text-sm text-emerald-800">
           Детализированный отчет показывает только продажи текущего месяца. Период всегда считается с 1 числа месяца по сегодняшний день: {periodFrom} - {periodTo}.
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
           {[
             { label: 'Период', value: `${periodFrom} - ${periodTo}` },
             { label: 'Продаж', value: String(totalSales) },
             { label: 'Позиций и единиц', value: `${totalItems} поз. · ${totalUnits} ед.` },
-            { label: 'Выручка', value: formatMoney(totalRevenue) },
+            { label: 'Оплачено', value: formatMoney(totalRevenue) },
+            { label: 'В долг', value: formatMoney(totalDebt) },
           ].map((item) => (
             <div key={item.label} className="bg-white p-4 rounded-2xl border border-[#5A5A40]/10">
               <p className="text-xs uppercase tracking-wider text-[#5A5A40]/50">{item.label}</p>
@@ -1214,9 +1226,9 @@ ${toolbar}
               </div>
 
               {renderMetricSection('1. Ключевые показатели', [
-                { label: 'Выручка брутто', value: formatMoney(report.kpi.revenueGross) },
+                { label: 'Получено денег', value: formatMoney(report.kpi.revenueGross) },
+                { label: 'Долги покупателей', value: formatMoney(report.debts.receivableTotal) },
                 { label: 'Возвраты', value: formatMoney(report.kpi.customerReturnsAmount) },
-                { label: 'Выручка нетто', value: formatMoney(report.kpi.netRevenue) },
                 { label: 'Себестоимость', value: formatMoney(report.kpi.cogs) },
                 { label: 'Валовая прибыль', value: formatMoney(report.kpi.grossProfit) },
                 { label: 'Валовая маржа', value: `${toNumber(report.kpi.grossMarginPct).toFixed(1)} %` },
