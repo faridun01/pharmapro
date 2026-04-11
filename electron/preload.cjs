@@ -17,4 +17,9 @@ contextBridge.exposeInMainWorld('pharmaproDesktop', {
     close: () => ipcRenderer.send('window:close'),
   },
   authHeaders: () => ipcRenderer.invoke('desktop:get-auth-headers'),
+  markRuntime: (name, details = {}) => ipcRenderer.send('runtime:mark', {
+    name,
+    details,
+    rendererTs: Date.now(),
+  }),
 });

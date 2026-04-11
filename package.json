@@ -7,7 +7,8 @@
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "cross-env NODE_ENV=development tsx server.ts",
+    "dev:web": "vite --host 127.0.0.1 --port 3000 --strictPort",
     "build": "npm run type-check && vite build && npm run bundle-analysis",
     "build:prod": "cross-env NODE_ENV=production npm run build",
     "build:server": "node ./scripts/build-server.mjs",
@@ -22,7 +23,7 @@
     "clean": "rimraf dist dist-server",
     "lint": "tsc --noEmit",
     "type-check": "tsc --noEmit",
-    "electron:dev": "node ./scripts/free-electron.mjs && node ./scripts/free-ports.mjs && concurrently --kill-others --success first \"npm run dev\" \"cross-env NODE_ENV=development electron .\"",
+    "electron:dev": "node ./scripts/free-electron.mjs && node ./scripts/free-ports.mjs && concurrently --kill-others --success first \"npm run dev\" \"npm run dev:web\" \"cross-env NODE_ENV=development electron .\"",
     "electron:build": "node ./scripts/prepare-electron-build.mjs && node ./scripts/prepare-runtime-env.mjs && npm run build:prod && node ./scripts/prisma-generate-safe.mjs && npm run build:server && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder && node electron/launch-built.cjs"
   },
   "build": {

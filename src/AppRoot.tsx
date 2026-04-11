@@ -1,11 +1,10 @@
 import './lib/i18n';
-import { PharmacyProvider } from './presentation/context';
 import App from './App';
 
+window.pharmaproDesktop?.markRuntime?.('app-root-module-evaluated', {
+  ts: Date.now(),
+});
+
 export default function AppRoot() {
-  return (
-    <PharmacyProvider>
-      <App />
-    </PharmacyProvider>
-  );
+  return <App />;
 }

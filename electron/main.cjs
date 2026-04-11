@@ -46,8 +46,6 @@ const resolveRuntimeLogPath = () => {
   }
 };
 
-// ─── Load .env early, before anything reads process.env ──────────────────────
-// This ensures DATABASE_URL and other config reach the spawned backend process.
 try {
   const dotenv = require('dotenv');
   const envFile = resolveRuntimeEnvPath();
@@ -55,7 +53,7 @@ try {
     dotenv.config({ path: envFile, override: false });
   }
 } catch {
-  // dotenv not available or .env not found — continue, env vars may be set by OS
+  // dotenv not available or .env not found; continue with OS env vars.
 }
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -86,7 +84,6 @@ const writeRuntimeLog = (tag, payload) => {
     // Ignore file logging errors and still print to stderr.
   }
   try {
-    // eslint-disable-next-line no-console
     console.error(line.trim());
   } catch {
     // ignore
@@ -153,13 +150,114 @@ const waitForServer = (url, timeoutMs = 20000) => {
   });
 };
 
+const waitForHttpOk = (url, timeoutMs = 20000) => {
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      const req = http.get(url, (res) => {
+        res.resume();
+        if ((res.statusCode || 500) >= 200 && (res.statusCode || 500) < 400) {
+          resolve(true);
+          return;
+        }
+
+        if (Date.now() - startedAt > timeoutMs) {
+          reject(new Error(`HTTP endpoint did not become ready in time: ${url}`));
+          return;
+        }
+        setTimeout(tick, 200);
+      });
+      req.on('error', () => {
+        if (Date.now() - startedAt > timeoutMs) {
+          reject(new Error(`HTTP endpoint did not become ready in time: ${url}`));
+          return;
+        }
+        setTimeout(tick, 200);
+      });
+    };
+    tick();
+  });
+};
+
+const fetchText = (url) => new Promise((resolve, reject) => {
+  const req = http.get(url, (res) => {
+    let body = '';
+    res.setEncoding('utf8');
+    res.on('data', (chunk) => {
+      body += chunk;
+    });
+    res.on('end', () => {
+      if ((res.statusCode || 500) >= 200 && (res.statusCode || 500) < 400) {
+        resolve(body);
+        return;
+      }
+      reject(new Error(`Unexpected status ${res.statusCode} for ${url}`));
+    });
+  });
+  req.on('error', reject);
+});
+
+const warmDevRendererAssets = async () => {
+  const warmStartedAt = Date.now();
+  const viteBaseUrl = new URL(DEV_SERVER_URL);
+  const targets = [
+    '/',
+    '/src/main.tsx',
+    '/src/AppRoot.tsx',
+    '/src/App.tsx',
+    '/src/lib/i18n.ts',
+    '/src/presentation/components/LoginView.tsx',
+    '/src/index.css',
+  ];
+
+  await waitForHttpOk(DEV_SERVER_URL, 15000);
+
+  for (const target of targets) {
+    const targetUrl = new URL(target, viteBaseUrl).toString();
+    const startedAt = Date.now();
+    try {
+      await fetchText(targetUrl);
+      writeRuntimeLog('dev-warm-hit', {
+        target,
+        elapsedMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      writeRuntimeLog('dev-warm-hit-failed', {
+        target,
+        message: error?.message,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+  }
+
+  writeRuntimeLog('dev-warm-complete', {
+    elapsedMs: Date.now() - warmStartedAt,
+  });
+};
+
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const loadDevAppWithRetry = async (window, timeoutMs = 15000) => {
   const startedAt = Date.now();
+  let attempt = 0;
+
+  try {
+    await warmDevRendererAssets();
+  } catch (error) {
+    writeRuntimeLog('dev-warm-failed', {
+      message: error?.message,
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
 
   while (window && !window.isDestroyed()) {
     try {
+      attempt += 1;
+      writeRuntimeLog('dev-load-attempt', {
+        attempt,
+        url: DEV_SERVER_URL,
+        elapsedMs: Date.now() - startedAt,
+      });
       await window.loadURL(DEV_SERVER_URL);
       writeRuntimeLog('dev-server-loaded', { url: DEV_SERVER_URL });
 
@@ -168,6 +266,11 @@ const loadDevAppWithRetry = async (window, timeoutMs = 15000) => {
       }
       return;
     } catch (error) {
+      writeRuntimeLog('dev-load-attempt-failed', {
+        attempt,
+        message: error?.message,
+        elapsedMs: Date.now() - startedAt,
+      });
       if (Date.now() - startedAt > timeoutMs) {
         throw error;
       }
@@ -275,7 +378,37 @@ function createWindow() {
     icon: windowIcon,
     title: 'PharmaPro Management System',
     backgroundColor: '#f5f5f0',
-    show: false,
+    show: isDev,
+  });
+
+  writeRuntimeLog('window-created', {
+    isDev,
+    show: isDev,
+    startupStartedAt: appStartupStartedAt,
+  });
+
+  mainWindow.webContents.on('did-start-loading', () => {
+    writeRuntimeLog('did-start-loading', {
+      url: mainWindow?.webContents?.getURL?.() || null,
+    });
+  });
+
+  mainWindow.webContents.on('dom-ready', () => {
+    writeRuntimeLog('dom-ready', {
+      url: mainWindow?.webContents?.getURL?.() || null,
+    });
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    writeRuntimeLog('did-finish-load', {
+      url: mainWindow?.webContents?.getURL?.() || null,
+    });
+  });
+
+  mainWindow.webContents.on('did-stop-loading', () => {
+    writeRuntimeLog('did-stop-loading', {
+      url: mainWindow?.webContents?.getURL?.() || null,
+    });
   });
 
   mainWindow.once('ready-to-show', () => {
@@ -283,11 +416,19 @@ function createWindow() {
       return;
     }
 
+    writeRuntimeLog('window-ready-to-show', {
+      isDev,
+      url: mainWindow.webContents?.getURL?.() || null,
+    });
+
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+
     if (!mainWindow.isMaximized()) {
       mainWindow.maximize();
     }
 
-    mainWindow.show();
     mainWindow.focus();
   });
 
@@ -445,4 +586,8 @@ ipcMain.handle('desktop:get-auth-headers', () => {
   return {
     'x-pharmapro-desktop-auth': desktopAuthSecret,
   };
+});
+
+ipcMain.on('runtime:mark', (_event, payload) => {
+  writeRuntimeLog('runtime-mark', payload || {});
 });

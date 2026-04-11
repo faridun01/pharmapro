@@ -4,13 +4,15 @@ import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
-  loadEnv(mode, '.', '');
+  const env = loadEnv(mode, '.', '');
   const isProd = mode === 'production';
+  const devApiPort = Number(env.DEV_API_PORT || 3921);
   const warmupClientFiles = [
     './index.html',
     './src/main.tsx',
     './src/AppRoot.tsx',
     './src/App.tsx',
+    './src/presentation/components/LoginView.tsx',
     './src/index.css',
   ];
 
@@ -26,7 +28,16 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
+      host: '127.0.0.1',
+      port: 3000,
+      strictPort: true,
       hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/api': {
+          target: `http://127.0.0.1:${devApiPort}`,
+          changeOrigin: false,
+        },
+      },
       warmup: {
         clientFiles: warmupClientFiles,
       },
