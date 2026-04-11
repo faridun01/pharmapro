@@ -135,7 +135,11 @@ export class SalesService {
         include: {
           batches: {
             where: { quantity: { gt: 0 } },
-            orderBy: { expiryDate: 'asc' },
+            orderBy: [
+              { receivedAt: 'asc' },
+              { createdAt: 'asc' },
+              { expiryDate: 'asc' },
+            ],
           },
         },
       });
@@ -161,6 +165,7 @@ export class SalesService {
 
         let remainingToDeduct = quantity;
 
+        // FIFO: deduct from the oldest received batches first.
         for (const batch of validBatches) {
           if (remainingToDeduct <= 0) break;
 

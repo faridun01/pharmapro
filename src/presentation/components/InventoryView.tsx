@@ -358,6 +358,21 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
     return `${qty} ед.`;
   };
 
+  const getBatchHistoryStatusLabel = (status: string, expiryDate: string | Date) => {
+    const expiry = new Date(expiryDate);
+    const now = Date.now();
+    if (!Number.isNaN(expiry.getTime())) {
+      const daysLeft = Math.ceil((expiry.getTime() - now) / (1000 * 60 * 60 * 24));
+      if (daysLeft <= 0) return 'Просрочена';
+      if (daysLeft <= 30) return `Скоро истекает (${daysLeft} дн.)`;
+    }
+
+    if (status === 'CRITICAL') return 'Критичная';
+    if (status === 'NEAR_EXPIRY') return 'Скоро истекает';
+    if (status === 'EXPIRED') return 'Просрочена';
+    return 'Нормально';
+  };
+
   const openAdd = () => {
     setForm(DEFAULT_FORM);
     setFormError('');
@@ -759,17 +774,20 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                   По этому товару партий пока нет.
                 </div>
               )}
+              <div className="rounded-2xl bg-[#f5f5f0] px-4 py-3 text-sm text-[#5A5A40]">
+                Здесь оставлены только данные, по которым легко найти нужную партию: номер, остаток, срок и цена прихода.
+              </div>
               {[...(batchHistoryProduct.batches || [])]
-                .sort((left, right) => new Date(right.expiryDate).getTime() - new Date(left.expiryDate).getTime())
+                .sort((left, right) => new Date(left.expiryDate).getTime() - new Date(right.expiryDate).getTime())
                 .map((batch) => (
                   <div key={batch.id} className="rounded-3xl border border-[#5A5A40]/10 bg-[#fcfbf7] p-5 shadow-sm">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
                         <p className="text-sm font-bold text-[#5A5A40]">Партия {batch.batchNumber}</p>
-                        <p className="text-[11px] text-[#5A5A40]/55 mt-1">{batch.supplierName || 'Без поставщика'} • Остаток {Math.max(0, Number(batch.quantity || 0))} ед.</p>
+                        <p className="text-[11px] text-[#5A5A40]/55 mt-1">Остаток {Math.max(0, Number(batch.quantity || 0))} ед.</p>
                       </div>
                       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border bg-[#f5f5f0] text-[#5A5A40] border-[#5A5A40]/10">
-                        {batch.status.replace('_', ' ')}
+                        {getBatchHistoryStatusLabel(batch.status, batch.expiryDate)}
                       </div>
                     </div>
 
@@ -779,6 +797,10 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                         <p className="font-semibold text-[#5A5A40] mt-1">{new Date(batch.expiryDate).toLocaleDateString('ru-RU')}</p>
                       </div>
                       <div className="rounded-2xl border border-[#5A5A40]/10 bg-white px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Остаток</p>
+                        <p className="font-semibold text-[#5A5A40] mt-1">{Math.max(0, Number(batch.quantity || 0))} ед.</p>
+                      </div>
+                      <div className="rounded-2xl border border-[#5A5A40]/10 bg-white px-4 py-3">
                         <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Цена прихода</p>
                         <p className="font-semibold text-[#5A5A40] mt-1">{Number(batch.costBasis || 0).toFixed(2)} TJS</p>
                       </div>
@@ -786,45 +808,6 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                         <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Цена продажи</p>
                         <p className="font-semibold text-[#5A5A40] mt-1">{Number(batchHistoryProduct.sellingPrice ?? 0).toFixed(2)} TJS</p>
                       </div>
-                      <div className="rounded-2xl border border-[#5A5A40]/10 bg-white px-4 py-3">
-                        <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Движений</p>
-                        <p className="font-semibold text-[#5A5A40] mt-1">{batch.movements.length}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 space-y-2">
-                      {batch.movements.length === 0 && (
-                        <p className="text-sm text-[#5A5A40]/50">Движений по партии пока нет.</p>
-                      )}
-                      {[...batch.movements]
-                        .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
-                        .map((movement) => (
-                          <div key={movement.id} className="rounded-2xl border border-[#5A5A40]/10 bg-white px-4 py-3">
-                            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                              <div>
-                                <p className="text-sm font-semibold text-[#5A5A40]">{movement.type === 'RESTOCK' ? 'Приход' : movement.type}</p>
-                                <p className="text-[11px] text-[#5A5A40]/55 mt-1">{movement.description || 'Без описания'}</p>
-                              </div>
-                              <div className="text-right text-[11px] text-[#5A5A40]/60">
-                                <div className="inline-flex items-center gap-1 justify-end">
-                                  <Calendar size={12} />
-                                  {new Date(movement.date).toLocaleDateString('ru-RU')}
-                                </div>
-                                <div className="mt-1">{Math.max(0, Number(movement.quantity || 0))} ед.</div>
-                              </div>
-                            </div>
-                            {movement.type === 'RESTOCK' && (
-                              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 text-sm">
-                                <div className="rounded-xl bg-[#f5f5f0] px-3 py-2 text-[#5A5A40]">
-                                  Цена прихода: {Number(batch.costBasis || 0).toFixed(2)} TJS
-                                </div>
-                                <div className="rounded-xl bg-[#f5f5f0] px-3 py-2 text-[#5A5A40]">
-                                  Цена продажи: {Number(batchHistoryProduct.sellingPrice ?? 0).toFixed(2)} TJS
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
                     </div>
                   </div>
                 ))}

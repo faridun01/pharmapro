@@ -63,6 +63,9 @@ productsRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
     where: { isActive: true },
     include: {
       batches: {
+        where: {
+          quantity: { gt: 0 },
+        },
         include: {
           movements: {
             select: {
@@ -91,6 +94,9 @@ productsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     where: { id: req.params.id },
     include: {
       batches: {
+        where: {
+          quantity: { gt: 0 },
+        },
         include: {
           movements: {
             orderBy: { date: 'desc' },

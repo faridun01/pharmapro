@@ -50,3 +50,39 @@ writeoffRouter.post('/', authenticate, asyncHandler(async (req, res) => {
 
   res.status(201).json(writeOff);
 }));
+
+writeoffRouter.patch('/:id', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const { items, ...data } = req.body ?? {};
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new ValidationError('items array is required');
+  }
+
+  const reason = (data.reason || 'OTHER').toUpperCase() as WriteOffReasonStr;
+  if (!VALID_REASONS.includes(reason)) {
+    throw new ValidationError(`Invalid reason. Must be one of: ${VALID_REASONS.join(', ')}`);
+  }
+
+  const writeOff = await writeOffService.updateWriteOff(String(req.params.id), {
+    warehouseId: data.warehouseId || null,
+    reason,
+    note: data.note || null,
+    items: items.map((item: any) => ({
+      productId: item.productId,
+      batchId: item.batchId || null,
+      quantity: Number(item.quantity),
+    })),
+    userId: authedReq.user.id,
+    userRole: authedReq.user.role,
+  });
+
+  res.json(writeOff);
+}));
+
+writeoffRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+
+  await writeOffService.deleteWriteOff(String(req.params.id), authedReq.user.id, authedReq.user.role);
+  res.json({ ok: true });
+}));
