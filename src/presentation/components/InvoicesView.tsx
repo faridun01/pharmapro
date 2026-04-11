@@ -314,6 +314,17 @@ export const InvoicesView: React.FC<{
     });
   }, [filteredInvoices, getInvoiceOutstandingAmount, isDebtorsView, isOverdueInvoice, sortBy, sortOrder]);
 
+  useEffect(() => {
+    if (!detailsDebtor) {
+      return;
+    }
+
+    const nextDebtor = debtorGroups.find((debtor) => debtor.key === detailsDebtor.key) || null;
+    if (nextDebtor !== detailsDebtor) {
+      setDetailsDebtor(nextDebtor);
+    }
+  }, [debtorGroups, detailsDebtor]);
+
   const invoicesSummary = useMemo(() => {
     const totalRevenue = filteredInvoices.reduce((acc, inv) => acc + inv.totalAmount, 0);
     const totalCount = isDebtorsView ? debtorGroups.length : filteredInvoices.length;
