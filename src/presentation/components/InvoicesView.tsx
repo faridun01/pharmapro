@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
 import { downloadExcelFriendlyCsv } from '../../lib/excelCsv';
+import { formatProductDisplayName } from '../../lib/productDisplay';
 import { runRefreshTasks } from '../../lib/utils';
 import { useCurrencyCode } from '../../lib/useCurrencyCode';
 import { 
@@ -24,6 +25,7 @@ import {
 
 type EditableInvoiceItem = {
   id: string;
+  productId?: string;
   productName: string;
   quantity: number;
   unitPrice: number;
@@ -31,6 +33,7 @@ type EditableInvoiceItem = {
 
 type ReturnInvoiceItem = {
   id: string;
+  productId?: string;
   productName: string;
   batchNo: string;
   soldQuantity: number;
@@ -69,7 +72,7 @@ export const InvoicesView: React.FC<{
   onInitialDetailsInvoiceHandled?: () => void;
 }> = ({ viewMode = 'history', initialSearchTerm = '', initialPaymentInvoiceId = '', initialDetailsInvoiceId = '', onInitialPaymentInvoiceHandled, onInitialDetailsInvoiceHandled }) => {
   const { t } = useTranslation();
-  const { invoices, isLoading, refreshInvoices, refreshProducts } = usePharmacy();
+  const { invoices, products, isLoading, refreshInvoices, refreshProducts } = usePharmacy();
   const isDebtorsView = viewMode === 'debtors';
   const todayIso = new Date().toISOString().slice(0, 10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -199,6 +202,19 @@ export const InvoicesView: React.FC<{
   }, [isDebtorInvoice]);
 
   const moneyLabel = useCallback((label: string) => `${label} (${currencyCode})`, [currencyCode]);
+
+  const getProductDisplayLabel = useCallback((productId?: string, fallbackName?: string) => {
+    const baseName = String(fallbackName || '-').trim() || '-';
+    if (!productId) {
+      return baseName;
+    }
+
+    const product = products.find((entry) => entry.id === productId);
+    return formatProductDisplayName({
+      name: baseName,
+      countryOfOrigin: product?.countryOfOrigin,
+    }, { includeCountry: true });
+  }, [products]);
 
   const filteredInvoices = useMemo(() => {
     const filtered = invoices.filter((inv) => 
@@ -397,6 +413,7 @@ export const InvoicesView: React.FC<{
         const remainingQuantity = Math.max(0, Number(item.quantity || 0) - Number(returnedByItemKey.get(`${item.productId}:${item.batchId || ''}`) || 0));
         return {
           id: item.id,
+          productId: item.productId,
           productName: item.productName || '-',
           batchNo: item.batchNo || '—',
           soldQuantity: remainingQuantity,
@@ -497,6 +514,7 @@ export const InvoicesView: React.FC<{
   const editInvoice = async (invoice: any) => {
     const items: EditableInvoiceItem[] = (invoice.items || []).map((item: any) => ({
       id: item.id,
+      productId: item.productId,
       productName: item.productName || '-',
       quantity: Number(item.quantity || 0),
       unitPrice: Number(item.unitPrice || 0),
@@ -649,7 +667,7 @@ export const InvoicesView: React.FC<{
               <tbody>
                 ${displayItems.map((item: any, index: number) => `<tr>
                   <td class="num">${index + 1}</td>
-                  <td>${item.productName || '-'}</td>
+                  <td>${getProductDisplayLabel(item.productId, item.productName)}</td>
                   <td class="right">${formatQuantityLabel(item)}</td>
                   <td class="right">${Number(item.unitPrice || 0).toFixed(2)}</td>
                   <td class="right">${Number(item.totalPrice || 0).toFixed(2)}</td>
@@ -1332,7 +1350,7 @@ export const InvoicesView: React.FC<{
                     {buildInvoiceDisplayItems(detailsInvoice.items || []).map((item: any, idx: number) => (
                       <tr key={item.id || idx} className="border-t border-[#5A5A40]/10">
                         <td className="px-3 py-2">{idx + 1}</td>
-                        <td className="px-3 py-2">{item.productName || '-'}</td>
+                        <td className="px-3 py-2">{getProductDisplayLabel(item.productId, item.productName)}</td>
                         <td className="px-3 py-2 text-right">{formatPackQuantity(Number(item.quantity || 0))}</td>
                         <td className="px-3 py-2 text-right">{Number(item.unitPrice || 0).toFixed(2)}</td>
                         <td className="px-3 py-2 text-right">{Number(item.totalPrice || 0).toFixed(2)}</td>
@@ -1384,7 +1402,7 @@ export const InvoicesView: React.FC<{
                       <div key={item.id} className="p-4 space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-[#5A5A40]">{item.productName}</p>
+                            <p className="text-sm font-semibold text-[#5A5A40]">{getProductDisplayLabel(item.productId, item.productName)}</p>
                             <p className="text-[11px] text-[#5A5A40]/55 mt-1">Продажа в единицах</p>
                           </div>
                           <p className="text-sm font-bold text-[#5A5A40]">{(item.quantity * item.unitPrice).toFixed(2)} {currencyCode}</p>
@@ -1479,7 +1497,7 @@ export const InvoicesView: React.FC<{
                     <div key={item.id} className="rounded-2xl border border-[#5A5A40]/10 p-4 space-y-3 bg-[#f5f5f0]/35">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-[#5A5A40]">{item.productName}</p>
+                          <p className="text-sm font-semibold text-[#5A5A40]">{getProductDisplayLabel(item.productId, item.productName)}</p>
                           <p className="text-[11px] text-[#5A5A40]/55 mt-1">Партия: {item.batchNo} • Продано: {formatPackQuantity(item.soldQuantity)}</p>
                         </div>
                         <p className="text-[11px] font-semibold text-[#5A5A40]/60">Макс: {formatPackQuantity(item.soldQuantity)}</p>

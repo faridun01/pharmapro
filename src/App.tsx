@@ -26,7 +26,6 @@ import { usePharmacy } from './presentation/context';
 import { useTranslation } from 'react-i18next';
 import { getShiftClosedEventName, loadLatestClosedShiftNotice } from './lib/shiftCloseNotice';
 import { lazyNamedImport } from './lib/lazyLoadComponents';
-import { BootSplash } from './presentation/components/BootSplash';
 import { LoginView } from './presentation/components/LoginView';
 import { buildApiHeaders } from './infrastructure/api';
 
@@ -179,11 +178,6 @@ const AppLoader: React.FC<{
 const App: React.FC = () => {
   const { t } = useTranslation();
   const { user, logout, isLoading, error } = usePharmacy();
-  const [bootStartedAt] = useState(() => (window as Window & {
-    pharmaproDesktop?: { startupStartedAt?: number | null };
-  }).pharmaproDesktop?.startupStartedAt || Date.now());
-  const [hasShownStartupIntro, setHasShownStartupIntro] = useState(false);
-  const [isStartupFadingOut, setIsStartupFadingOut] = useState(false);
   const desktopControls = (window as Window & {
     pharmaproDesktop?: {
       startupStartedAt?: number | null;
@@ -223,30 +217,10 @@ const App: React.FC = () => {
       return;
     }
 
-    if (!hasShownStartupIntro) {
-      prebootSplash.classList.remove('preboot-splash--hidden');
-      return;
-    }
-
     prebootSplash.classList.add('preboot-splash--hidden');
     const timer = window.setTimeout(() => prebootSplash.remove(), 260);
     return () => window.clearTimeout(timer);
-  }, [hasShownStartupIntro]);
-
-  React.useEffect(() => {
-    if (hasShownStartupIntro) {
-      return;
-    }
-
-    const remainingMs = Math.max(0, 5000 - (Date.now() - bootStartedAt));
-    const fadeTimer = window.setTimeout(() => setIsStartupFadingOut(true), Math.max(0, remainingMs - 320));
-    const completeTimer = window.setTimeout(() => setHasShownStartupIntro(true), remainingMs);
-
-    return () => {
-      window.clearTimeout(fadeTimer);
-      window.clearTimeout(completeTimer);
-    };
-  }, [bootStartedAt, hasShownStartupIntro]);
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -448,23 +422,6 @@ const App: React.FC = () => {
       default: return <DashboardView onOpenInvoicePayment={openInvoicePaymentFlow} />;
     }
   };
-
-  if (!hasShownStartupIntro) {
-    return (
-      <div className="h-screen bg-[#f5f5f0] overflow-hidden">
-        <div className={isStartupFadingOut ? 'pharma-startup-fade-out' : 'pharma-startup-fade-in'}>
-          <BootSplash
-            subtitle={user
-              ? 'Подключаем данные и восстанавливаем рабочее пространство'
-              : 'Готовим рабочее пространство и открываем вход в систему'}
-            note="Решение ITFORCE"
-            showProgress
-            durationMs={5000}
-          />
-        </div>
-      </div>
-    );
-  }
 
   if (!user) {
     return (

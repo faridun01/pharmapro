@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { lazyNamedImport } from '../../lib/lazyLoadComponents';
 import { buildApiHeaders } from '../../infrastructure/api';
+import { formatProductDisplayName } from '../../lib/productDisplay';
 import { 
   TrendingUp, 
   Package, 
@@ -58,6 +59,17 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
   const [serverMetrics, setServerMetrics] = useState<DashboardMetricsResponse | null>(null);
 
   const formatMoney = (value: number) => `${Number(value || 0).toFixed(2)} TJS`;
+  const getProductDisplayLabel = (productId: string | undefined, fallbackName: string) => {
+    const product = products.find((entry) => entry.id === productId);
+    return formatProductDisplayName({
+      name: fallbackName,
+      manufacturer: product?.manufacturer,
+      countryOfOrigin: product?.countryOfOrigin,
+    }, {
+      includeManufacturer: true,
+      includeCountry: true,
+    });
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => setShowChart(true), 0);
@@ -164,6 +176,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
     p.batches.flatMap((b) =>
       b.movements.map((m) => ({
         id: `mov-${m.id}`,
+        productId: p.id,
         type:
           m.type === 'RESTOCK'
             ? ('restock' as const)
@@ -172,10 +185,10 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
             : ('adjustment' as const),
         title:
           m.type === 'RESTOCK'
-            ? `${t('Restock')} ${p.name}`
+            ? `${t('Restock')} ${getProductDisplayLabel(p.id, p.name)}`
             : m.type === 'WRITE_OFF'
-            ? `${t('Write-off')} ${p.name}`
-            : `${t('Stock adjustment')} ${p.name}`,
+            ? `${t('Write-off')} ${getProductDisplayLabel(p.id, p.name)}`
+            : `${t('Stock adjustment')} ${getProductDisplayLabel(p.id, p.name)}`,
         time: toRelativeTime(m.date),
         amount: Number(m.quantity || 0),
         date: new Date(m.date as any),
@@ -597,7 +610,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">{index + 1}</div>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-[#5A5A40] truncate">{product.name}</p>
+                    <p className="text-sm font-bold text-[#5A5A40] truncate">{getProductDisplayLabel(product.productId, product.name)}</p>
                     <p className="text-xs text-[#5A5A40]/60">Минимум: {product.minStock || 10}</p>
                   </div>
                 </div>
@@ -618,7 +631,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${item.severityRank === 0 ? 'bg-red-100 text-red-700' : item.severityRank === 1 ? 'bg-orange-100 text-orange-700' : 'bg-amber-100 text-amber-700'}`}>{index + 1}</div>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-[#5A5A40] truncate">{item.name}</p>
+                    <p className="text-sm font-bold text-[#5A5A40] truncate">{getProductDisplayLabel(undefined, item.name)}</p>
                     <p className="text-xs text-[#5A5A40]/60">Партия {item.batchNumber} • {item.severityLabel}</p>
                   </div>
                 </div>

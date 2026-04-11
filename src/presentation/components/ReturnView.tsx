@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { buildApiHeaders } from '../../infrastructure/api';
+import { formatProductDisplayName } from '../../lib/productDisplay';
 import { useCurrencyCode } from '../../lib/useCurrencyCode';
 import { runRefreshTasks } from '../../lib/utils';
 import { Plus, CheckCircle2, XCircle, Clock, RefreshCw, ChevronDown, ChevronUp, Package, Printer } from 'lucide-react';
@@ -75,6 +76,15 @@ function CreateReturnModal({
   const { t } = useTranslation();
   const { products, suppliers, refreshProducts, refreshSuppliers } = usePharmacy();
   const currencyCode = useCurrencyCode();
+  const getProductDisplayLabel = useCallback((productId?: string, fallbackName?: string) => {
+    const baseName = String(fallbackName || '').trim() || '-';
+    if (!productId) return baseName;
+    const product = products.find((entry) => entry.id === productId);
+    return formatProductDisplayName({
+      name: baseName,
+      countryOfOrigin: product?.countryOfOrigin,
+    }, { includeCountry: true });
+  }, [products]);
   const [type, setType] = useState<'CUSTOMER' | 'SUPPLIER'>('CUSTOMER');
   const [customerName, setCustomerName] = useState('');
   const [supplierId, setSupplierId] = useState('');
@@ -317,7 +327,7 @@ function CreateReturnModal({
                       >
                         <option value="">{t('Select product')}</option>
                         {products.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                          <option key={p.id} value={p.id}>{getProductDisplayLabel(p.id, p.name)}</option>
                         ))}
                       </select>
                     </div>
@@ -403,7 +413,7 @@ function CreateReturnModal({
 export const ReturnView: React.FC = () => {
   const { t } = useTranslation();
   const currencyCode = useCurrencyCode();
-  const { refreshProducts } = usePharmacy();
+  const { products, refreshProducts } = usePharmacy();
   const [returns, setReturns] = useState<Return[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -457,6 +467,15 @@ export const ReturnView: React.FC = () => {
   const overallAmount = useMemo(() => filteredReturns.reduce((sum, ret) => sum + getReturnTotal(ret), 0), [filteredReturns]);
   const overallQuantity = useMemo(() => filteredReturns.reduce((sum, ret) => sum + ret.items.reduce((itemsSum, item) => itemsSum + Number(item.quantity || 0), 0), 0), [filteredReturns]);
   const moneyLabel = useCallback((label: string) => `${label} (${currencyCode})`, [currencyCode]);
+  const getProductDisplayLabel = useCallback((productId?: string, fallbackName?: string) => {
+    const baseName = String(fallbackName || '-').trim() || '-';
+    if (!productId) return baseName;
+    const product = products.find((entry) => entry.id === productId);
+    return formatProductDisplayName({
+      name: baseName,
+      countryOfOrigin: product?.countryOfOrigin,
+    }, { includeCountry: true });
+  }, [products]);
 
   const printReturn = (ret: Return) => {
     const html = `<!doctype html>
@@ -491,7 +510,7 @@ export const ReturnView: React.FC = () => {
     <tbody>
       ${ret.items.map((item) => `
         <tr>
-          <td>${item.product?.name ?? '-'}</td>
+          <td>${getProductDisplayLabel(item.productId, item.product?.name ?? '-')}</td>
           <td>${item.batch?.batchNumber ?? '—'}</td>
           <td class="right">${formatPackQuantity(item.quantity)}</td>
           <td class="right">${Number(item.unitPrice || 0).toFixed(2)}</td>
@@ -701,7 +720,7 @@ export const ReturnView: React.FC = () => {
                     <tbody>
                       {ret.items.map((item) => (
                         <tr key={item.id} className="border-t border-[#5A5A40]/5">
-                          <td className="py-2 font-medium">{item.product?.name ?? t('Unknown')}</td>
+                          <td className="py-2 font-medium">{getProductDisplayLabel(item.productId, item.product?.name ?? t('Unknown'))}</td>
                           <td className="py-2 text-[#5A5A40]/60">{item.batch?.batchNumber ?? '—'}</td>
                           <td className="py-2 text-right">{formatPackQuantity(item.quantity)}</td>
                           <td className="py-2 text-right">{item.unitPrice ? item.unitPrice.toFixed(2) : '—'}</td>

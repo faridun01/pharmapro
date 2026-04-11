@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { buildApiHeaders } from '../../infrastructure/api';
+import { formatProductDisplayName } from '../../lib/productDisplay';
 import { saveLatestClosedShiftNotice } from '../../lib/shiftCloseNotice';
 import { CloseShiftModal, OpenShiftModal } from './ShiftView';
 import { 
@@ -76,6 +77,13 @@ export const POSView: React.FC = () => {
       String(p.countryOfOrigin || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
+
+  const getProductDisplayLabel = useCallback((product: Pick<Product, 'name' | 'manufacturer' | 'countryOfOrigin'>) => {
+    return formatProductDisplayName(product, {
+      includeManufacturer: true,
+      includeCountry: true,
+    });
+  }, []);
 
   const formatUnitQuantity = (quantity: number) => {
     const safeQuantity = Math.max(0, Math.floor(Number(quantity) || 0));
@@ -437,6 +445,7 @@ export const POSView: React.FC = () => {
               (() => {
                 const stockLabel = formatUnitQuantity(product.totalStock);
                 const lowStock = product.totalStock < (product.minStock || 10);
+                const metaBadges = [product.manufacturer, product.countryOfOrigin].filter(Boolean);
 
                 return (
               <button
@@ -455,6 +464,20 @@ export const POSView: React.FC = () => {
                         <h3 className="text-[15px] font-bold text-[#5A5A40] truncate">{product.name}</h3>
                       </div>
                       <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-widest mt-0.5">{product.sku}</p>
+                      {metaBadges.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {product.manufacturer && (
+                            <span className="inline-flex rounded-full bg-[#eef2e6] px-2 py-0.5 text-[10px] font-semibold text-[#5A5A40]">
+                              {product.manufacturer}
+                            </span>
+                          )}
+                          {product.countryOfOrigin && (
+                            <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                              {product.countryOfOrigin}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <p className={`text-[10px] font-bold mt-1.5 px-2 py-1 rounded-lg w-fit ${lowStock ? 'bg-amber-100 text-amber-700' : 'bg-[#f5f5f0] text-[#5A5A40]/60'}`}>
                         Остаток: {stockLabel}
                       </p>
@@ -487,12 +510,27 @@ export const POSView: React.FC = () => {
           {cart.length > 0 ? (
             cart.map((item) => {
               const cartItemKey = getCartItemKey(item);
+              const metaBadges = [item.manufacturer, item.countryOfOrigin].filter(Boolean);
 
               return (
               <div key={cartItemKey} className="p-2 bg-[#f5f5f0]/50 rounded-xl border border-[#5A5A40]/5 group space-y-1.5">
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <h4 className="text-[12px] font-bold text-[#5A5A40] truncate leading-tight">{item.name}</h4>
+                    {metaBadges.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {item.manufacturer && (
+                          <span className="inline-flex rounded-full bg-[#eef2e6] px-2 py-0.5 text-[9px] font-semibold text-[#5A5A40]">
+                            {item.manufacturer}
+                          </span>
+                        )}
+                        {item.countryOfOrigin && (
+                          <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-semibold text-sky-700">
+                            {item.countryOfOrigin}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <p className="text-[10px] text-[#5A5A40]/55 mt-0.5 leading-tight">
                       {item.sellingPrice.toFixed(2)} TJS / ед. • Остаток: {formatUnitQuantity(item.totalStock)}
                     </p>
