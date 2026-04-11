@@ -198,6 +198,7 @@ productsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     sku: normalizeSku(body.sku) || undefined,
     category: body.category != null ? String(body.category) : undefined,
     manufacturer: body.manufacturer != null ? String(body.manufacturer) : undefined,
+    countryOfOrigin: body.countryOfOrigin != null ? String(body.countryOfOrigin).trim() || undefined : undefined,
     barcode: body.barcode != null ? String(body.barcode) : undefined,
     minStock: body.minStock != null ? Number(body.minStock) : undefined,
     costPrice: body.costPrice != null ? Number(body.costPrice) : 0,
@@ -208,7 +209,7 @@ productsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     analogs: Array.isArray(body.analogs) ? JSON.stringify(body.analogs) : body.analogs != null ? String(body.analogs) : undefined,
   };
 
-  const existingProduct = await findExistingProductByName(productData.name);
+  const existingProduct = await findExistingProductByName(productData.name, productData.countryOfOrigin);
   if (existingProduct) {
     res.json(existingProduct);
     return;
@@ -347,6 +348,7 @@ productsRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
     sku: body.sku,
     category: body.category,
     manufacturer: body.manufacturer,
+    countryOfOrigin: body.countryOfOrigin !== undefined ? (String(body.countryOfOrigin).trim() || null) : undefined,
     barcode: body.barcode,
     minStock: body.minStock !== undefined ? Number(body.minStock) : undefined,
     costPrice: body.costPrice !== undefined ? Number(body.costPrice) : undefined,

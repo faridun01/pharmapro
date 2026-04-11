@@ -24,6 +24,7 @@ export interface Product {
   sku: string;
   category: string;
   manufacturer: string;
+  countryOfOrigin?: string;
   totalStock: number;
   costPrice: number;
   sellingPrice: number;

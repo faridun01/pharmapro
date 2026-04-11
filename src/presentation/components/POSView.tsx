@@ -72,7 +72,8 @@ export const POSView: React.FC = () => {
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(p.barcode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(p.manufacturer || '').toLowerCase().includes(searchTerm.toLowerCase())
+      String(p.manufacturer || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(p.countryOfOrigin || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
 

@@ -191,6 +191,7 @@ model Product {
   categoryId        String?
   productCategory   ProductCategory?    @relation(fields: [categoryId], references: [id])
   manufacturer      String
+  countryOfOrigin   String?
   manufacturerId    String?
   manufacturerRef   Manufacturer?       @relation(fields: [manufacturerId], references: [id])
   dosage            String?

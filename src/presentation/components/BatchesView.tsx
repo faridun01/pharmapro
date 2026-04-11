@@ -15,12 +15,13 @@ import { Batch, BatchStatus } from '../../core/domain';
 type BatchSortMode = 'name' | 'quantity_desc' | 'quantity_asc';
 type VisibleBatchStatus = Extract<BatchStatus, 'NEAR_EXPIRY' | 'CRITICAL' | 'EXPIRED'>;
 
-type BatchWithProductName = Batch & { productName: string; productId: string; minStock?: number; manufacturer?: string };
+type BatchWithProductName = Batch & { productName: string; productId: string; minStock?: number; manufacturer?: string; countryOfOrigin?: string };
 type BatchGroup = {
   key: string;
   productName: string;
   productId: string;
   manufacturer: string;
+  countryOfOrigin: string;
   minStock: number;
   batches: BatchWithProductName[];
   primaryBatch: BatchWithProductName | null;
@@ -76,6 +77,7 @@ export const BatchesView: React.FC<{
         productId: p.id,
         minStock: Number(p.minStock || 0),
         manufacturer: String(p.manufacturer || '').trim(),
+        countryOfOrigin: String(p.countryOfOrigin || '').trim(),
       }))),
     [products],
   );
@@ -92,7 +94,8 @@ export const BatchesView: React.FC<{
   const filteredBatches = useMemo(() => allBatches.filter((b) => {
     const matchesSearch = b.productName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
       (b.supplierName || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-      (b.manufacturer || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+      (b.manufacturer || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      (b.countryOfOrigin || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
     const matchesStatus = b.status === statusFilter;
     return matchesSearch && matchesStatus;
   }), [allBatches, debouncedSearchTerm, statusFilter]);
@@ -151,7 +154,7 @@ export const BatchesView: React.FC<{
     const groups = new Map<string, BatchWithProductName[]>();
 
     for (const batch of filteredBatches) {
-      const key = `${normalizeName(batch.productName)}::${normalizeName(batch.manufacturer || '')}`;
+      const key = `${normalizeName(batch.productName)}::${normalizeName(batch.manufacturer || '')}::${normalizeName(batch.countryOfOrigin || '')}`;
       const group = groups.get(key) || [];
       group.push(batch);
       groups.set(key, group);
@@ -168,6 +171,7 @@ export const BatchesView: React.FC<{
         productName: firstBatch?.productName || '',
         productId: firstBatch?.productId || '',
         manufacturer: firstBatch?.manufacturer || '',
+        countryOfOrigin: firstBatch?.countryOfOrigin || '',
         minStock: Number(firstBatch?.minStock || 0),
         batches: orderedBatches,
         primaryBatch: firstBatch || null,
@@ -396,6 +400,9 @@ export const BatchesView: React.FC<{
                           <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">
                             {group.manufacturer ? `Производитель: ${group.manufacturer}` : 'Производитель не указан'}
                           </p>
+                          {group.countryOfOrigin && (
+                            <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">Страна: {group.countryOfOrigin}</p>
+                          )}
                           <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">
                             {group.suppliers.length > 0 ? `${t('Supplier')}: ${group.suppliers.join(', ')}` : 'Без поставщика'}
                           </p>

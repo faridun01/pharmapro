@@ -15,6 +15,7 @@ type NewProductForm = {
   barcode: string;
   category: string;
   manufacturer: string;
+  countryOfOrigin: string;
   minStock: number;
   costPrice: number;
   sellingPrice: number;
@@ -31,6 +32,7 @@ const DEFAULT_FORM: NewProductForm = {
   barcode: '',
   category: '',
   manufacturer: '',
+  countryOfOrigin: '',
   minStock: 10,
   costPrice: 0,
   sellingPrice: 0,
@@ -66,6 +68,11 @@ const InventoryRow = React.memo(function InventoryRow({ index, product, stockLab
         <div>
           <p className="text-sm font-bold leading-tight text-[#5A5A40]">{product.name}</p>
           <p className="mt-0.5 text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{product.sku}</p>
+          {(product.manufacturer || product.countryOfOrigin) && (
+            <p className="mt-1 text-[10px] text-[#5A5A40]/45">
+              {[product.manufacturer, product.countryOfOrigin].filter(Boolean).join(' • ')}
+            </p>
+          )}
           <p className="mt-1 text-[10px] text-[#5A5A40]/45">
             {batches.length > 0
               ? `Партий: ${batches.length}${primaryBatch ? ` • Ближайший срок: ${new Date(primaryBatch.expiryDate).toLocaleDateString('ru-RU')}` : ''}`
@@ -267,7 +274,11 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
   };
 
   const filteredProducts = useMemo(() => products.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || p.sku.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+    const searchValue = debouncedSearchTerm.toLowerCase();
+    const matchesSearch = p.name.toLowerCase().includes(searchValue)
+      || p.sku.toLowerCase().includes(searchValue)
+      || String(p.manufacturer || '').toLowerCase().includes(searchValue)
+      || String(p.countryOfOrigin || '').toLowerCase().includes(searchValue);
     const matchesFilter =
       filter === 'all' ||
       (filter === 'low' && p.totalStock < (p.minStock || 10)) ||
@@ -476,6 +487,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
         barcode: form.barcode.trim() || undefined,
         category: form.category.trim() || 'Uncategorized',
         manufacturer: form.manufacturer.trim() || 'Unknown',
+        countryOfOrigin: form.countryOfOrigin.trim() || undefined,
         costPrice: Number(form.costPrice),
         sellingPrice: Number(form.sellingPrice),
         image: '',
@@ -757,6 +769,9 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
               <div>
                 <h3 className="text-xl font-bold text-[#5A5A40]">История партий</h3>
                 <p className="text-sm text-[#5A5A40]/60 mt-1">{batchHistoryProduct.name} • {batchHistoryProduct.sku}</p>
+                {batchHistoryProduct.countryOfOrigin && (
+                  <p className="text-xs text-[#5A5A40]/50 mt-1">Страна производства: {batchHistoryProduct.countryOfOrigin}</p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -995,6 +1010,18 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                       value={form.manufacturer}
                       onChange={(e) => setForm((s) => ({ ...s, manufacturer: e.target.value }))}
                     />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">Страна производства</label>
+                    <input 
+                      type="text"
+                      className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm focus:ring-2 focus:ring-[#5A5A40]/20 outline-none" 
+                      value={form.countryOfOrigin}
+                      onChange={(e) => setForm((s) => ({ ...s, countryOfOrigin: e.target.value }))}
+                      placeholder="Необязательно"
+                    />
+                    <p className="text-[11px] text-[#5A5A40]/55">Заполняйте только для тех товаров, где страна важна для различения одинакового названия.</p>
                   </div>
 
                   {/* Min Stock */}

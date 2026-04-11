@@ -38,6 +38,7 @@ export interface Product {
   barcode?: string;
   category: string;
   manufacturer: string;
+  countryOfOrigin?: string;
   totalStock: number;
   minStock: number;
   costPrice: number;
