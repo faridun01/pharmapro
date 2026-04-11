@@ -10,6 +10,23 @@ export const productsRouter = Router();
 
 const normalizeSku = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
+const normalizeNullableText = (value: unknown) => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized || normalized.toLowerCase() === 'null' || normalized.toLowerCase() === 'undefined') {
+    return null;
+  }
+
+  return normalized;
+};
+
 const buildGeneratedSku = (name: string) => {
   const base = String(name || '')
     .toUpperCase()
@@ -348,7 +365,7 @@ productsRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
     sku: body.sku,
     category: body.category,
     manufacturer: body.manufacturer,
-    countryOfOrigin: body.countryOfOrigin !== undefined ? (String(body.countryOfOrigin).trim() || null) : undefined,
+    countryOfOrigin: normalizeNullableText(body.countryOfOrigin),
     barcode: body.barcode,
     minStock: body.minStock !== undefined ? Number(body.minStock) : undefined,
     costPrice: body.costPrice !== undefined ? Number(body.costPrice) : undefined,
