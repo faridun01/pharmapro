@@ -901,15 +901,17 @@ export const InvoicesView: React.FC<{
   }, [getInvoiceOutstandingAmount, paymentModal.invoice]);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-4 animate-in fade-in duration-500">
       <div className="overflow-hidden rounded-3xl border border-[#5A5A40]/5 bg-white shadow-sm">
-        <div className="grid gap-5 border-b border-[#5A5A40]/8 px-5 py-5 md:px-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] xl:items-start">
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <h2 className="text-2xl font-black tracking-tight text-[#423d2f] md:text-[30px]">
-                {isDebtorsView ? 'Должники' : 'История продаж'}
-              </h2>
-            </div>
+        <div className={`grid gap-4 border-b border-[#5A5A40]/8 px-5 py-4 md:px-6 ${isDebtorsView ? 'xl:grid-cols-1' : 'xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] xl:items-start'}`}>
+          <div className="space-y-3">
+            {!isDebtorsView && (
+              <div className="space-y-1">
+                <h2 className="text-2xl font-black tracking-tight text-[#423d2f] md:text-[30px]">
+                  История продаж
+                </h2>
+              </div>
+            )}
 
             {!isDebtorsView && (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -948,19 +950,19 @@ export const InvoicesView: React.FC<{
             )}
           </div>
 
-          <div className="grid gap-3 rounded-[28px] border border-[#5A5A40]/8 bg-[#fcfbf8] p-4">
-            <div className="rounded-[22px] border border-[#5A5A40]/8 bg-white p-4">
+          <div className={`grid gap-3 rounded-[28px] border border-[#5A5A40]/8 bg-[#fcfbf8] ${isDebtorsView ? 'hidden' : 'p-4'}`}>
+            <div className={`rounded-[22px] border border-[#5A5A40]/8 bg-white ${isDebtorsView ? 'px-4 py-3' : 'p-4'}`}>
               <p className="mt-2 text-2xl font-black text-[#423d2f]">{activeRangeMeta.label}</p>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-[22px] border border-[#5A5A40]/8 bg-white px-4 py-4">
+            <div className={`grid gap-3 ${isDebtorsView ? 'md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]' : 'md:grid-cols-2'}`}>
+              <div className={`rounded-[22px] border border-[#5A5A40]/8 bg-white px-4 ${isDebtorsView ? 'py-3' : 'py-4'}`}>
                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#5A5A40]/45">{isDebtorsView ? 'В фокусе' : 'Продаж в выборке'}</p>
-                <p className="mt-2 text-2xl font-black text-[#423d2f]">{invoicesSummary.totalCount}</p>
+                <p className="mt-1.5 text-2xl font-black text-[#423d2f]">{isDebtorsView ? invoicesSummary.totalDebtInvoices : invoicesSummary.totalCount}</p>
               </div>
-              <div className="rounded-[22px] border border-[#5A5A40]/8 bg-white px-4 py-4">
+              <div className={`rounded-[22px] border border-[#5A5A40]/8 bg-white px-4 ${isDebtorsView ? 'py-3' : 'py-4'}`}>
                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#5A5A40]/45">{isDebtorsView ? 'Последняя активность' : 'Последняя продажа'}</p>
-                <p className="mt-2 text-lg font-black text-[#423d2f]">
+                <p className="mt-1.5 text-lg font-black text-[#423d2f]">
                   {latestVisibleInvoice
                     ? (isDebtorsView
                       ? (latestVisibleInvoice as Date).toLocaleDateString('ru-RU')
@@ -976,18 +978,10 @@ export const InvoicesView: React.FC<{
                 </p>
               </div>
             </div>
-
-            <button
-              onClick={exportInvoicesReport}
-              className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-[#5A5A40]/10 bg-[#5A5A40] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(90,90,64,0.22)] transition-all hover:-translate-y-px hover:bg-[#4b4b36]"
-            >
-              <Download size={18} />
-              {t('Export Report')}
-            </button>
           </div>
         </div>
 
-        <div className="px-5 py-5 md:px-6">
+        <div className="px-5 py-4 md:px-6">
           {!isDebtorsView && dateFilterMode === 'custom' && (
             <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[22px] border border-[#5A5A40]/10 bg-white/80 px-3 py-3 shadow-sm">
               <input
@@ -1013,7 +1007,7 @@ export const InvoicesView: React.FC<{
             </div>
           )}
 
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative group w-full xl:max-w-85">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
             <input 
@@ -1064,7 +1058,7 @@ export const InvoicesView: React.FC<{
       </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {[
           ...(isDebtorsView
             ? [
@@ -1080,13 +1074,13 @@ export const InvoicesView: React.FC<{
                 { label: 'Остаток по продажам', value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
               ])
         ].map((stat, i) => (
-          <div key={i} className="bg-white p-5 rounded-[28px] shadow-sm border border-[#5A5A40]/5 flex items-center gap-4 hover:-translate-y-0.5 hover:shadow-md transition-all">
+          <div key={i} className="bg-white p-4 rounded-3xl shadow-sm border border-[#5A5A40]/5 flex items-center gap-3.5 hover:-translate-y-0.5 hover:shadow-md transition-all">
             <div className={`w-12 h-12 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
               <stat.icon size={24} />
             </div>
             <div>
               <p className="text-xs font-bold text-[#5A5A40]/40 uppercase tracking-widest">{stat.label}</p>
-              <p className="text-2xl font-bold text-[#5A5A40] mt-0.5">{stat.value}</p>
+              <p className="mt-0.5 text-xl font-bold text-[#5A5A40]">{stat.value}</p>
             </div>
           </div>
         ))}

@@ -512,7 +512,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar relative">
+        <div className={`flex-1 p-6 custom-scrollbar relative ${currentView === 'pos' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <div key={currentView} className="pharma-view-enter">
             <ViewErrorBoundary onReset={() => setCurrentView('dashboard')}>
               <Suspense fallback={<AppLoader compact label="Загружаем раздел" />}>
