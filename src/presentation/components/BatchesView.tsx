@@ -15,11 +15,12 @@ import { Batch, BatchStatus } from '../../core/domain';
 type BatchSortMode = 'name' | 'quantity_desc' | 'quantity_asc';
 type VisibleBatchStatus = Extract<BatchStatus, 'NEAR_EXPIRY' | 'CRITICAL' | 'EXPIRED'>;
 
-type BatchWithProductName = Batch & { productName: string; productId: string; minStock?: number };
+type BatchWithProductName = Batch & { productName: string; productId: string; minStock?: number; manufacturer?: string };
 type BatchGroup = {
   key: string;
   productName: string;
   productId: string;
+  manufacturer: string;
   minStock: number;
   batches: BatchWithProductName[];
   primaryBatch: BatchWithProductName | null;
@@ -66,7 +67,18 @@ export const BatchesView: React.FC<{
   // Debounce search to 300ms to avoid filtering on every keystroke
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const allBatches = useMemo(() => products.flatMap((p) => p.batches.map((b) => ({ ...b, productName: p.name, productId: p.id, minStock: Number(p.minStock || 0) }))), [products]);
+  const allBatches = useMemo(
+    () => products.flatMap((p) => p.batches
+      .filter((b) => Number(b.quantity || 0) > 0)
+      .map((b) => ({
+        ...b,
+        productName: p.name,
+        productId: p.id,
+        minStock: Number(p.minStock || 0),
+        manufacturer: String(p.manufacturer || '').trim(),
+      }))),
+    [products],
+  );
 
   const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
 
@@ -79,7 +91,8 @@ export const BatchesView: React.FC<{
 
   const filteredBatches = useMemo(() => allBatches.filter((b) => {
     const matchesSearch = b.productName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-      (b.supplierName || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+      (b.supplierName || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      (b.manufacturer || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
     const matchesStatus = b.status === statusFilter;
     return matchesSearch && matchesStatus;
   }), [allBatches, debouncedSearchTerm, statusFilter]);
@@ -138,7 +151,7 @@ export const BatchesView: React.FC<{
     const groups = new Map<string, BatchWithProductName[]>();
 
     for (const batch of filteredBatches) {
-      const key = normalizeName(batch.productName);
+      const key = `${normalizeName(batch.productName)}::${normalizeName(batch.manufacturer || '')}`;
       const group = groups.get(key) || [];
       group.push(batch);
       groups.set(key, group);
@@ -154,6 +167,7 @@ export const BatchesView: React.FC<{
         key,
         productName: firstBatch?.productName || '',
         productId: firstBatch?.productId || '',
+        manufacturer: firstBatch?.manufacturer || '',
         minStock: Number(firstBatch?.minStock || 0),
         batches: orderedBatches,
         primaryBatch: firstBatch || null,
@@ -163,7 +177,7 @@ export const BatchesView: React.FC<{
         suppliers,
         averageCostBasis: totalQuantity > 0 ? totalCostValue / totalQuantity : 0,
       };
-    }).sort((left, right) => {
+    }).filter((group) => group.batches.length > 0 && group.totalQuantity > 0).sort((left, right) => {
       if (sortMode === 'quantity_desc') return right.totalQuantity - left.totalQuantity;
       if (sortMode === 'quantity_asc') return left.totalQuantity - right.totalQuantity;
       return left.productName.localeCompare(right.productName, 'ru-RU');
@@ -379,6 +393,9 @@ export const BatchesView: React.FC<{
                         </div>
                         <div>
                           <p className={`text-sm font-bold ${isLowStock ? 'text-amber-800' : 'text-[#5A5A40]'}`}>{group.productName}</p>
+                          <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">
+                            {group.manufacturer ? `Производитель: ${group.manufacturer}` : 'Производитель не указан'}
+                          </p>
                           <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">
                             {group.suppliers.length > 0 ? `${t('Supplier')}: ${group.suppliers.join(', ')}` : 'Без поставщика'}
                           </p>
