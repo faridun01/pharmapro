@@ -560,7 +560,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
               <option value="year">Год</option>
             </select>
           </div>
-          <div className="h-75 w-full">
+          <div className="h-75 w-full md:h-90">
             {showChart ? (
               <Suspense fallback={<div className="h-full w-full rounded-2xl bg-[#f5f5f0] animate-pulse" />}>
                 <DashboardSalesChart data={chartData} />
