@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useStat
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
-import { Search, Plus, Trash2, AlertTriangle, Package, X, PencilLine, Layers, Calendar, History } from 'lucide-react';
+import { Search, Plus, Trash2, AlertTriangle, Package, X, PencilLine, Layers, Calendar, Barcode, BadgeDollarSign } from 'lucide-react';
 import { Product } from '../../core/domain';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { lazyNamedImport } from '../../lib/lazyLoadComponents';
@@ -122,7 +122,7 @@ const InventoryRow = React.memo(function InventoryRow({ index, product, stockLab
         )}
       </td>
       <td className="px-6 py-3.5 text-right">
-        <div className="flex items-center justify-end gap-2">
+        <div className="ml-auto grid w-fit grid-cols-2 gap-2">
           <button
             onClick={() => onOpenBatchHistory(product)}
             disabled={submitting}
@@ -130,17 +130,17 @@ const InventoryRow = React.memo(function InventoryRow({ index, product, stockLab
             title="История партий"
             aria-label="История партий"
           >
-            <History size={14} />
+            <Layers size={14} />
           </button>
           {!product.barcode && (
             <button
               onClick={() => onAddBarcode(product)}
               disabled={submitting}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
+              className="order-4 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
               title="Добавить штрихкод"
               aria-label="Добавить штрихкод"
             >
-              <PencilLine size={14} />
+              <Barcode size={14} />
             </button>
           )}
           <button
@@ -150,12 +150,12 @@ const InventoryRow = React.memo(function InventoryRow({ index, product, stockLab
             title="Изменить цены"
             aria-label="Изменить цены"
           >
-            <PencilLine size={14} />
+            <BadgeDollarSign size={14} />
           </button>
           <button
             onClick={() => onDelete(product.id, product.name)}
             disabled={submitting}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#5A5A40]/30 transition-all hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+            className="order-3 inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#5A5A40]/30 transition-all hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
             title={t('Delete Product')}
             aria-label={t('Delete Product')}
           >

@@ -277,15 +277,7 @@ export const BatchesView: React.FC<{
 
       {showActionBlock && (
       <div className="rounded-[28px] border border-[#5A5A40]/10 bg-white px-4 py-4 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
-          {onOpenImportInvoice && (
-            <button
-              onClick={onOpenImportInvoice}
-              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
-            >
-              <Package size={16} /> Импорт прихода
-            </button>
-          )}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {onOpenAddProduct && (
             <button
               onClick={onOpenAddProduct}
@@ -300,6 +292,14 @@ export const BatchesView: React.FC<{
           >
             <Layers size={16} /> Добавить партию
           </button>
+          {onOpenImportInvoice && (
+            <button
+              onClick={onOpenImportInvoice}
+              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+            >
+              <ArrowDownUp size={16} /> Импорт прихода
+            </button>
+          )}
         </div>
       </div>
       )}
@@ -373,7 +373,7 @@ export const BatchesView: React.FC<{
                 <th className="px-8 py-5">Цены</th>
                 <th className="px-8 py-5">Ближайший срок</th>
                 <th className="px-8 py-5">{t('Status')}</th>
-                <th className="px-8 py-5 text-right">Действие</th>
+                <th className="px-8 py-5 text-right">Действия</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#5A5A40]/5">
@@ -439,7 +439,7 @@ export const BatchesView: React.FC<{
                         disabled={!group.primaryBatch || busyBatchId === group.primaryBatch.id}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#5A5A40]/10 text-sm font-medium text-[#5A5A40] hover:bg-[#f5f5f0] transition-all disabled:opacity-40"
                       >
-                        <Layers size={16} />
+                        <Plus size={16} />
                         Пополнить
                       </button>
                     </td>

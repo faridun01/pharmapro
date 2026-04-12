@@ -901,15 +901,41 @@ export const InvoicesView: React.FC<{
   }, [getInvoiceOutstandingAmount, paymentModal.invoice]);
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-500">
-      <div className="overflow-hidden rounded-3xl border border-[#5A5A40]/5 bg-white shadow-sm">
-        <div className={`grid gap-4 border-b border-[#5A5A40]/8 px-5 py-4 md:px-6 ${isDebtorsView ? 'xl:grid-cols-1' : 'xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] xl:items-start'}`}>
+    <div className="flex flex-col gap-4 animate-in fade-in duration-500">
+      <div className="order-1 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          ...(isDebtorsView
+            ? [
+                { label: moneyLabel('ÐžÐ±Ñ‰Ð¸Ð¹ Ð´Ð¾Ð»Ð³'), value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-rose-600', bg: 'bg-rose-50' },
+                { label: 'ÐšÐ¾Ð»Ð¸Ñ‡ÐµÑÑ‚Ð²Ð¾ Ð´Ð¾Ð»Ð¶Ð½Ð¸ÐºÐ¾Ð²', value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
+                { label: 'ÐÐ°ÐºÐ»Ð°Ð´Ð½Ñ‹Ñ… Ð² Ð´Ð¾Ð»Ð³Ðµ', value: invoicesSummary.totalDebtInvoices.toString(), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+                { label: 'Ð¡Ñ€ÐµÐ´Ð½Ð¸Ð¹ Ð´Ð¾Ð»Ð³', value: `${invoicesSummary.averageOrder.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: AlertCircle, color: 'text-[#7a5b1f]', bg: 'bg-[#fbf3df]' },
+              ]
+            : [
+                { label: moneyLabel(t('Total Revenue')), value: `${invoicesSummary.totalRevenue.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                { label: t('Total Invoices'), value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
+                { label: moneyLabel(t('Avg. Order Value')), value: `${invoicesSummary.averageOrder.toFixed(2)} ${currencyCode}`, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
+                { label: 'ÐžÑÑ‚Ð°Ñ‚Ð¾Ðº Ð¿Ð¾ Ð¿Ñ€Ð¾Ð´Ð°Ð¶Ð°Ð¼', value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+              ])]
+          .map((stat, i) => (
+            <div key={i} className="bg-white p-4 rounded-3xl shadow-sm border border-[#5A5A40]/5 flex items-center gap-3.5 hover:-translate-y-0.5 hover:shadow-md transition-all">
+              <div className={`w-12 h-12 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
+                <stat.icon size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-[#5A5A40]/40 uppercase tracking-widest">{stat.label}</p>
+                <p className="mt-0.5 text-xl font-bold text-[#5A5A40]">{stat.value}</p>
+              </div>
+            </div>
+          ))}
+      </div>
+
+      <div className="order-2 overflow-hidden rounded-3xl border border-[#5A5A40]/5 bg-white shadow-sm">
+        <div className="border-b border-[#5A5A40]/8 px-5 py-4 md:px-6">
           <div className="space-y-3">
             {!isDebtorsView && (
               <div className="space-y-1">
-                <h2 className="text-2xl font-black tracking-tight text-[#423d2f] md:text-[30px]">
-                  История продаж
-                </h2>
+
               </div>
             )}
 
@@ -950,7 +976,7 @@ export const InvoicesView: React.FC<{
             )}
           </div>
 
-          <div className={`grid gap-3 rounded-[28px] border border-[#5A5A40]/8 bg-[#fcfbf8] ${isDebtorsView ? 'hidden' : 'p-4'}`}>
+          <div className="hidden">
             <div className={`rounded-[22px] border border-[#5A5A40]/8 bg-white ${isDebtorsView ? 'px-4 py-3' : 'p-4'}`}>
               <p className="mt-2 text-2xl font-black text-[#423d2f]">{activeRangeMeta.label}</p>
             </div>
@@ -1058,7 +1084,7 @@ export const InvoicesView: React.FC<{
       </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="hidden grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {[
           ...(isDebtorsView
             ? [
