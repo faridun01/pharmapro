@@ -10,18 +10,26 @@
  * before any other module's initialization code.
  */
 import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Try candidate paths in priority order so the backend finds .env regardless
 // of how the exe was launched (from project root, from resources dir, etc.)
 const candidates = [
   process.env.PHARMAPRO_ENV_FILE,         // explicit override from Electron main
-  path.join(process.cwd(), '.env'),        // inherited CWD (works via launch-built.cjs)
-  path.join(__dirname, '../../.env'),      // dist-server/../../.env = project root in dev
-];
+  path.join(process.cwd(), '.env'),        // inherited CWD
+  path.join(__dirname, '../../.env'),      // project root in dev
+  // Desktop-specific paths
+  process.env.APPDATA ? path.join(process.env.APPDATA, 'pharmapro', '.env') : null,
+  process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library/Application Support', 'pharmapro', '.env') : null,
+].filter(Boolean) as string[];
 
 for (const p of candidates) {
-  if (!p) continue;
+  if (!fs.existsSync(p)) continue;
   const result = dotenv.config({ path: p, override: false });
   if (!result.error) break;
 }

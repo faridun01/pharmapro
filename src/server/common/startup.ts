@@ -1,3 +1,6 @@
+import { prisma } from '../infrastructure/prisma';
+import { logger } from './logger';
+
 const maskDatabaseUrl = (value?: string) => {
   if (!value) return '(not set)';
 
@@ -25,17 +28,30 @@ export const isDatabaseStartupError = (error: unknown) => {
   );
 };
 
+export const pingDatabase = async () => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    logger.info('Database connection verified.');
+    return true;
+  } catch (error) {
+    if (isDatabaseStartupError(error)) {
+      logger.error('Database connection failed during ping.', { 
+        url: maskDatabaseUrl(process.env.DATABASE_URL) 
+      });
+    } else {
+      logger.error('Unexpected database error during ping.', error);
+    }
+    return false;
+  }
+};
+
 export const logStartupError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error || 'Unknown startup error');
 
   if (isDatabaseStartupError(error)) {
-    console.error('[startup] Database bootstrap skipped:', message);
-    console.error('[startup] PharmaPro requires PostgreSQL for local development.');
-    console.error(`[startup] DATABASE_URL: ${maskDatabaseUrl(process.env.DATABASE_URL)}`);
-    console.error('[startup] Verify that PostgreSQL is running, the target database exists, and the username/password in .env are correct.');
-    console.error('[startup] Example: DATABASE_URL="postgresql://postgres:postgres@localhost:5432/pharmapro?schema=public"');
+    logger.error('Database bootstrap skipped:', message);
     return;
   }
 
-  console.error('[startup] ensureAdminUser failed:', message);
+  logger.error('Startup task failed:', message);
 };

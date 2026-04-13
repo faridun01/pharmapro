@@ -1,40 +1,22 @@
+import './src/server/env';
 import path from 'path';
 import express from 'express';
-import dotenv from 'dotenv';
 import { createApp } from './src/server/app/createApp';
 import { ensureAdminUser } from './src/server/common/auth';
 import { logStartupError } from './src/server/common/startup';
-
-dotenv.config();
-
-const isDev = process.env.NODE_ENV !== 'production';
-const DEV_API_PORT = Number(process.env.DEV_API_PORT || 3921);
-
-// Conditional logger - only logs in development
-const log = {
-  info: (msg: string, data?: any) => {
-    if (isDev) {
-      console.log(`[INFO] ${msg}`, data || '');
-    }
-  },
-  warn: (msg: string, data?: any) => {
-    if (isDev) {
-      console.warn(`[WARN] ${msg}`, data || '');
-    }
-  },
-  error: (msg: string, err?: any) => {
-    console.error(`[ERROR] ${msg}`, err || '');
-  },
-};
+import { config } from './src/server/config';
+import { logger } from './src/server/common/logger';
+import { prisma } from './src/server/infrastructure/prisma';
+import { pingDatabase } from './src/server/common/startup';
 
 const app = createApp();
-const PORT = isDev ? DEV_API_PORT : Number(process.env.PORT || 3000);
+const isDev = config.NODE_ENV === 'development';
 
 if (!isDev) {
   const distPath = path.join(process.cwd(), 'dist');
   app.use(express.static(distPath));
-  app.get('*', (_req, res) => {
-    if (_req.path.startsWith('/api/')) {
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) {
       return res.status(404).json({
         error: 'API route not found',
         code: 'API_NOT_FOUND',
@@ -44,11 +26,33 @@ if (!isDev) {
   });
 }
 
-app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`[${new Date().toISOString()}] PharmaPro ${isDev ? 'API server' : 'server'} running on http://localhost:${PORT}`);
+const server = app.listen(config.PORT, '0.0.0.0', async () => {
+  logger.info(`PharmaPro ${isDev ? 'API server' : 'server'} running on http://localhost:${config.PORT}`);
+  logger.info(`Environment: ${config.NODE_ENV}`);
+  
+  await pingDatabase();
+  
   try {
     await ensureAdminUser();
   } catch (err) {
     logStartupError(err);
   }
 });
+
+const shutdown = async () => {
+  logger.info('Shutting down server...');
+  server.close(async () => {
+    logger.info('Express server closed.');
+    try {
+      await prisma.$disconnect();
+      logger.info('Prisma disconnected.');
+      process.exit(0);
+    } catch (err) {
+      logger.error('Error during Prisma disconnect:', err);
+      process.exit(1);
+    }
+  });
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
