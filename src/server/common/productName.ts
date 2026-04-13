@@ -6,33 +6,38 @@ const normalizeCountry = (value: string | null | undefined) => String(value || '
 export async function findExistingProductByName(name: string, countryOfOrigin?: string | null) {
   const normalizedName = normalizeProductName(name || '');
   if (!normalizedName) return null;
-  const normalizedCountry = normalizeCountry(countryOfOrigin);
 
-  const candidates = await prisma.product.findMany({
-    where: { isActive: true },
-    select: {
-      id: true,
-      name: true,
-      countryOfOrigin: true,
+  // Search by name directly in DB (case-insensitive)
+  // We first fetch active products with exact case-insensitive name match.
+  // This is much faster than loading all products into memory.
+  const matched = await prisma.product.findFirst({
+    where: {
+      isActive: true,
+      name: {
+        equals: normalizedName,
+        mode: 'insensitive',
+      },
+      // If country is provided, match it too (case-insensitive)
+      ...(countryOfOrigin
+        ? {
+            countryOfOrigin: {
+              equals: countryOfOrigin.trim(),
+              mode: 'insensitive',
+            },
+          }
+        : {
+            OR: [
+              { countryOfOrigin: null },
+              { countryOfOrigin: '' },
+            ],
+          }),
+    },
+    include: {
+      batches: {
+        where: { quantity: { gt: 0 } },
+      },
     },
   });
 
-  const match = candidates.find((candidate) => {
-    if (normalizeProductName(candidate.name) !== normalizedName) {
-      return false;
-    }
-
-    const candidateCountry = normalizeCountry(candidate.countryOfOrigin);
-    if (normalizedCountry) {
-      return candidateCountry === normalizedCountry;
-    }
-
-    return !candidateCountry;
-  });
-  if (!match) return null;
-
-  return prisma.product.findUnique({
-    where: { id: match.id },
-    include: { batches: true },
-  });
+  return matched;
 }

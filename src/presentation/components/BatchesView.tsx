@@ -355,7 +355,7 @@ export const BatchesView: React.FC<{
               }`}
             >
               {option.label}
-              <span className={`ml-2 inline-flex min-w-[1.75rem] items-center justify-center rounded-lg px-2 py-0.5 text-[10px] font-bold ${statusFilter === option.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
+              <span className={`ml-2 inline-flex min-w-7 items-center justify-center rounded-lg px-2 py-0.5 text-[10px] font-bold ${statusFilter === option.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
                 {statusCounts[option.id]}
               </span>
             </button>
@@ -469,7 +469,7 @@ export const BatchesView: React.FC<{
           </table>
         </div>
         {groupedBatches.length > batchPageSize && (
-          <div className="flex min-h-[72px] flex-col gap-3 border-t border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-h-18 flex-col gap-3 border-t border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
             <div className="text-sm text-[#5A5A40]/70">
               Показано {(safeBatchPage - 1) * batchPageSize + 1}-{Math.min(safeBatchPage * batchPageSize, groupedBatches.length)} из {groupedBatches.length}
             </div>

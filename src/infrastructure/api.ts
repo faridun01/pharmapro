@@ -5,6 +5,8 @@ import {
   IInvoiceRepository, 
   Supplier, 
   ISupplierRepository,
+  PaginationParams,
+  PaginatedResponse,
 } from '../core/domain';
 
 type DesktopBridge = {
@@ -71,10 +73,25 @@ class BaseApi {
 export class ApiProductRepository extends BaseApi implements IProductRepository {
   private readonly baseUrl = '/api/products';
 
-  async getAll(): Promise<Product[]> {
-    const response = await fetch(this.baseUrl, { headers: await this.getHeaders() });
+  async getAll(params?: PaginationParams): Promise<Product[] | PaginatedResponse<Product>> {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+
+    const url = query.toString() ? `${this.baseUrl}?${query.toString()}` : this.baseUrl;
+    const response = await fetch(url, { headers: await this.getHeaders() });
     const data = await this.handleResponse(response);
-    return data.map((p: any) => this.mapToEntity(p));
+
+    if (data.items && data.pagination) {
+      return {
+        items: data.items.map((p: any) => this.mapToEntity(p)),
+        pagination: data.pagination,
+      };
+    }
+
+    // Fallback for unexpected format (though backend should be consistent now)
+    return Array.isArray(data) ? data.map((p: any) => this.mapToEntity(p)) : [];
   }
 
   async getById(id: string): Promise<Product | null> {
@@ -85,7 +102,8 @@ export class ApiProductRepository extends BaseApi implements IProductRepository 
   }
 
   async getBySku(sku: string): Promise<Product | null> {
-    const products = await this.getAll();
+    const data = await this.getAll({ search: sku });
+    const products = Array.isArray(data) ? data : data.items;
     return products.find(p => p.sku === sku) || null;
   }
 
@@ -136,13 +154,30 @@ export class ApiProductRepository extends BaseApi implements IProductRepository 
 export class ApiInvoiceRepository extends BaseApi implements IInvoiceRepository {
   private readonly baseUrl = '/api/invoices';
 
-  async getAll(): Promise<Invoice[]> {
-    const response = await fetch(this.baseUrl, { headers: await this.getHeaders() });
+  async getAll(params?: PaginationParams): Promise<Invoice[] | PaginatedResponse<Invoice>> {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+
+    const url = query.toString() ? `${this.baseUrl}?${query.toString()}` : this.baseUrl;
+    const response = await fetch(url, { headers: await this.getHeaders() });
     const data = await this.handleResponse(response);
-    return data.map((inv: any) => ({
+
+    if (data.items && data.pagination) {
+      return {
+        items: data.items.map((inv: any) => ({
+          ...inv,
+          createdAt: new Date(inv.createdAt)
+        })),
+        pagination: data.pagination,
+      };
+    }
+
+    return Array.isArray(data) ? data.map((inv: any) => ({
       ...inv,
       createdAt: new Date(inv.createdAt)
-    }));
+    })) : [];
   }
 
   async getById(id: string): Promise<Invoice | null> {
@@ -161,11 +196,48 @@ export class ApiInvoiceRepository extends BaseApi implements IInvoiceRepository 
     await this.handleResponse(response);
   }
 
+  async update(id: string, payload: Partial<Invoice>): Promise<Invoice> {
+    const response = await fetch(`${this.baseUrl}/${id}`, {
+      method: 'PUT',
+      headers: await this.getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const data = await this.handleResponse(response);
+    return { ...data, createdAt: new Date(data.createdAt) };
+  }
+
   async updateStatus(id: string, status: string): Promise<void> {
     const response = await fetch(`${this.baseUrl}/${id}/status`, {
       method: 'PATCH',
       headers: await this.getHeaders(),
       body: JSON.stringify({ status })
+    });
+    await this.handleResponse(response);
+  }
+
+  async addPayment(id: string, payload: { amount: number; method: string; comment?: string }): Promise<Invoice> {
+    const response = await fetch(`${this.baseUrl}/${id}/payments`, {
+      method: 'POST',
+      headers: await this.getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const data = await this.handleResponse(response);
+    return { ...data, createdAt: new Date(data.createdAt) };
+  }
+
+  async processReturn(id: string, items: Array<{ id: string; quantity: number }>): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/${id}/returns`, {
+      method: 'POST',
+      headers: await this.getHeaders(),
+      body: JSON.stringify({ items })
+    });
+    await this.handleResponse(response);
+  }
+
+  async delete(id: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/${id}`, {
+      method: 'DELETE',
+      headers: await this.getHeaders()
     });
     await this.handleResponse(response);
   }

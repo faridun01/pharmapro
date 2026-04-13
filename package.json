@@ -24,7 +24,8 @@
     "lint": "tsc --noEmit",
     "type-check": "tsc --noEmit",
     "electron:dev": "node ./scripts/free-electron.mjs && node ./scripts/free-ports.mjs && concurrently --kill-others --success first \"npm run dev\" \"npm run dev:web\" \"cross-env NODE_ENV=development electron .\"",
-    "electron:build": "node ./scripts/prepare-electron-build.mjs && node ./scripts/prepare-runtime-env.mjs && npm run build:prod && node ./scripts/prisma-generate-safe.mjs && npm run build:server && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder && node electron/launch-built.cjs"
+    "electron:build": "node ./scripts/prepare-electron-build.mjs && node ./scripts/prepare-runtime-env.mjs && npm run build:prod && node ./scripts/prisma-generate-safe.mjs && npm run build:server && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder && node electron/launch-built.cjs",
+    "test": "vitest"
   },
   "build": {
     "appId": "com.pharmapro.app",
@@ -83,7 +84,8 @@
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
     "vite": "^6.2.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -91,6 +93,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.14",
+    "@vitest/coverage-v8": "^4.1.4",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
@@ -102,6 +105,7 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
+    "vitest": "^4.1.4",
     "wait-on": "^9.0.4"
   }
 }

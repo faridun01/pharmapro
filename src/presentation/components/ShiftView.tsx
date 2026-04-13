@@ -685,7 +685,7 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
             )}
           </div>
           {shifts.length > itemsPerPage && (
-            <div className="mt-4 flex min-h-[72px] flex-col gap-3 rounded-2xl border border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="mt-4 flex min-h-18 flex-col gap-3 rounded-2xl border border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-[#5A5A40]/70">
                 Показано {(safeCurrentPage - 1) * itemsPerPage + 1}-{Math.min(safeCurrentPage * itemsPerPage, shifts.length)} из {shifts.length}
               </div>

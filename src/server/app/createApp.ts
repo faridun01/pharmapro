@@ -30,7 +30,14 @@ export const createApp = () => {
 
   app.disable('x-powered-by');
   app.use(helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "img-src": ["'self'", "data:", "blob:"],
+        "script-src": ["'self'", "'unsafe-inline'"], // unsafe-inline is often needed for Vite/Electron splash
+        "connect-src": ["'self'", "http://localhost:*", "ws://localhost:*"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
   }));
   app.use(compression());

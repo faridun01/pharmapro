@@ -43,7 +43,7 @@ export interface Product {
   minStock: number;
   costPrice: number;
   sellingPrice: number;
-  status: 'Active' | 'Low Stock' | 'Out of Stock';
+  status: 'ACTIVE' | 'LOW_STOCK' | 'OUT_OF_STOCK';
   image: string;
   prescription: boolean;
   markingRequired: boolean;
@@ -143,6 +143,7 @@ export interface Invoice {
   paymentStatus?: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'OVERDUE' | 'CANCELLED';
   comment?: string;
   userId: string;
+  paidAmountTotal?: number;
   items: InvoiceItem[];
   receivables?: Array<{
     id: string;
@@ -155,12 +156,24 @@ export interface Invoice {
   createdAt: Date;
 }
 
-/**
- * Repository Interfaces - Abstractions for data access.
- * Follows Dependency Inversion Principle.
- */
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
 export interface IProductRepository {
-  getAll(): Promise<Product[]>;
+  getAll(params?: PaginationParams): Promise<Product[] | PaginatedResponse<Product>>;
   getById(id: string): Promise<Product | null>;
   getBySku(sku: string): Promise<Product | null>;
   save(product: Product): Promise<Product>;
@@ -169,10 +182,14 @@ export interface IProductRepository {
 }
 
 export interface IInvoiceRepository {
-  getAll(): Promise<Invoice[]>;
+  getAll(params?: PaginationParams): Promise<Invoice[] | PaginatedResponse<Invoice>>;
   getById(id: string): Promise<Invoice | null>;
   save(invoice: Invoice): Promise<void>;
+  update(id: string, payload: Partial<Invoice>): Promise<Invoice>;
   updateStatus(id: string, status: string): Promise<void>;
+  addPayment(id: string, payload: { amount: number; method: string; comment?: string }): Promise<Invoice>;
+  processReturn(id: string, items: Array<{ id: string; quantity: number }>): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 export interface ISupplierRepository {

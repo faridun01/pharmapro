@@ -64,7 +64,7 @@ export class InventoryService {
 
     product.batches.push(newBatch);
     product.totalStock += batchData.quantity;
-    product.status = product.totalStock > product.minStock ? 'Active' : 'Low Stock';
+    product.status = product.totalStock > product.minStock ? 'ACTIVE' : 'LOW_STOCK';
 
     await this.productRepository.update(product);
     this.logger.info(`Restocked product ${product.name}`, { productId, quantity: batchData.quantity });
@@ -91,7 +91,7 @@ export class InventoryService {
       userId
     });
 
-    product.status = product.totalStock <= 0 ? 'Out of Stock' : product.totalStock < product.minStock ? 'Low Stock' : 'Active';
+    product.status = product.totalStock <= 0 ? 'OUT_OF_STOCK' : product.totalStock < product.minStock ? 'LOW_STOCK' : 'ACTIVE';
     
     await this.productRepository.update(product);
     this.logger.warn(`Write-off processed for ${product.name}`, { productId, batchId, quantity, reason });
@@ -176,7 +176,7 @@ export class POSService {
         }
       }
 
-      product.status = product.totalStock <= 0 ? 'Out of Stock' : product.totalStock < product.minStock ? 'Low Stock' : 'Active';
+      product.status = product.totalStock <= 0 ? 'OUT_OF_STOCK' : product.totalStock < product.minStock ? 'LOW_STOCK' : 'ACTIVE';
       await this.productRepository.update(product);
     }
 

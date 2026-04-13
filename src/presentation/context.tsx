@@ -136,7 +136,8 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const refreshProducts = async () => {
     try {
-      let data = await productRepository.getAll();
+      const result = await productRepository.getAll();
+      const data = Array.isArray(result) ? result : result.items;
       setProducts(data);
     } catch (err: any) {
       logger.error('Failed to fetch products', err);
@@ -145,7 +146,8 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const refreshInvoices = async () => {
     try {
-      const data = await invoiceRepository.getAll();
+      const result = await invoiceRepository.getAll();
+      const data = Array.isArray(result) ? result : result.items;
       setInvoices(data);
     } catch (err: any) {
       logger.error('Failed to fetch invoices', err);

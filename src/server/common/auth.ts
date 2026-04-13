@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { UnauthorizedError } from './errors';
+import { ForbiddenError, UnauthorizedError } from './errors';
 import { prisma } from '../infrastructure/prisma';
 import { getJwtSecret, isDevAuthBypassEnabled } from './jwt';
 
@@ -150,4 +150,19 @@ export const authenticate = async (req: Request, _res: Response, next: NextFunct
   } catch {
     return next(new UnauthorizedError('Invalid token'));
   }
+};
+
+export const requireRole = (roles: string[]) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const user = (req as AuthedRequest).user;
+    if (!user) {
+      return next(new UnauthorizedError());
+    }
+
+    if (!roles.includes(user.role)) {
+      return next(new ForbiddenError(`Required role: ${roles.join(' or ')}`));
+    }
+
+    next();
+  };
 };

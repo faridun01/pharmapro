@@ -1,0 +1,17 @@
+﻿
+> pharmapro@1.0.0 build
+> npm run type-check && vite build && npm run bundle-analysis
+
+
+> pharmapro@1.0.0 type-check
+> tsc --noEmit
+
+src/application/services.ts(67,5): error TS2322: Type '"Active" | "Low Stock"' is not assignable to type '"ACTIVE" | "LOW_STOCK" | "OUT_OF_STOCK"'.
+  Type '"Active"' is not assignable to type '"ACTIVE" | "LOW_STOCK" | "OUT_OF_STOCK"'. Did you mean '"ACTIVE"'?
+src/application/services.ts(94,5): error TS2322: Type '"Active" | "Low Stock" | "Out of Stock"' is not assignable to type '"ACTIVE" | "LOW_STOCK" | "OUT_OF_STOCK"'.
+  Type '"Active"' is not assignable to type '"ACTIVE" | "LOW_STOCK" | "OUT_OF_STOCK"'. Did you mean '"ACTIVE"'?
+src/application/services.ts(179,7): error TS2322: Type '"Active" | "Low Stock" | "Out of Stock"' is not assignable to type '"ACTIVE" | "LOW_STOCK" | "OUT_OF_STOCK"'.
+  Type '"Active"' is not assignable to type '"ACTIVE" | "LOW_STOCK" | "OUT_OF_STOCK"'. Did you mean '"ACTIVE"'?
+src/server/modules/catalog/product.service.ts(154,43): error TS2339: Property 'status' does not exist on type '{ name: string; minStock: number; costPrice: number; sellingPrice: number; prescription: boolean; markingRequired: boolean; batches: { quantity: number; id?: string; batchNumber?: string; costBasis?: number; supplierId?: string; warehouseId?: string; manufacturedDate?: string | Date; expiryDate?: string | Date; }[];...'.
+src/server/modules/catalog/product.service.ts(172,41): error TS2339: Property 'status' does not exist on type '{ name: string; minStock: number; costPrice: number; sellingPrice: number; prescription: boolean; markingRequired: boolean; batches: { quantity: number; id?: string; batchNumber?: string; costBasis?: number; supplierId?: string; warehouseId?: string; manufacturedDate?: string | Date; expiryDate?: string | Date; }[];...'.
+src/server/modules/catalog/product.service.ts(212,83): error TS2339: Property 'status' does not exist on type '{ name: string; minStock: number; costPrice: number; sellingPrice: number; prescription: boolean; markingRequired: boolean; batches: { quantity: number; id?: string; batchNumber?: string; costBasis?: number; supplierId?: string; warehouseId?: string; manufacturedDate?: string | Date; expiryDate?: string | Date; }[];...'.
