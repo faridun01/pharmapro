@@ -1246,7 +1246,7 @@ ${toolbar}
     return (
       <>
         <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 text-sm text-emerald-800">
-          Детализированный отчет показывает только продажи текущего месяца. Период всегда считается с 1 числа месяца по сегодняшний день: {periodFrom} - {periodTo}.
+           {periodFrom} - {periodTo}.
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
           {[
@@ -1316,7 +1316,7 @@ ${toolbar}
           ))}
           {viewMode === 'detailed' && (
             <div className="px-3 py-2 rounded-xl text-xs font-semibold border bg-emerald-50 text-emerald-800 border-emerald-100">
-              Период: с 1 числа текущего месяца по сегодня
+              
             </div>
           )}
         </div>
@@ -1327,7 +1327,7 @@ ${toolbar}
           <span className="text-[#5A5A40]/50">-</span>
           <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} disabled={viewMode === 'detailed'} className="text-xs px-2 py-1 rounded-lg border border-[#5A5A40]/10 disabled:bg-[#f5f5f0] disabled:text-[#5A5A40]/45" />
           <button onClick={() => void loadReport(preset, fromDate, toDate)} disabled={viewMode === 'detailed'} className="px-3 py-1.5 rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-xs font-semibold disabled:opacity-50">Применить</button>
-          {viewMode === 'detailed' && <span className="text-xs text-[#5A5A40]/55">В детальном режиме период фиксирован: текущий месяц с 1 числа.</span>}
+          {viewMode === 'detailed' && <span className="text-xs text-[#5A5A40]/55"></span>}
 
           <div className="ml-auto flex items-center gap-2">
             <button onClick={openPrintPreview} disabled={!report} className="px-3 py-1.5 rounded-lg border border-[#5A5A40]/20 text-xs flex items-center gap-1 disabled:opacity-50"><Eye size={13} /> Превью</button>

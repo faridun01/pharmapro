@@ -599,9 +599,9 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <div className="flex h-full min-h-0 flex-col gap-3 animate-in fade-in duration-500">
+      <div className="shrink-0 rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <div className="inline-flex items-center gap-2 rounded-2xl border border-[#5A5A40]/10 bg-[#f8f6ef] px-4 py-2.5 shadow-sm">
               <Package size={16} className="text-[#5A5A40]" />
@@ -612,7 +612,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
             </span>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <button
               onClick={() => setIsImportOpen(true)}
               className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
@@ -634,8 +634,8 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
           </div>
         </div>
 
-        <div className="mt-4 rounded-[26px] border border-[#5A5A40]/10 bg-[#fcfbf7] p-4 shadow-sm">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="mt-3 rounded-[26px] border border-[#5A5A40]/10 bg-[#fcfbf7] p-3.5 shadow-sm">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="relative group w-full xl:w-[320px]">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
               <input
@@ -647,7 +647,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
               />
             </div>
 
-            <div className="flex items-center gap-4 overflow-x-auto pb-1 custom-scrollbar">
+            <div className="flex items-center gap-3 overflow-x-auto pb-1 custom-scrollbar">
               {[
                 { id: 'all', label: t('All Products'), count: productCounts.all },
                 { id: 'low', label: t('Low Stock'), count: productCounts.low },
@@ -656,7 +656,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                 <button
                   key={item.id}
                   onClick={() => setFilter(item.id as 'all' | 'low' | 'prescription')}
-                  className={`px-6 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+                  className={`px-5 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
                     filter === item.id
                       ? 'bg-[#5A5A40] text-white border-[#5A5A40] shadow-md'
                       : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
@@ -673,9 +673,9 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
         </div>
       </div>
 
-      <>
-        <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
-            <div className="overflow-x-auto">
+      <div className="flex-1 min-h-0">
+        <div className="flex h-full min-h-0 flex-col bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/50 font-bold">
@@ -760,7 +760,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
               </div>
             )}
         </div>
-      </>
+      </div>
 
       {batchHistoryProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">

@@ -265,7 +265,7 @@ export const BatchesView: React.FC<{
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="flex h-full min-h-0 flex-col gap-8 animate-in fade-in duration-500">
       <div>
         {embedded ? null : (
           <>
@@ -277,25 +277,25 @@ export const BatchesView: React.FC<{
 
       {showActionBlock && (
       <div className="rounded-[28px] border border-[#5A5A40]/10 bg-white px-4 py-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {onOpenAddProduct && (
             <button
               onClick={onOpenAddProduct}
-              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#4A4A30]"
             >
               <Plus size={16} /> Добавить товар
             </button>
           )}
           <button
             onClick={openCreateBatchModal}
-            className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+            className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#4A4A30]"
           >
             <Layers size={16} /> Добавить партию
           </button>
           {onOpenImportInvoice && (
             <button
               onClick={onOpenImportInvoice}
-              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#4A4A30]"
             >
               <ArrowDownUp size={16} /> Импорт прихода
             </button>
@@ -324,19 +324,19 @@ export const BatchesView: React.FC<{
           </div>
         </div>
 
-        <div className="flex items-center gap-4 overflow-x-auto pb-1 custom-scrollbar">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {statusOptions.map((option) => (
             <button
               key={option.id}
               onClick={() => setStatusFilter(option.id)}
-              className={`px-6 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+              className={`flex h-13 w-full items-center justify-center rounded-2xl px-6 text-sm font-medium transition-all border ${
                 statusFilter === option.id
                   ? 'bg-[#5A5A40] text-white border-[#5A5A40] shadow-md'
                   : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
               }`}
             >
               {option.label}
-              <span className={`ml-2 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${statusFilter === option.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
+              <span className={`ml-2 inline-flex min-w-[1.75rem] items-center justify-center rounded-lg px-2 py-0.5 text-[10px] font-bold ${statusFilter === option.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
                 {statusCounts[option.id]}
               </span>
             </button>
@@ -357,13 +357,13 @@ export const BatchesView: React.FC<{
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+      <div className="flex-1 min-h-0 bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
         {actionError && (
           <div className="mx-6 mt-6 p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100">
             {actionError}
           </div>
         )}
-        <div className="overflow-x-auto">
+        <div className="h-full overflow-x-auto overflow-y-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/50 font-bold">

@@ -142,13 +142,11 @@ export const InvoicesView: React.FC<{
     error: null,
   });
   const paymentAmountInputRef = useRef<HTMLInputElement | null>(null);
-  const [invoicesScrollTop, setInvoicesScrollTop] = useState(0);
   const [initialLoadPending, setInitialLoadPending] = useState(false);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const itemsPerPageOptions = [10, 20, 50, 100];
+  const [currentPage, setCurrentPage] = useState(1);
   const resetPaymentModal = () => setPaymentModal({ open: false, invoice: null, amount: '', method: 'CASH', comment: '', error: null });
-
-  const INVOICE_ROW_HEIGHT = 88;
-  const INVOICE_VIEWPORT_HEIGHT = 620;
-  const INVOICE_OVERSCAN = 8;
 
   // Debounce search to 300ms to avoid filtering on every keystroke
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -418,16 +416,26 @@ export const InvoicesView: React.FC<{
     },
   ]), []);
 
-  const onInvoicesScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    setInvoicesScrollTop(event.currentTarget.scrollTop);
-  }, []);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, sortBy, sortOrder, dateFilterMode, dateFrom, dateTo, isDebtorsView, itemsPerPage]);
 
-  const invoiceStartIndex = Math.max(0, Math.floor(invoicesScrollTop / INVOICE_ROW_HEIGHT) - INVOICE_OVERSCAN);
-  const invoiceVisibleCount = Math.ceil(INVOICE_VIEWPORT_HEIGHT / INVOICE_ROW_HEIGHT) + INVOICE_OVERSCAN * 2;
-  const invoiceEndIndex = Math.min(filteredInvoices.length, invoiceStartIndex + invoiceVisibleCount);
-  const visibleInvoices = filteredInvoices.slice(invoiceStartIndex, invoiceEndIndex);
-  const invoiceTopSpacerHeight = invoiceStartIndex * INVOICE_ROW_HEIGHT;
-  const invoiceBottomSpacerHeight = Math.max(0, (filteredInvoices.length - invoiceEndIndex) * INVOICE_ROW_HEIGHT);
+  const totalItems = isDebtorsView ? debtorGroups.length : filteredInvoices.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * itemsPerPage;
+  const visibleInvoices = filteredInvoices.slice(pageStartIndex, pageStartIndex + itemsPerPage);
+  const visibleDebtors = debtorGroups.slice(pageStartIndex, pageStartIndex + itemsPerPage);
+  const visibleRowsCount = isDebtorsView ? visibleDebtors.length : visibleInvoices.length;
+  const fillerRowsCount = !isInitialInvoicesLoading && totalItems <= itemsPerPage
+    ? Math.max(0, itemsPerPage - visibleRowsCount)
+    : 0;
+
+  useEffect(() => {
+    if (currentPage !== safeCurrentPage) {
+      setCurrentPage(safeCurrentPage);
+    }
+  }, [currentPage, safeCurrentPage]);
 
   const isReturnLocked = (status: string) => status === 'RETURNED';
   const isEditLocked = (status: string) => status === 'RETURNED' || status === 'PARTIALLY_RETURNED';
@@ -901,46 +909,41 @@ export const InvoicesView: React.FC<{
   }, [getInvoiceOutstandingAmount, paymentModal.invoice]);
 
   return (
-    <div className="flex flex-col gap-4 animate-in fade-in duration-500">
-      <div className="order-1 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <div className="flex min-h-full flex-col gap-3 animate-in fade-in duration-500">
+      <div className="z-20 shrink-0 -mx-1 space-y-3 bg-[#f6f3ea]/95 px-1 pb-1">
+      <div className="order-1 grid grid-cols-2 gap-2 md:gap-2.5 2xl:grid-cols-4">
         {[
           ...(isDebtorsView
             ? [
-                { label: moneyLabel('ÐžÐ±Ñ‰Ð¸Ð¹ Ð´Ð¾Ð»Ð³'), value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-rose-600', bg: 'bg-rose-50' },
-                { label: 'ÐšÐ¾Ð»Ð¸Ñ‡ÐµÑÑ‚Ð²Ð¾ Ð´Ð¾Ð»Ð¶Ð½Ð¸ÐºÐ¾Ð²', value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
-                { label: 'ÐÐ°ÐºÐ»Ð°Ð´Ð½Ñ‹Ñ… Ð² Ð´Ð¾Ð»Ð³Ðµ', value: invoicesSummary.totalDebtInvoices.toString(), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-                { label: 'Ð¡Ñ€ÐµÐ´Ð½Ð¸Ð¹ Ð´Ð¾Ð»Ð³', value: `${invoicesSummary.averageOrder.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: AlertCircle, color: 'text-[#7a5b1f]', bg: 'bg-[#fbf3df]' },
+                { label: moneyLabel('Общий долг'), value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-rose-600', bg: 'bg-rose-50' },
+                { label: 'Количество должников', value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
+                { label: 'Накладных в долге', value: invoicesSummary.totalDebtInvoices.toString(), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+                { label: 'Средний долг', value: `${invoicesSummary.averageOrder.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: AlertCircle, color: 'text-[#7a5b1f]', bg: 'bg-[#fbf3df]' },
               ]
             : [
                 { label: moneyLabel(t('Total Revenue')), value: `${invoicesSummary.totalRevenue.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                 { label: t('Total Invoices'), value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
                 { label: moneyLabel(t('Avg. Order Value')), value: `${invoicesSummary.averageOrder.toFixed(2)} ${currencyCode}`, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
-                { label: 'ÐžÑÑ‚Ð°Ñ‚Ð¾Ðº Ð¿Ð¾ Ð¿Ñ€Ð¾Ð´Ð°Ð¶Ð°Ð¼', value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+                { label: 'Остаток по продажам', value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
               ])]
           .map((stat, i) => (
-            <div key={i} className="bg-white p-4 rounded-3xl shadow-sm border border-[#5A5A40]/5 flex items-center gap-3.5 hover:-translate-y-0.5 hover:shadow-md transition-all">
-              <div className={`w-12 h-12 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
-                <stat.icon size={24} />
+            <div key={i} className="bg-white px-3 py-2.5 rounded-[26px] shadow-sm border border-[#5A5A40]/5 flex items-center gap-2.5 hover:-translate-y-0.5 hover:shadow-md transition-all">
+              <div className={`w-9 h-9 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center shrink-0`}>
+                <stat.icon size={18} />
               </div>
-              <div>
-                <p className="text-xs font-bold text-[#5A5A40]/40 uppercase tracking-widest">{stat.label}</p>
-                <p className="mt-0.5 text-xl font-bold text-[#5A5A40]">{stat.value}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-[0.18em] leading-tight">{stat.label}</p>
+                <p className="mt-1 text-lg leading-none font-bold text-[#5A5A40]">{stat.value}</p>
               </div>
             </div>
           ))}
       </div>
 
       <div className="order-2 overflow-hidden rounded-3xl border border-[#5A5A40]/5 bg-white shadow-sm">
-        <div className="border-b border-[#5A5A40]/8 px-5 py-4 md:px-6">
-          <div className="space-y-3">
+        <div className="border-b border-[#5A5A40]/8 px-4 py-2.5 md:px-5">
+          <div className="space-y-2.5">
             {!isDebtorsView && (
-              <div className="space-y-1">
-
-              </div>
-            )}
-
-            {!isDebtorsView && (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 2xl:grid-cols-4">
                 {quickDatePresets.map((preset) => {
                   const isActive = dateFilterMode === preset.key;
                   return (
@@ -961,11 +964,11 @@ export const InvoicesView: React.FC<{
                           setDateTo(todayIso);
                         }
                       }}
-                      className={`rounded-2xl border px-4 py-4 text-left transition-all ${isActive ? 'border-[#5A5A40] bg-[#5A5A40] text-white shadow-[0_10px_20px_rgba(90,90,64,0.14)]' : 'border-[#5A5A40]/10 bg-white text-[#5A5A40] hover:bg-[#f8f7f2]'}`}
+                      className={`rounded-2xl border px-3 py-2.5 text-left transition-all ${isActive ? 'border-[#5A5A40] bg-[#5A5A40] text-white shadow-[0_10px_20px_rgba(90,90,64,0.14)]' : 'border-[#5A5A40]/10 bg-white text-[#5A5A40] hover:bg-[#f8f7f2]'}`}
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-extrabold uppercase tracking-[0.18em]">{preset.label}</span>
-                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold ${isActive ? 'bg-white/16 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/70'}`}>
+                        <span className="text-[13px] font-extrabold uppercase tracking-[0.18em]">{preset.label}</span>
+                        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold ${isActive ? 'bg-white/16 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/70'}`}>
                           {preset.label.slice(0, 1)}
                         </span>
                       </div>
@@ -976,40 +979,11 @@ export const InvoicesView: React.FC<{
             )}
           </div>
 
-          <div className="hidden">
-            <div className={`rounded-[22px] border border-[#5A5A40]/8 bg-white ${isDebtorsView ? 'px-4 py-3' : 'p-4'}`}>
-              <p className="mt-2 text-2xl font-black text-[#423d2f]">{activeRangeMeta.label}</p>
-            </div>
-
-            <div className={`grid gap-3 ${isDebtorsView ? 'md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]' : 'md:grid-cols-2'}`}>
-              <div className={`rounded-[22px] border border-[#5A5A40]/8 bg-white px-4 ${isDebtorsView ? 'py-3' : 'py-4'}`}>
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#5A5A40]/45">{isDebtorsView ? 'В фокусе' : 'Продаж в выборке'}</p>
-                <p className="mt-1.5 text-2xl font-black text-[#423d2f]">{isDebtorsView ? invoicesSummary.totalDebtInvoices : invoicesSummary.totalCount}</p>
-              </div>
-              <div className={`rounded-[22px] border border-[#5A5A40]/8 bg-white px-4 ${isDebtorsView ? 'py-3' : 'py-4'}`}>
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#5A5A40]/45">{isDebtorsView ? 'Последняя активность' : 'Последняя продажа'}</p>
-                <p className="mt-1.5 text-lg font-black text-[#423d2f]">
-                  {latestVisibleInvoice
-                    ? (isDebtorsView
-                      ? (latestVisibleInvoice as Date).toLocaleDateString('ru-RU')
-                      : new Date((latestVisibleInvoice as any).createdAt).toLocaleDateString('ru-RU'))
-                    : 'Нет данных'}
-                </p>
-                <p className="mt-1 text-xs text-[#5A5A40]/58">
-                  {latestVisibleInvoice
-                    ? (isDebtorsView
-                      ? (latestVisibleInvoice as Date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-                      : new Date((latestVisibleInvoice as any).createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }))
-                    : '—'}
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
 
-        <div className="px-5 py-4 md:px-6">
+        <div className="px-4 py-2.5 md:px-5">
           {!isDebtorsView && dateFilterMode === 'custom' && (
-            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[22px] border border-[#5A5A40]/10 bg-white/80 px-3 py-3 shadow-sm">
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[22px] border border-[#5A5A40]/10 bg-white/80 px-3 py-2.5 shadow-sm">
               <input
                 type="date"
                 value={dateFrom}
@@ -1033,7 +1007,7 @@ export const InvoicesView: React.FC<{
             </div>
           )}
 
-          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative group w-full xl:max-w-85">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
             <input 
@@ -1041,11 +1015,11 @@ export const InvoicesView: React.FC<{
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={isDebtorsView ? 'Поиск по номеру или покупателю' : 'Поиск по номеру чека'} 
-              className="w-full min-w-0 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 transition-all shadow-sm"
+              className="w-full min-w-0 pl-12 pr-4 py-2.5 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 transition-all shadow-sm"
             />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar">
+          <div className="flex flex-wrap items-center gap-2">
             {[
               { key: 'date', label: 'По дате' },
               { key: 'amount', label: 'По сумме' },
@@ -1061,7 +1035,7 @@ export const InvoicesView: React.FC<{
                     setSortOrder('desc');
                   }
                 }}
-                className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+                className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
                   sortBy === option.key
                     ? `bg-[#5A5A40] text-white border-[#5A5A40] ${sortOrder === 'desc' ? '' : 'opacity-70'}`
                     : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
@@ -1074,7 +1048,7 @@ export const InvoicesView: React.FC<{
             {!isDebtorsView && (
               <button
                 onClick={() => setDateFilterMode('all')}
-                className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${dateFilterMode === 'all' ? 'bg-[#5A5A40] text-white border-[#5A5A40]' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'}`}
+                className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${dateFilterMode === 'all' ? 'bg-[#5A5A40] text-white border-[#5A5A40]' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'}`}
               >
                 Вся история
               </button>
@@ -1083,55 +1057,29 @@ export const InvoicesView: React.FC<{
         </div>
       </div>
       </div>
-
-      <div className="hidden grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          ...(isDebtorsView
-            ? [
-                { label: moneyLabel('Общий долг'), value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-rose-600', bg: 'bg-rose-50' },
-                { label: 'Количество должников', value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
-                { label: 'Накладных в долге', value: invoicesSummary.totalDebtInvoices.toString(), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-                { label: 'Средний долг', value: `${invoicesSummary.averageOrder.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: AlertCircle, color: 'text-[#7a5b1f]', bg: 'bg-[#fbf3df]' },
-              ]
-            : [
-                { label: moneyLabel(t('Total Revenue')), value: `${invoicesSummary.totalRevenue.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                { label: t('Total Invoices'), value: invoicesSummary.totalCount.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
-                { label: moneyLabel(t('Avg. Order Value')), value: `${invoicesSummary.averageOrder.toFixed(2)} ${currencyCode}`, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
-                { label: 'Остаток по продажам', value: `${invoicesSummary.totalOutstanding.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-              ])
-        ].map((stat, i) => (
-          <div key={i} className="bg-white p-4 rounded-3xl shadow-sm border border-[#5A5A40]/5 flex items-center gap-3.5 hover:-translate-y-0.5 hover:shadow-md transition-all">
-            <div className={`w-12 h-12 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center`}>
-              <stat.icon size={24} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-[#5A5A40]/40 uppercase tracking-widest">{stat.label}</p>
-              <p className="mt-0.5 text-xl font-bold text-[#5A5A40]">{stat.value}</p>
-            </div>
-          </div>
-        ))}
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+
+      <div className="flex flex-1 min-h-90 flex-col bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
         {actionError && (
           <div className="mx-6 mt-6 p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 flex items-center gap-2">
             <AlertCircle size={14} />
             {actionError}
           </div>
         )}
-        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: INVOICE_VIEWPORT_HEIGHT }} onScroll={onInvoicesScroll}>
+        <div className="flex-1 overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#f5f5f0]/50 text-[9px] uppercase tracking-[0.2em] text-[#5A5A40]/45 font-bold">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-[#f5f5f0]/95 text-[9px] uppercase tracking-[0.2em] text-[#5A5A40]/45 font-bold backdrop-blur-sm">
                 <th className="px-4 py-3.5 text-center">№</th>
                 <th className="px-6 py-3.5">{isDebtorsView ? 'Должник' : 'Номер чека'}</th>
-                <th className="px-6 py-3.5">{isDebtorsView ? 'Последняя активность' : t('Date & Time')}</th>
-                <th className="px-6 py-3.5">{isDebtorsView ? 'Состояние долга' : t('Payment')}</th>
+                <th className="px-6 py-3.5">{isDebtorsView ? 'Последняя активность' : 'Дата и время'}</th>
+                <th className="px-6 py-3.5">{isDebtorsView ? 'Состояние долга' : 'Оплата'}</th>
                 <th className="px-4 py-3.5 text-right">{isDebtorsView ? 'Накладных' : 'Количество'}</th>
                 <th className="px-4 py-3.5 text-right">{moneyLabel('Сумма')}</th>
                 <th className="px-4 py-3.5 text-right">{moneyLabel('Оплачено')}</th>
                 <th className="px-4 py-3.5 text-right">{moneyLabel('Остаток')}</th>
-                <th className="px-6 py-3.5 text-right">{t('Actions')}</th>
+                <th className="px-6 py-3.5 text-right">Действия</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#5A5A40]/5">
@@ -1152,20 +1100,14 @@ export const InvoicesView: React.FC<{
                   </td>
                 </tr>
               )}
-              {!isDebtorsView && invoiceTopSpacerHeight > 0 && (
-                <tr>
-                  <td colSpan={9} style={{ height: invoiceTopSpacerHeight }} />
-                </tr>
-              )}
-              {!isInitialInvoicesLoading && isDebtorsView && debtorGroups.map((debtor, index) => {
-                const rowNumber = index + 1;
+              {!isInitialInvoicesLoading && isDebtorsView && visibleDebtors.map((debtor, index) => {
                 const statusBadge = getPaymentStatusLabel('UNPAID', debtor.totalOutstanding, debtor.totalPaid);
 
                 return (
                   <tr key={debtor.key} className="hover:bg-[#f5f5f0]/30 transition-colors group align-top">
                     <td className="px-4 py-3.5 text-center">
                       <span className="inline-flex min-w-7 h-7 items-center justify-center rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-[12px] font-bold">
-                        {rowNumber}
+                        {pageStartIndex + index + 1}
                       </span>
                     </td>
                     <td className="px-6 py-3.5">
@@ -1214,7 +1156,7 @@ export const InvoicesView: React.FC<{
                         <button
                           onClick={() => setDetailsDebtor(debtor)}
                           className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
-                          title="Сверка: детали и суммы"
+                          title="Открыть: детали и суммы"
                         >
                           <ChevronRight size={14} />
                         </button>
@@ -1224,7 +1166,6 @@ export const InvoicesView: React.FC<{
                 );
               })}
               {!isInitialInvoicesLoading && !isDebtorsView && visibleInvoices.map((invoice, index) => {
-                const rowNumber = invoiceStartIndex + index + 1;
                 const totalAmount = Number(invoice.totalAmount || 0);
                 const returnedAmount = Number((invoice as any).returnedAmountTotal || 0);
                 const netAmount = totalAmount - returnedAmount;
@@ -1244,7 +1185,7 @@ export const InvoicesView: React.FC<{
                 <tr key={invoice.id} className="hover:bg-[#f5f5f0]/30 transition-colors group align-top">
                   <td className="px-4 py-3.5 text-center">
                     <span className="inline-flex min-w-7 h-7 items-center justify-center rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-[12px] font-bold">
-                      {rowNumber}
+                      {pageStartIndex + index + 1}
                     </span>
                   </td>
                   <td className="px-6 py-3.5">
@@ -1307,7 +1248,7 @@ export const InvoicesView: React.FC<{
                       <button
                         onClick={() => setDetailsInvoice(invoice)}
                         className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-md transition-all"
-                        title="Сверка: детали и суммы"
+                        title="Открыть: детали и суммы"
                       >
                         <ChevronRight size={14} />
                       </button>
@@ -1357,14 +1298,57 @@ export const InvoicesView: React.FC<{
                 </tr>
                 );
               })}
-              {invoiceBottomSpacerHeight > 0 && (
-                <tr>
-                  <td colSpan={9} style={{ height: invoiceBottomSpacerHeight }} />
+              {Array.from({ length: fillerRowsCount }).map((_, index) => (
+                <tr key={`filler-row-${index}`} className="pointer-events-none">
+                  <td colSpan={9} className="h-31 border-0 bg-white/70" />
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
+        {!isInitialInvoicesLoading && totalItems > itemsPerPage && (
+          <div className="border-t border-[#5A5A40]/8 px-5 py-4 md:px-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3 text-sm text-[#5A5A40]/70">
+                <span>
+                  Показано {pageStartIndex + 1}-{Math.min(pageStartIndex + itemsPerPage, totalItems)} из {totalItems}
+                </span>
+                <label className="flex items-center gap-2">
+                  <span>На странице</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+                  >
+                    {itemsPerPageOptions.map((size) => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="rounded-xl border border-[#5A5A40]/10 px-3 py-1.5 text-sm font-semibold text-[#5A5A40] transition-colors hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Назад
+                </button>
+                <span className="min-w-24 text-center text-sm font-semibold text-[#5A5A40]">
+                  {safeCurrentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="rounded-xl border border-[#5A5A40]/10 px-3 py-1.5 text-sm font-semibold text-[#5A5A40] transition-colors hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Вперед
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {detailsDebtor && (

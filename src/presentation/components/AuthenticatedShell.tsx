@@ -414,48 +414,52 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
           )}
         </div>
 
-        <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto custom-scrollbar">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setCurrentView(item.id as View)}
-              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl transition-all group relative ${
-                currentView === item.id
-                  ? 'bg-[#5A5A40] text-white shadow-lg'
-                  : 'text-white/40 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <item.icon size={20} className={currentView === item.id ? 'text-white' : 'group-hover:scale-110 transition-transform'} />
-              {isSidebarOpen && (
-                <span className="font-medium text-sm flex items-center gap-2">
-                  {item.label}
-                  {item.id === 'notifications' && notificationsCount > 0 ? (
-                    <span className="inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
+        <div className="flex-1 min-h-0 px-3 py-4 flex flex-col">
+          <div className="flex-1 min-h-0 rounded-[28px] border border-white/6 bg-white/3 shadow-inner flex flex-col overflow-hidden">
+            <nav className="flex-1 min-h-0 p-3 space-y-2 overflow-y-auto custom-scrollbar">
+              {menuItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setCurrentView(item.id as View)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl transition-all group relative ${
+                    currentView === item.id
+                      ? 'bg-[#5A5A40] text-white shadow-lg shadow-[#5A5A40]/25'
+                      : 'text-white/40 hover:text-white hover:bg-white/6'
+                  }`}
+                >
+                  <item.icon size={20} className={currentView === item.id ? 'text-white' : 'group-hover:scale-110 transition-transform'} />
+                  {isSidebarOpen && (
+                    <span className="font-medium text-sm flex items-center gap-2">
+                      {item.label}
+                      {item.id === 'notifications' && notificationsCount > 0 ? (
+                        <span className="inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
+                          {notificationsCount}
+                        </span>
+                      ) : null}
+                    </span>
+                  )}
+                  {currentView === item.id && !isSidebarOpen && (
+                    <div className="absolute left-0 w-1 h-6 bg-white rounded-r-full" />
+                  )}
+                  {!isSidebarOpen && item.id === 'notifications' && notificationsCount > 0 && (
+                    <span className="absolute top-2 right-2 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
                       {notificationsCount}
                     </span>
-                  ) : null}
-                </span>
-              )}
-              {currentView === item.id && !isSidebarOpen && (
-                <div className="absolute left-0 w-1 h-6 bg-white rounded-r-full" />
-              )}
-              {!isSidebarOpen && item.id === 'notifications' && notificationsCount > 0 && (
-                <span className="absolute top-2 right-2 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
-                  {notificationsCount}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
+                  )}
+                </button>
+              ))}
+            </nav>
 
-        <div className="p-3 border-t border-white/5">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3.5 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all group"
-          >
-            <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
-            {isSidebarOpen && <span className="font-medium text-sm">{t('Sign Out')}</span>}
-          </button>
+            <div className="p-3 border-t border-white/6 bg-black/10">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-3.5 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all group"
+              >
+                <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
+                {isSidebarOpen && <span className="font-medium text-sm">{t('Sign Out')}</span>}
+              </button>
+            </div>
+          </div>
         </div>
 
         <button
@@ -512,8 +516,8 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
           </div>
         </header>
 
-        <div className={`flex-1 p-6 custom-scrollbar relative ${currentView === 'pos' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-          <div key={currentView} className="pharma-view-enter">
+        <div className={`flex min-h-0 flex-1 flex-col p-6 custom-scrollbar relative ${currentView === 'pos' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <div key={currentView} className="pharma-view-enter flex h-full min-h-0 flex-col">
             <ViewErrorBoundary onReset={() => setCurrentView('dashboard')}>
               <Suspense fallback={<AppLoader compact label="Загружаем раздел" />}>
                 {renderView()}
