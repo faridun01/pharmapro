@@ -70,12 +70,12 @@ const InventoryRow = React.memo(function InventoryRow({ index, product, stockLab
           <p className="mt-0.5 text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{product.sku}</p>
           {(product.manufacturer || product.countryOfOrigin) && (
             <p className="mt-1 text-[10px] text-[#5A5A40]/45">
-              {[product.manufacturer, product.countryOfOrigin].filter(Boolean).join(' â€¢ ')}
+              {[product.manufacturer, product.countryOfOrigin].filter(Boolean).join(' • ')}
             </p>
           )}
           <p className="mt-1 text-[10px] text-[#5A5A40]/45">
             {batches.length > 0
-              ? `Партий: ${batches.length}${primaryBatch ? ` â€¢ Ближайший срок: ${new Date(primaryBatch.expiryDate).toLocaleDateString('ru-RU')}` : ''}`
+              ? `Партий: ${batches.length}${primaryBatch ? ` • Ближайший срок: ${new Date(primaryBatch.expiryDate).toLocaleDateString('ru-RU')}` : ''}`
               : 'Партий пока нет'}
           </p>
           {riskyBatchCount > 0 && (
@@ -766,7 +766,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                 >
                   Приход
                 </button>
-                <button onClick={() => setBatchHistoryProduct(null)} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">âœ•</button>
+                <button onClick={() => setBatchHistoryProduct(null)} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">✕</button>
               </div>
             </div>
             <div className="p-6 overflow-y-auto space-y-4">
@@ -825,7 +825,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                 <h3 className="text-xl font-bold text-[#5A5A40]">Добавление партии</h3>
                 <p className="text-sm text-[#5A5A40]/60 mt-1">Приход сохраняется прямо под товаром и попадает в историю партии.</p>
               </div>
-              <button onClick={() => setRestockModal((prev) => ({ ...prev, open: false, error: null }))} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">âœ•</button>
+              <button onClick={() => setRestockModal((prev) => ({ ...prev, open: false, error: null }))} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">✕</button>
             </div>
             <div className="p-6 overflow-y-auto space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -934,7 +934,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
               <h3 className="text-xl font-bold text-[#5A5A40]">{t('Manual Add Product')}</h3>
-              <button onClick={() => setIsAddOpen(false)} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">âœ•</button>
+              <button onClick={() => setIsAddOpen(false)} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">✕</button>
             </div>
             <div className="p-6 overflow-y-auto space-y-6">
               {/* Product Information Section */}
@@ -1218,8 +1218,8 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                           <p className="text-xs text-[#5A5A40]/50">{new Date(entry.createdAt).toLocaleString('ru-RU')}</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 text-xs">
-                          <p>Себестоимость: {entry.costPrice.old != null ? `${entry.costPrice.old.toFixed(2)} TJS` : 'â€”'} â†’ {entry.costPrice.new != null ? `${entry.costPrice.new.toFixed(2)} TJS` : 'â€”'}</p>
-                          <p>Цена продажи: {entry.sellingPrice.old != null ? `${entry.sellingPrice.old.toFixed(2)} TJS` : 'â€”'} â†’ {entry.sellingPrice.new != null ? `${entry.sellingPrice.new.toFixed(2)} TJS` : 'â€”'}</p>
+                          <p>Себестоимость: {entry.costPrice.old != null ? `${entry.costPrice.old.toFixed(2)} TJS` : '—'} → {entry.costPrice.new != null ? `${entry.costPrice.new.toFixed(2)} TJS` : '—'}</p>
+                          <p>Цена продажи: {entry.sellingPrice.old != null ? `${entry.sellingPrice.old.toFixed(2)} TJS` : '—'} → {entry.sellingPrice.new != null ? `${entry.sellingPrice.new.toFixed(2)} TJS` : '—'}</p>
                         </div>
                       </div>
                     ))}

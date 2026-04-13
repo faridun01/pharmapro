@@ -508,7 +508,7 @@ export const InvoicesView: React.FC<{
           id: item.id,
           productId: item.productId,
           productName: item.productName || '-',
-          batchNo: item.batchNo || 'â€”',
+          batchNo: item.batchNo || '—',
           soldQuantity: remainingQuantity,
           quantity: remainingQuantity,
         };
@@ -755,7 +755,7 @@ export const InvoicesView: React.FC<{
             <div class="muted">${invoice.customer ? `${isDebtorsView ? 'Покупатель' : 'Продажа'}: ${invoice.customer} | ` : ''}Дата: ${createdAt.toLocaleString('ru-RU')} | Статус: ${invoice.status}</div>
             <table>
               <thead>
-                <tr><th class="num">â„–</th><th>Товар</th><th class="right">Кол-во</th><th class="right">${moneyLabel('Цена')}</th><th class="right">${moneyLabel('Сумма')}</th></tr>
+                <tr><th class="num">№</th><th>Товар</th><th class="right">Кол-во</th><th class="right">${moneyLabel('Цена')}</th><th class="right">${moneyLabel('Сумма')}</th></tr>
               </thead>
               <tbody>
                 ${displayItems.map((item: any, index: number) => `<tr>
@@ -1040,7 +1040,7 @@ export const InvoicesView: React.FC<{
                     : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
                 }`}
               >
-                {option.label} {sortBy === option.key && (sortOrder === 'asc' ? 'â†‘' : 'â†“')}
+                {option.label} {sortBy === option.key && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
             ))}
 
@@ -1116,7 +1116,7 @@ export const InvoicesView: React.FC<{
                         </div>
                         <div>
                           <span className="font-semibold text-[#5A5A40] text-[13px] leading-none">{debtor.customer}</span>
-                          <p className="text-[10px] text-[#5A5A40]/45 mt-1">{debtor.invoiceCount} накладных â€¢ {debtor.totalUnits} ед.</p>
+                          <p className="text-[10px] text-[#5A5A40]/45 mt-1">{debtor.invoiceCount} накладных • {debtor.totalUnits} ед.</p>
                         </div>
                       </div>
                     </td>
@@ -1124,11 +1124,11 @@ export const InvoicesView: React.FC<{
                       <div className="space-y-1 text-[12px] text-[#5A5A40]/60 leading-none">
                         <div className="flex items-center gap-1.5">
                           <Calendar size={12} />
-                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleDateString('ru-RU') : 'â€”'}</span>
+                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleDateString('ru-RU') : '—'}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Clock size={12} />
-                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'â€”'}</span>
+                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
                         </div>
                       </div>
                     </td>
@@ -1459,7 +1459,7 @@ export const InvoicesView: React.FC<{
                 <table className="w-full text-sm">
                   <thead className="bg-[#f5f5f0]/60 text-[#5A5A40]/70 text-xs uppercase">
                     <tr>
-                      <th className="px-3 py-2 text-left">â„–</th>
+                      <th className="px-3 py-2 text-left">№</th>
                       <th className="px-3 py-2 text-left">Товар</th>
                       <th className="px-3 py-2 text-right">Кол-во</th>
                       <th className="px-3 py-2 text-right">{moneyLabel('Цена')}</th>
@@ -1618,7 +1618,7 @@ export const InvoicesView: React.FC<{
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-[#5A5A40]">{getProductDisplayLabel(item.productId, item.productName)}</p>
-                          <p className="text-[11px] text-[#5A5A40]/55 mt-1">Партия: {item.batchNo} â€¢ Продано: {formatPackQuantity(item.soldQuantity)}</p>
+                          <p className="text-[11px] text-[#5A5A40]/55 mt-1">Партия: {item.batchNo} • Продано: {formatPackQuantity(item.soldQuantity)}</p>
                         </div>
                         <p className="text-[11px] font-semibold text-[#5A5A40]/60">Макс: {formatPackQuantity(item.soldQuantity)}</p>
                       </div>
