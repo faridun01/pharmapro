@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
@@ -70,12 +70,12 @@ const InventoryRow = React.memo(function InventoryRow({ index, product, stockLab
           <p className="mt-0.5 text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{product.sku}</p>
           {(product.manufacturer || product.countryOfOrigin) && (
             <p className="mt-1 text-[10px] text-[#5A5A40]/45">
-              {[product.manufacturer, product.countryOfOrigin].filter(Boolean).join(' • ')}
+              {[product.manufacturer, product.countryOfOrigin].filter(Boolean).join(' â€¢ ')}
             </p>
           )}
           <p className="mt-1 text-[10px] text-[#5A5A40]/45">
             {batches.length > 0
-              ? `Партий: ${batches.length}${primaryBatch ? ` • Ближайший срок: ${new Date(primaryBatch.expiryDate).toLocaleDateString('ru-RU')}` : ''}`
+              ? `Партий: ${batches.length}${primaryBatch ? ` â€¢ Ближайший срок: ${new Date(primaryBatch.expiryDate).toLocaleDateString('ru-RU')}` : ''}`
               : 'Партий пока нет'}
           </p>
           {riskyBatchCount > 0 && (
@@ -231,7 +231,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
   });
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
   const [catalogPage, setCatalogPage] = useState(1);
-  const [catalogPageSize, setCatalogPageSize] = useState(10);
+  const catalogPageSize = 10;
 
   useEffect(() => {
     if (products.length > 0) {
@@ -242,8 +242,6 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
   }, [products.length, refreshProducts]);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
-
-  const catalogPageSizeOptions = [10, 25, 50];
 
   const generateBatchNumber = (sku: string): string => {
     if (!sku.trim()) return '';
@@ -301,7 +299,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
 
   useEffect(() => {
     setCatalogPage(1);
-  }, [debouncedSearchTerm, filter, catalogPageSize]);
+  }, [debouncedSearchTerm, filter]);
 
   useEffect(() => {
     if (catalogPage > totalCatalogPages) {
@@ -599,7 +597,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 animate-in fade-in duration-500">
+    <div className="space-y-3 animate-in fade-in duration-500">
       <div className="shrink-0 rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-3">
@@ -673,9 +671,9 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0">
-        <div className="flex h-full min-h-0 flex-col bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+      <div>
+        <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+            <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/50 font-bold">
@@ -717,23 +715,11 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
             </div>
 
             {filteredProducts.length > 10 && (
-              <div className="flex flex-col gap-3 border-t border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-h-[72px] flex-col gap-3 border-t border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-3 text-sm text-[#5A5A40]/70">
                   <span>
                     Показано {(safeCatalogPage - 1) * catalogPageSize + 1}-{Math.min(safeCatalogPage * catalogPageSize, filteredProducts.length)} из {filteredProducts.length}
                   </span>
-                  <label className="flex items-center gap-2">
-                    <span>На странице</span>
-                    <select
-                      value={catalogPageSize}
-                      onChange={(e) => setCatalogPageSize(Number(e.target.value))}
-                      className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                    >
-                      {catalogPageSizeOptions.map((size) => (
-                        <option key={size} value={size}>{size}</option>
-                      ))}
-                    </select>
-                  </label>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -780,7 +766,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                 >
                   Приход
                 </button>
-                <button onClick={() => setBatchHistoryProduct(null)} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">✕</button>
+                <button onClick={() => setBatchHistoryProduct(null)} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">âœ•</button>
               </div>
             </div>
             <div className="p-6 overflow-y-auto space-y-4">
@@ -839,7 +825,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                 <h3 className="text-xl font-bold text-[#5A5A40]">Добавление партии</h3>
                 <p className="text-sm text-[#5A5A40]/60 mt-1">Приход сохраняется прямо под товаром и попадает в историю партии.</p>
               </div>
-              <button onClick={() => setRestockModal((prev) => ({ ...prev, open: false, error: null }))} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">✕</button>
+              <button onClick={() => setRestockModal((prev) => ({ ...prev, open: false, error: null }))} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">âœ•</button>
             </div>
             <div className="p-6 overflow-y-auto space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -948,7 +934,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
               <h3 className="text-xl font-bold text-[#5A5A40]">{t('Manual Add Product')}</h3>
-              <button onClick={() => setIsAddOpen(false)} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">✕</button>
+              <button onClick={() => setIsAddOpen(false)} className="text-[#5A5A40]/50 hover:text-[#5A5A40]">âœ•</button>
             </div>
             <div className="p-6 overflow-y-auto space-y-6">
               {/* Product Information Section */}
@@ -1232,8 +1218,8 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                           <p className="text-xs text-[#5A5A40]/50">{new Date(entry.createdAt).toLocaleString('ru-RU')}</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 text-xs">
-                          <p>Себестоимость: {entry.costPrice.old != null ? `${entry.costPrice.old.toFixed(2)} TJS` : '—'} → {entry.costPrice.new != null ? `${entry.costPrice.new.toFixed(2)} TJS` : '—'}</p>
-                          <p>Цена продажи: {entry.sellingPrice.old != null ? `${entry.sellingPrice.old.toFixed(2)} TJS` : '—'} → {entry.sellingPrice.new != null ? `${entry.sellingPrice.new.toFixed(2)} TJS` : '—'}</p>
+                          <p>Себестоимость: {entry.costPrice.old != null ? `${entry.costPrice.old.toFixed(2)} TJS` : 'â€”'} â†’ {entry.costPrice.new != null ? `${entry.costPrice.new.toFixed(2)} TJS` : 'â€”'}</p>
+                          <p>Цена продажи: {entry.sellingPrice.old != null ? `${entry.sellingPrice.old.toFixed(2)} TJS` : 'â€”'} â†’ {entry.sellingPrice.new != null ? `${entry.sellingPrice.new.toFixed(2)} TJS` : 'â€”'}</p>
                         </div>
                       </div>
                     ))}

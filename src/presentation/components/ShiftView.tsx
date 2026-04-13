@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Clock,
@@ -476,6 +476,8 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
 }) => {
   const { t } = useTranslation();
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [lastClosedShift, setLastClosedShift] = useState<CloseShiftResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -512,6 +514,19 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
     setReportShiftId(initialReportShiftId);
     onInitialReportHandled?.();
   }, [initialReportShiftId, onInitialReportHandled]);
+
+  const totalPages = Math.max(1, Math.ceil(shifts.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedShifts = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+    return shifts.slice(startIndex, startIndex + itemsPerPage);
+  }, [shifts, safeCurrentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -621,7 +636,7 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
         <div>
           <h3 className="text-xs font-semibold text-[#5A5A40]/40 uppercase tracking-widest mb-4">{t('Shift History')}</h3>
           <div className="space-y-3">
-            {shifts.map((shift) => (
+            {paginatedShifts.map((shift) => (
               <div key={shift.id} className="bg-white rounded-2xl shadow-sm border border-[#5A5A40]/5 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${shift.status === 'OPEN' ? 'bg-emerald-100' : 'bg-[#f5f5f0]'}`}>
@@ -669,6 +684,34 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
               <p className="text-center text-[#5A5A40]/40 py-8">{t('No shifts recorded yet')}</p>
             )}
           </div>
+          {shifts.length > itemsPerPage && (
+            <div className="mt-4 flex min-h-[72px] flex-col gap-3 rounded-2xl border border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
+              <div className="text-sm text-[#5A5A40]/70">
+                Показано {(safeCurrentPage - 1) * itemsPerPage + 1}-{Math.min(safeCurrentPage * itemsPerPage, shifts.length)} из {shifts.length}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Назад
+                </button>
+                <span className="px-3 py-2 text-sm font-semibold text-[#5A5A40]">
+                  {safeCurrentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Вперед
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
@@ -143,8 +143,7 @@ export const InvoicesView: React.FC<{
   });
   const paymentAmountInputRef = useRef<HTMLInputElement | null>(null);
   const [initialLoadPending, setInitialLoadPending] = useState(false);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const itemsPerPageOptions = [10, 20, 50, 100];
+  const itemsPerPage = 10;
   const [currentPage, setCurrentPage] = useState(1);
   const resetPaymentModal = () => setPaymentModal({ open: false, invoice: null, amount: '', method: 'CASH', comment: '', error: null });
 
@@ -418,7 +417,7 @@ export const InvoicesView: React.FC<{
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, sortBy, sortOrder, dateFilterMode, dateFrom, dateTo, isDebtorsView, itemsPerPage]);
+  }, [debouncedSearchTerm, sortBy, sortOrder, dateFilterMode, dateFrom, dateTo, isDebtorsView]);
 
   const totalItems = isDebtorsView ? debtorGroups.length : filteredInvoices.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -509,7 +508,7 @@ export const InvoicesView: React.FC<{
           id: item.id,
           productId: item.productId,
           productName: item.productName || '-',
-          batchNo: item.batchNo || '—',
+          batchNo: item.batchNo || 'â€”',
           soldQuantity: remainingQuantity,
           quantity: remainingQuantity,
         };
@@ -756,7 +755,7 @@ export const InvoicesView: React.FC<{
             <div class="muted">${invoice.customer ? `${isDebtorsView ? 'Покупатель' : 'Продажа'}: ${invoice.customer} | ` : ''}Дата: ${createdAt.toLocaleString('ru-RU')} | Статус: ${invoice.status}</div>
             <table>
               <thead>
-                <tr><th class="num">№</th><th>Товар</th><th class="right">Кол-во</th><th class="right">${moneyLabel('Цена')}</th><th class="right">${moneyLabel('Сумма')}</th></tr>
+                <tr><th class="num">â„–</th><th>Товар</th><th class="right">Кол-во</th><th class="right">${moneyLabel('Цена')}</th><th class="right">${moneyLabel('Сумма')}</th></tr>
               </thead>
               <tbody>
                 ${displayItems.map((item: any, index: number) => `<tr>
@@ -909,8 +908,8 @@ export const InvoicesView: React.FC<{
   }, [getInvoiceOutstandingAmount, paymentModal.invoice]);
 
   return (
-    <div className="flex min-h-full flex-col gap-3 animate-in fade-in duration-500">
-      <div className="z-20 shrink-0 -mx-1 space-y-3 bg-[#f6f3ea]/95 px-1 pb-1">
+    <div className="space-y-3 animate-in fade-in duration-500">
+      <div className="-mx-1 space-y-3 bg-[#f6f3ea]/95 px-1 pb-1">
       <div className="order-1 grid grid-cols-2 gap-2 md:gap-2.5 2xl:grid-cols-4">
         {[
           ...(isDebtorsView
@@ -1041,7 +1040,7 @@ export const InvoicesView: React.FC<{
                     : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
                 }`}
               >
-                {option.label} {sortBy === option.key && (sortOrder === 'asc' ? '↑' : '↓')}
+                {option.label} {sortBy === option.key && (sortOrder === 'asc' ? 'â†‘' : 'â†“')}
               </button>
             ))}
 
@@ -1060,16 +1059,16 @@ export const InvoicesView: React.FC<{
       </div>
 
 
-      <div className="flex flex-1 min-h-90 flex-col bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
         {actionError && (
           <div className="mx-6 mt-6 p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 flex items-center gap-2">
             <AlertCircle size={14} />
             {actionError}
           </div>
         )}
-        <div className="flex-1 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 z-10">
+            <thead>
               <tr className="bg-[#f5f5f0]/95 text-[9px] uppercase tracking-[0.2em] text-[#5A5A40]/45 font-bold backdrop-blur-sm">
                 <th className="px-4 py-3.5 text-center">№</th>
                 <th className="px-6 py-3.5">{isDebtorsView ? 'Должник' : 'Номер чека'}</th>
@@ -1117,7 +1116,7 @@ export const InvoicesView: React.FC<{
                         </div>
                         <div>
                           <span className="font-semibold text-[#5A5A40] text-[13px] leading-none">{debtor.customer}</span>
-                          <p className="text-[10px] text-[#5A5A40]/45 mt-1">{debtor.invoiceCount} накладных • {debtor.totalUnits} ед.</p>
+                          <p className="text-[10px] text-[#5A5A40]/45 mt-1">{debtor.invoiceCount} накладных â€¢ {debtor.totalUnits} ед.</p>
                         </div>
                       </div>
                     </td>
@@ -1125,11 +1124,11 @@ export const InvoicesView: React.FC<{
                       <div className="space-y-1 text-[12px] text-[#5A5A40]/60 leading-none">
                         <div className="flex items-center gap-1.5">
                           <Calendar size={12} />
-                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleDateString('ru-RU') : '—'}</span>
+                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleDateString('ru-RU') : 'â€”'}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Clock size={12} />
-                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                          <span>{debtor.latestActivityAt ? debtor.latestActivityAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'â€”'}</span>
                         </div>
                       </div>
                     </td>
@@ -1307,24 +1306,12 @@ export const InvoicesView: React.FC<{
           </table>
         </div>
         {!isInitialInvoicesLoading && totalItems > itemsPerPage && (
-          <div className="border-t border-[#5A5A40]/8 px-5 py-4 md:px-6">
+          <div className="min-h-[72px] border-t border-[#5A5A40]/8 px-5 py-4 md:px-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-3 text-sm text-[#5A5A40]/70">
                 <span>
                   Показано {pageStartIndex + 1}-{Math.min(pageStartIndex + itemsPerPage, totalItems)} из {totalItems}
                 </span>
-                <label className="flex items-center gap-2">
-                  <span>На странице</span>
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                    className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                  >
-                    {itemsPerPageOptions.map((size) => (
-                      <option key={size} value={size}>{size}</option>
-                    ))}
-                  </select>
-                </label>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1472,7 +1459,7 @@ export const InvoicesView: React.FC<{
                 <table className="w-full text-sm">
                   <thead className="bg-[#f5f5f0]/60 text-[#5A5A40]/70 text-xs uppercase">
                     <tr>
-                      <th className="px-3 py-2 text-left">№</th>
+                      <th className="px-3 py-2 text-left">â„–</th>
                       <th className="px-3 py-2 text-left">Товар</th>
                       <th className="px-3 py-2 text-right">Кол-во</th>
                       <th className="px-3 py-2 text-right">{moneyLabel('Цена')}</th>
@@ -1631,7 +1618,7 @@ export const InvoicesView: React.FC<{
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-[#5A5A40]">{getProductDisplayLabel(item.productId, item.productName)}</p>
-                          <p className="text-[11px] text-[#5A5A40]/55 mt-1">Партия: {item.batchNo} • Продано: {formatPackQuantity(item.soldQuantity)}</p>
+                          <p className="text-[11px] text-[#5A5A40]/55 mt-1">Партия: {item.batchNo} â€¢ Продано: {formatPackQuantity(item.soldQuantity)}</p>
                         </div>
                         <p className="text-[11px] font-semibold text-[#5A5A40]/60">Макс: {formatPackQuantity(item.soldQuantity)}</p>
                       </div>

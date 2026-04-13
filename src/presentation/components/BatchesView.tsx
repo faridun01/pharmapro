@@ -44,6 +44,8 @@ export const BatchesView: React.FC<{
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<VisibleBatchStatus>('NEAR_EXPIRY');
   const [sortMode, setSortMode] = useState<BatchSortMode>('name');
+  const [batchPage, setBatchPage] = useState(1);
+  const batchPageSize = 10;
   const [restockModal, setRestockModal] = useState({
     open: false,
     productId: '',
@@ -188,6 +190,23 @@ export const BatchesView: React.FC<{
     });
   }, [filteredBatches, sortMode]);
 
+  const totalBatchPages = Math.max(1, Math.ceil(groupedBatches.length / batchPageSize));
+  const safeBatchPage = Math.min(batchPage, totalBatchPages);
+  const paginatedBatches = useMemo(() => {
+    const startIndex = (safeBatchPage - 1) * batchPageSize;
+    return groupedBatches.slice(startIndex, startIndex + batchPageSize);
+  }, [groupedBatches, safeBatchPage]);
+
+  useEffect(() => {
+    setBatchPage(1);
+  }, [debouncedSearchTerm, sortMode, statusFilter]);
+
+  useEffect(() => {
+    if (batchPage > totalBatchPages) {
+      setBatchPage(totalBatchPages);
+    }
+  }, [batchPage, totalBatchPages]);
+
   const openRestockModalForBatch = (batch: BatchWithProductName) => {
     setRestockModal({
       open: true,
@@ -265,7 +284,7 @@ export const BatchesView: React.FC<{
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div>
         {embedded ? null : (
           <>
@@ -357,13 +376,13 @@ export const BatchesView: React.FC<{
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
         {actionError && (
           <div className="mx-6 mt-6 p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100">
             {actionError}
           </div>
         )}
-        <div className="h-full overflow-x-auto overflow-y-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/50 font-bold">
@@ -384,7 +403,7 @@ export const BatchesView: React.FC<{
                   </td>
                 </tr>
               )}
-              {groupedBatches.map((group) => {
+              {paginatedBatches.map((group) => {
                 const isLowStock = group.minStock > 0 && group.totalQuantity <= group.minStock;
                 const groupStatus = getGroupStatusMeta(group);
 
@@ -449,6 +468,34 @@ export const BatchesView: React.FC<{
             </tbody>
           </table>
         </div>
+        {groupedBatches.length > batchPageSize && (
+          <div className="flex min-h-[72px] flex-col gap-3 border-t border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-[#5A5A40]/70">
+              Показано {(safeBatchPage - 1) * batchPageSize + 1}-{Math.min(safeBatchPage * batchPageSize, groupedBatches.length)} из {groupedBatches.length}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBatchPage((page) => Math.max(1, page - 1))}
+                disabled={safeBatchPage === 1}
+                className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Назад
+              </button>
+              <span className="px-3 py-2 text-sm font-semibold text-[#5A5A40]">
+                {safeBatchPage} / {totalBatchPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setBatchPage((page) => Math.min(totalBatchPages, page + 1))}
+                disabled={safeBatchPage === totalBatchPages}
+                className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Вперед
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {restockModal.open && (

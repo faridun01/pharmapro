@@ -416,7 +416,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
 
         <div className="flex-1 min-h-0 px-3 py-4 flex flex-col">
           <div className="flex-1 min-h-0 rounded-[28px] border border-white/6 bg-white/3 shadow-inner flex flex-col overflow-hidden">
-            <nav className="flex-1 min-h-0 p-3 space-y-2 overflow-y-auto custom-scrollbar">
+            <nav className="flex-1 p-3 space-y-2">
               {menuItems.map((item) => (
                 <button
                   key={item.id}
@@ -517,7 +517,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
         </header>
 
         <div className={`flex min-h-0 flex-1 flex-col p-6 custom-scrollbar relative ${currentView === 'pos' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-          <div key={currentView} className="pharma-view-enter flex h-full min-h-0 flex-col">
+          <div key={currentView} className="pharma-view-enter flex flex-col">
             <ViewErrorBoundary onReset={() => setCurrentView('dashboard')}>
               <Suspense fallback={<AppLoader compact label="Загружаем раздел" />}>
                 {renderView()}
