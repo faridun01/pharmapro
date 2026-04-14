@@ -75,11 +75,16 @@ export const InvoiceTableRow: React.FC<InvoiceTableRowProps> = React.memo(({
         </span>
       </td>
       <td className="px-6 py-3.5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-[#f5f5f0] rounded-lg flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
-            <FileText size={14} />
+        <div className="flex flex-col gap-0.5">
+          {isDebtorsView && (
+            <span className="text-xs text-[#5A5A40]/60 font-semibold leading-none mb-0.5">Покупатель: {invoice.customer || '—'}</span>
+          )}
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 bg-[#f5f5f0] rounded-lg flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
+              <FileText size={14} />
+            </div>
+            <span className="font-mono font-bold text-[#5A5A40] text-[13px] leading-none">{invoice.invoiceNo || invoice.id}</span>
           </div>
-          <span className="font-mono font-bold text-[#5A5A40] text-[13px] leading-none">{invoice.invoiceNo || invoice.id}</span>
         </div>
       </td>
       <td className="px-6 py-3.5">
