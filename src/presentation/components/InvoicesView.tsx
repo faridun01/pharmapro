@@ -335,7 +335,7 @@ export const InvoicesView: React.FC<{
                               <span className="inline-flex min-w-7 h-7 items-center justify-center rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-[12px] font-bold">{pageStartIndex + groupIdx + 1}</span>
                             </td>
                             <td className="px-6 py-3.5">
-                              <span className="font-bold text-[#5A5A40]">Покупатель: {group.customer}</span>
+                              <span className="font-bold text-[#5A5A40]">{group.customer}</span>
                             </td>
                             <td className="px-6 py-3.5">
                               <span className="text-[12px] text-[#5A5A40]/60">{group.latestActivityAt ? new Date(group.latestActivityAt).toLocaleDateString() : ''}</span>
