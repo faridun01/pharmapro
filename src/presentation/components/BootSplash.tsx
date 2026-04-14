@@ -34,7 +34,7 @@ export const BootSplash: React.FC<{
           initial={{ opacity: 1 }}
           exit={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
           transition={{ duration: 0.6, ease: 'easeInOut' }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#151619] overflow-hidden"
+          className="fixed inset-0 z-9999 flex items-center justify-center bg-[#151619] overflow-hidden"
         >
           {/* Background Decorative Elements */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -55,7 +55,7 @@ export const BootSplash: React.FC<{
               className="relative w-24 h-24 flex items-center justify-center mb-8"
             >
               <div className={`absolute inset-0 bg-[#5A5A40] blur-2xl opacity-20 ${!errorMessage && !showConfig && 'animate-pulse'}`} />
-              <div className="w-20 h-20 bg-gradient-to-br from-[#5A5A40] to-[#151619] border border-white/10 rounded-[28px] flex items-center justify-center shadow-2xl relative z-10">
+              <div className="w-20 h-20 bg-linear-to-br from-[#5A5A40] to-[#151619] border border-white/10 rounded-[28px] flex items-center justify-center shadow-2xl relative z-10">
                 <Pill size={40} className="text-white" />
               </div>
             </motion.div>
@@ -67,7 +67,7 @@ export const BootSplash: React.FC<{
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   onSubmit={handleApply}
-                  className="bg-white/5 border border-white/10 p-6 rounded-[32px] backdrop-blur-xl text-left"
+                  className="bg-white/5 border border-white/10 p-6 rounded-4xl backdrop-blur-xl text-left"
                 >
                   <h3 className="text-white font-black uppercase tracking-widest text-[10px] mb-4 text-center">Настройка базы данных</h3>
                   
@@ -147,7 +147,7 @@ export const BootSplash: React.FC<{
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#5A5A40] animate-pulse">
                       {statusMessage}
                     </p>
-                    <div className="w-48 h-[1px] bg-white/5 rounded-full overflow-hidden">
+                    <div className="w-48 h-px bg-white/5 rounded-full overflow-hidden">
                       <motion.div 
                         animate={{ x: ['-100%', '100%'] }}
                         transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -160,7 +160,7 @@ export const BootSplash: React.FC<{
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-red-500/10 border border-red-500/20 p-6 rounded-[32px] backdrop-blur-xl"
+                  className="bg-red-500/10 border border-red-500/20 p-6 rounded-4xl backdrop-blur-xl"
                 >
                   <h3 className="text-red-500 font-black uppercase tracking-widest text-xs mb-3">Ошибка подключения</h3>
                   <p className="text-white/60 text-xs leading-relaxed mb-6 font-medium">
@@ -188,7 +188,7 @@ export const BootSplash: React.FC<{
             </div>
 
             {/* Footer */}
-            <div className="absolute bottom-[-140px] left-0 right-0 text-center opacity-30">
+            <div className="absolute -bottom-35 left-0 right-0 text-center opacity-30">
                <span className="text-[8px] font-black text-white uppercase tracking-[0.4em]">PharmaPro Enterprise v2.4</span>
             </div>
           </div>
