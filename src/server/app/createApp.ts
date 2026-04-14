@@ -43,8 +43,19 @@ export const createApp = () => {
   app.use(compression());
   app.use(express.json({ limit: '12mb' }));
 
-  app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, service: 'pharmapro-api' });
+  app.get('/api/health', async (_req, res) => {
+    try {
+      // Smallest possible query to verify connection
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ ok: true, service: 'pharmapro-api', database: 'connected' });
+    } catch (err) {
+      res.status(503).json({ 
+        ok: false, 
+        service: 'pharmapro-api', 
+        database: 'disconnected', 
+        error: err instanceof Error ? err.message : String(err) 
+      });
+    }
   });
 
   app.use('/api/auth', authLimiter, authRouter);

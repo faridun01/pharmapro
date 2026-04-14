@@ -70,14 +70,62 @@ import { BootSplash } from './presentation/components/BootSplash';
 const App: React.FC = () => {
   const [user, setUser] = React.useState<User | null>(() => getStoredAuthUser());
   const [showSplash, setShowSplash] = React.useState(true);
+  const [status, setStatus] = React.useState('Запуск системы...');
+  const [error, setError] = React.useState<string | null>(null);
   const desktopControls = window.pharmaproDesktop?.controls;
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 4000);
-    return () => clearTimeout(timer);
+  const checkHealth = React.useCallback(async () => {
+    try {
+      const response = await fetch('/api/health');
+      const data = await response.json();
+      
+      if (response.ok && data.ok) {
+        setStatus('База данных готова');
+        return true;
+      } else {
+        setStatus('Инициализация базы данных...');
+        if (data.database === 'disconnected') {
+          // If we explicitly get a "disconnected" status, we show a descriptive error
+          setError('PostgreSQL disconnected');
+        }
+        return false;
+      }
+    } catch (err) {
+      setStatus('Подключение к серверу...');
+      return false;
+    }
   }, []);
+
+  React.useEffect(() => {
+    let polling = true;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 30; // 30 seconds total
+
+    const poll = async () => {
+      if (!polling) return;
+      
+      const isHealthy = await checkHealth();
+      
+      if (isHealthy) {
+        // Minimum branding display time: 3 seconds
+        setTimeout(() => {
+          setShowSplash(false);
+          polling = false;
+        }, 3000);
+      } else {
+        attempts++;
+        if (attempts >= MAX_ATTEMPTS) {
+          setError('Превышено время ожидания сервера. Проверьте статус PostgreSQL.');
+          polling = false;
+        } else {
+          setTimeout(poll, 1000);
+        }
+      }
+    };
+
+    poll();
+    return () => { polling = false; };
+  }, [checkHealth]);
 
   const handleLogin = async (login: string, password: string) => {
     const authSession = await loginWithPassword(login, password);
@@ -91,7 +139,16 @@ const App: React.FC = () => {
 
   return (
     <>
-      <BootSplash isVisible={showSplash} />
+      <BootSplash 
+        isVisible={showSplash} 
+        statusMessage={status}
+        errorMessage={error || undefined}
+        onRetry={() => {
+          setError(null);
+          setStatus('Повторная попытка...');
+          window.location.reload();
+        }}
+      />
       
       {!user ? (
         <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">

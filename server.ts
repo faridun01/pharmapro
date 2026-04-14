@@ -3,11 +3,10 @@ import path from 'path';
 import express from 'express';
 import { createApp } from './src/server/app/createApp';
 import { ensureAdminUser } from './src/server/common/auth';
-import { logStartupError } from './src/server/common/startup';
+import { logStartupError, runDatabaseMigrations, pingDatabase, ensureDatabaseExists } from './src/server/common/startup';
 import { config } from './src/server/config';
 import { logger } from './src/server/common/logger';
 import { prisma } from './src/server/infrastructure/prisma';
-import { pingDatabase } from './src/server/common/startup';
 
 const app = createApp();
 const isDev = config.NODE_ENV === 'development';
@@ -30,12 +29,17 @@ const server = app.listen(config.PORT, '0.0.0.0', async () => {
   logger.info(`PharmaPro ${isDev ? 'API server' : 'server'} running on http://localhost:${config.PORT}`);
   logger.info(`Environment: ${config.NODE_ENV}`);
   
-  await pingDatabase();
-  
   try {
+    await ensureDatabaseExists(config.DATABASE_URL);
+    await runDatabaseMigrations();
+    await pingDatabase();
     await ensureAdminUser();
+    logger.info('Startup tasks completed successfully.');
   } catch (err) {
+    logger.error('Startup failed during database initialization:', err);
     logStartupError(err);
+    // In production, we might want to shut down if DB is not ready, 
+    // but in Electron we often keep the process alive to show error in UI.
   }
 });
 
