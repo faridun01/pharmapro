@@ -137,6 +137,21 @@ const App: React.FC = () => {
     setUser(null);
   };
 
+  const handleSaveConfig = async (url: string) => {
+    setStatus('Применение настроек...');
+    try {
+      const result = await window.pharmaproDesktop?.saveDatabaseConfig(url);
+      if (result?.success) {
+        setStatus('Перезапуск сервера...');
+        // The polling in useEffect will automatically pick up the new server
+      } else {
+        setError(result?.error || 'Не удалось сохранить настройки');
+      }
+    } catch (err) {
+      setError('Ошибка IPC: Не удалось сохранить настройки');
+    }
+  };
+
   return (
     <>
       <BootSplash 
@@ -148,6 +163,7 @@ const App: React.FC = () => {
           setStatus('Повторная попытка...');
           window.location.reload();
         }}
+        onSaveConfig={handleSaveConfig}
       />
       
       {!user ? (

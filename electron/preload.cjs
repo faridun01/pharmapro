@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('pharmaproDesktop', {
     close: () => ipcRenderer.send('window:close'),
   },
   authHeaders: () => ipcRenderer.invoke('desktop:get-auth-headers'),
+  saveDatabaseConfig: (url) => ipcRenderer.invoke('desktop:save-db-config', url),
   markRuntime: (name, details = {}) => ipcRenderer.send('runtime:mark', {
     name,
     details,

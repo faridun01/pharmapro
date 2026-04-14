@@ -586,6 +586,46 @@ ipcMain.handle('desktop:get-auth-headers', () => {
   };
 });
 
+ipcMain.handle('desktop:save-db-config', async (_event, databaseUrl) => {
+  writeRuntimeLog('config-save-request', { url: databaseUrl?.replace(/:([^:@]+)@/, ':***@') });
+  
+  try {
+    const userDataDir = app.getPath('userData');
+    const envPath = path.join(userDataDir, '.env');
+    
+    // We strictly manage the .env file in userData for custom settings.
+    // If it exists, we update it; if not, we create it.
+    let content = '';
+    if (fs.existsSync(envPath)) {
+      content = fs.readFileSync(envPath, 'utf8');
+    }
+    
+    const lines = content.split('\n');
+    const dbUrlLine = `DATABASE_URL="${databaseUrl}"`;
+    const newLines = lines.filter(line => !line.startsWith('DATABASE_URL='));
+    newLines.push(dbUrlLine);
+    
+    fs.mkdirSync(userDataDir, { recursive: true });
+    fs.writeFileSync(envPath, newLines.join('\n').trim(), 'utf8');
+    
+    writeRuntimeLog('config-saved', { path: envPath });
+
+    // Restart the backend
+    if (backendProcess && !backendProcess.killed) {
+      writeRuntimeLog('backend-restart-killing-old', { pid: backendProcess.pid });
+      backendProcess.kill();
+      // Wait a moment for the process to die and port to clear
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    await startInternalBackend();
+    return { success: true };
+  } catch (error) {
+    writeRuntimeLog('config-save-failed', { error: error?.message });
+    return { success: false, error: error?.message };
+  }
+});
+
 ipcMain.on('runtime:mark', (_event, payload) => {
   writeRuntimeLog('runtime-mark', payload || {});
 });
