@@ -47,17 +47,14 @@ export default defineConfig(({mode}) => {
         'react',
         'react/jsx-runtime',
         'react-dom/client',
-        'react-i18next',
-        'i18next',
         'lucide-react',
         'motion/react',
         'recharts',
-        'clsx',
-        'tailwind-merge',
         'xlsx',
         'jspdf',
         'jspdf-autotable',
       ],
+      exclude: ['@tailwindcss/vite'],
     },
     build: {
       // Production optimizations

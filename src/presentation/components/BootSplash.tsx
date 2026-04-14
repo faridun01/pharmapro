@@ -1,121 +1,105 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Cross, Pill } from 'lucide-react';
+import React from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Pill, ShieldCheck } from 'lucide-react';
 
 export const BootSplash: React.FC<{
-  title?: string;
-  subtitle?: string;
-  compact?: boolean;
-  note?: string;
-  showProgress?: boolean;
-  durationMs?: number;
-}> = ({
-  title = 'PharmaPro',
-  subtitle = 'Подготавливаем рабочее пространство и подключаем данные аптеки',
-  compact = false,
-  note = 'Решение ITFORCE',
-  showProgress = !compact,
-  durationMs = 5000,
-}) => {
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    if (!showProgress) {
-      setProgress(0);
-      return;
-    }
-
-    const startedAt = Date.now();
-    const timer = window.setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const nextProgress = Math.min(100, Math.round((elapsed / durationMs) * 100));
-      setProgress(nextProgress);
-    }, 50);
-
-    setProgress(0);
-
-    return () => window.clearInterval(timer);
-  }, [durationMs, showProgress]);
-
-  const progressLabel = useMemo(() => {
-    if (!showProgress) {
-      return 'Синхронизация';
-    }
-
-    if (progress < 34) return 'Запуск';
-    if (progress < 68) return 'Подключение';
-    if (progress < 100) return 'Подготовка';
-    return 'Готово';
-  }, [progress, showProgress]);
-
+  isVisible: boolean;
+  onComplete?: () => void;
+}> = ({ isVisible }) => {
   return (
-    <div className={`pharma-splash ${compact ? 'pharma-splash--compact' : ''}`}>
-      <div className="pharma-splash__backdrop">
-        <div className="pharma-splash__orb pharma-splash__orb--left" />
-        <div className="pharma-splash__orb pharma-splash__orb--right" />
-        <div className="pharma-splash__cross pharma-splash__cross--top" />
-        <div className="pharma-splash__cross pharma-splash__cross--bottom" />
-        <div className="pharma-splash__grid" />
-      </div>
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0, scale: 1.1, filter: 'blur(20px)' }}
+          transition={{ duration: 0.8, ease: 'easeInOut' }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#151619] overflow-hidden"
+        >
+          {/* Background Decorative Elements */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <motion.div 
+              animate={{ 
+                scale: [1, 1.2, 1],
+                opacity: [0.3, 0.5, 0.3],
+                x: [-20, 20, -20]
+              }}
+              transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+              className="absolute -top-1/4 -left-1/4 w-full h-full bg-[#5A5A40]/20 blur-[120px] rounded-full" 
+            />
+            <motion.div 
+              animate={{ 
+                scale: [1, 1.3, 1],
+                opacity: [0.2, 0.4, 0.2],
+                y: [-30, 30, -30]
+              }}
+              transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
+              className="absolute -bottom-1/4 -right-1/4 w-full h-full bg-[#5A5A40]/10 blur-[100px] rounded-full" 
+            />
+          </div>
 
-      <div className="pharma-splash__card">
-        <div className="pharma-splash__sheen" />
+          <div className="relative flex flex-col items-center">
+            {/* Main Logo Animation */}
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.8, ease: 'backOut' }}
+              className="relative w-32 h-32 flex items-center justify-center"
+            >
+              <div className="absolute inset-0 bg-[#5A5A40] blur-3xl opacity-20 animate-pulse" />
+              <div className="w-24 h-24 bg-gradient-to-br from-[#5A5A40] to-[#151619] border border-white/10 rounded-[32px] flex items-center justify-center shadow-2xl relative z-10">
+                <Pill size={48} className="text-white" />
+              </div>
+              
+              {/* Spinning Rings */}
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                className="absolute inset-0 border-2 border-[#5A5A40]/30 rounded-[40px]"
+              />
+            </motion.div>
 
-        <div className="pharma-splash__badge">
-          <Cross size={compact ? 14 : 16} strokeWidth={2.1} />
-          <span>{note}</span>
-        </div>
+            {/* ITFORCE Branding */}
+            <div className="mt-12 text-center">
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.4, duration: 0.6 }}
+              >
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.5em] text-white/30 mb-2">Developed by</h2>
+                <h1 className="text-4xl font-black text-white tracking-widest flex items-center gap-1">
+                  IT<span className="text-[#5A5A40]">FORCE</span>
+                </h1>
+              </motion.div>
 
-        <div className="pharma-splash__logo-wrap">
-          <div className="pharma-splash__logo-ring" />
-          <div className="pharma-splash__emblem">
-            <div className="pharma-splash__emblem-mark">
-              <Cross size={compact ? 16 : 18} strokeWidth={2.1} />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1, duration: 1 }}
+                className="mt-8 flex items-center justify-center gap-4 py-2 px-6 rounded-full border border-white/5 bg-white/2 backdrop-blur-md"
+              >
+                <ShieldCheck size={14} className="text-[#5A5A40]" />
+                <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest">Enterprise Edition v2.4</span>
+              </motion.div>
+            </div>
+
+            {/* Progress indicator */}
+            <div className="absolute bottom-[-100px] w-64 h-[2px] bg-white/5 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ x: '-100%' }}
+                animate={{ x: '0%' }}
+                transition={{ duration: 3.5, ease: 'easeInOut' }}
+                className="w-full h-full bg-[#5A5A40]"
+              />
             </div>
           </div>
-          <div className="pharma-splash__logo-core">
-            <Pill size={compact ? 28 : 34} strokeWidth={2.1} />
-          </div>
-        </div>
 
-        <div className="pharma-splash__content">
-          <div className="pharma-splash__eyebrow">АПТЕЧНАЯ СИСТЕМА УПРАВЛЕНИЯ</div>
-          <h1 className="pharma-splash__title">{title}</h1>
-          <p className="pharma-splash__subtitle">{subtitle}</p>
-        </div>
-
-        <div className="pharma-splash__chips" aria-hidden="true">
-          <div className="pharma-splash__chip">
-            <span className="pharma-splash__chip-label">Партнер</span>
-            <span className="pharma-splash__chip-value">ITFORCE</span>
+          <div className="absolute bottom-12 left-0 right-0 text-center">
+            <p className="text-[10px] text-white/10 font-medium tracking-tight">
+              © 2026 PharmaPro Systems | Secured & Optimized by ITFORCE
+            </p>
           </div>
-          <div className="pharma-splash__chip">
-            <span className="pharma-splash__chip-label">Статус</span>
-            <span className="pharma-splash__chip-value">Безопасный запуск</span>
-          </div>
-          <div className="pharma-splash__chip">
-            <span className="pharma-splash__chip-label">Режим</span>
-            <span className="pharma-splash__chip-value">Поддержка ITFORCE</span>
-          </div>
-        </div>
-
-        <div className="pharma-splash__loader" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-
-        {showProgress ? (
-          <>
-            <div className="pharma-splash__progress" aria-hidden="true">
-              <div className="pharma-splash__progress-bar" style={{ transform: `translateX(${progress - 100}%)` }} />
-            </div>
-            <div className="pharma-splash__progress-meta">
-              <span className="pharma-splash__progress-state">{progressLabel}</span>
-              <span className="pharma-splash__progress-value">{progress}%</span>
-            </div>
-          </>
-        ) : null}
-      </div>
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

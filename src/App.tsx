@@ -65,9 +65,19 @@ const AppLoader: React.FC<{
   </div>
 );
 
+import { BootSplash } from './presentation/components/BootSplash';
+
 const App: React.FC = () => {
   const [user, setUser] = React.useState<User | null>(() => getStoredAuthUser());
+  const [showSplash, setShowSplash] = React.useState(true);
   const desktopControls = window.pharmaproDesktop?.controls;
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleLogin = async (login: string, password: string) => {
     const authSession = await loginWithPassword(login, password);
@@ -79,21 +89,23 @@ const App: React.FC = () => {
     setUser(null);
   };
 
-  if (!user) {
-    return (
-      <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">
-        {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
-        <div className="flex-1 min-h-0">
-          <LoginView embedded={Boolean(desktopControls)} onLogin={handleLogin} />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <Suspense fallback={<AppLoader label="Загружаем панель" />}>
-      <AuthenticatedApp onSignedOut={handleSignedOut} />
-    </Suspense>
+    <>
+      <BootSplash isVisible={showSplash} />
+      
+      {!user ? (
+        <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">
+          {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
+          <div className="flex-1 min-h-0">
+            <LoginView embedded={Boolean(desktopControls)} onLogin={handleLogin} />
+          </div>
+        </div>
+      ) : (
+        <Suspense fallback={<AppLoader label="Загружаем панель" />}>
+          <AuthenticatedApp onSignedOut={handleSignedOut} />
+        </Suspense>
+      )}
+    </>
   );
 };
 

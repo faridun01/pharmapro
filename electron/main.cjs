@@ -212,23 +212,21 @@ const warmDevRendererAssets = async () => {
 
   await waitForHttpOk(DEV_SERVER_URL, 15000);
 
-  for (const target of targets) {
+  writeRuntimeLog('dev-warm-start', { count: targets.length });
+
+  await Promise.all(targets.map(async (target) => {
     const targetUrl = new URL(target, viteBaseUrl).toString();
     const startedAt = Date.now();
     try {
       await fetchText(targetUrl);
-      writeRuntimeLog('dev-warm-hit', {
-        target,
-        elapsedMs: Date.now() - startedAt,
-      });
+      const elapsedMs = Date.now() - startedAt;
+      writeRuntimeLog('dev-warm-hit', { target, elapsedMs });
+      console.log(`[warmup] ✓ ${target} (${elapsedMs}ms)`);
     } catch (error) {
-      writeRuntimeLog('dev-warm-hit-failed', {
-        target,
-        message: error?.message,
-        elapsedMs: Date.now() - startedAt,
-      });
+      writeRuntimeLog('dev-warm-hit-failed', { target, message: error?.message });
+      console.warn(`[warmup] ✗ ${target} failed: ${error?.message}`);
     }
-  }
+  }));
 
   writeRuntimeLog('dev-warm-complete', {
     elapsedMs: Date.now() - warmStartedAt,
