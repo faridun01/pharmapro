@@ -672,7 +672,7 @@ export const WriteOffView: React.FC = () => {
                     <thead>
                       <tr className="text-xs text-[#5A5A40]/40 uppercase tracking-widest">
                         <th className="text-left py-2">Товар</th>
-                        <th className="text-left py-2">Партия</th>
+                        <th className="text-left py-2">Кол-во в партии</th>
                         <th className="text-right py-2">Списано</th>
                       </tr>
                     </thead>
@@ -680,7 +680,7 @@ export const WriteOffView: React.FC = () => {
                       {wo.items.map((item) => (
                         <tr key={item.id} className="border-t border-[#5A5A40]/5">
                           <td className="py-2 font-medium">{item.product?.name ?? 'Неизвестно'}</td>
-                          <td className="py-2 text-[#5A5A40]/60">{item.batch?.batchNumber ?? '—'}</td>
+                          <td className="py-2 text-[#5A5A40]/60">{'quantity' in (item.batch ?? {}) && typeof (item.batch as any).quantity === 'number' ? formatPackQuantity((item.batch as any).quantity) : '—'}</td>
                           <td className="py-2 text-right text-red-600 font-semibold">−{formatPackQuantity(item.quantity)}</td>
                         </tr>
                       ))}

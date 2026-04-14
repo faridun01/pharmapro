@@ -353,7 +353,7 @@ function CreateReturnModal({
                         onChange={(e) => updateItemPackaging(idx, '0', e.target.value)}
                         placeholder={t('Qty')}
                       />
-                      <p className="text-[10px] text-[#5A5A40]/55 leading-tight">Количество в единицах</p>
+                      <p className="text-[10px] text-[#5A5A40]/55 leading-tight">Кол-во в ед.</p>
                     </div>
                     <div className="col-span-2">
                       <input

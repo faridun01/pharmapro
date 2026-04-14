@@ -22,16 +22,40 @@ returnsRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
 }));
 
 returnsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
+
+  // Debug logging for incoming return creation requests
   const authedReq = req as AuthedRequest;
+  console.log('POST /api/returns body:', JSON.stringify(req.body, null, 2));
+  console.log('Authenticated user:', authedReq.user);
   const { items, ...data } = req.body ?? {};
 
+  // Robust validation
   if (!items || !Array.isArray(items) || items.length === 0) {
-    throw new ValidationError('items array is required');
+    console.error('Validation error: items array is required');
+    throw new ValidationError('Не выбраны позиции для возврата (items array is required)');
   }
 
   const typeVal = (data.type || '').toUpperCase();
   if (typeVal !== 'CUSTOMER' && typeVal !== 'SUPPLIER') {
-    throw new ValidationError('type must be CUSTOMER or SUPPLIER');
+    console.error('Validation error: type must be CUSTOMER or SUPPLIER');
+    throw new ValidationError('Тип возврата должен быть CUSTOMER или SUPPLIER');
+  }
+
+  // Validate each item
+  for (const [idx, item] of items.entries()) {
+    if (!item.productId || typeof item.productId !== 'string') {
+      console.error(`Validation error: productId is required for item ${idx}`);
+      throw new ValidationError(`Позиция №${idx + 1}: не выбран товар (productId is required)`);
+    }
+    if (!item.quantity || isNaN(Number(item.quantity)) || Number(item.quantity) <= 0) {
+      console.error(`Validation error: quantity must be > 0 for item ${idx}`);
+      throw new ValidationError(`Позиция №${idx + 1}: количество должно быть больше 0 (quantity > 0)`);
+    }
+    // unitPrice can be 0, so check for undefined/null only
+    if (item.unitPrice === undefined || item.unitPrice === null || isNaN(Number(item.unitPrice))) {
+      console.error(`Validation error: unitPrice is required for item ${idx}`);
+      throw new ValidationError(`Позиция №${idx + 1}: не указана цена (unitPrice)`);
+    }
   }
 
   const created = await returnsService.createReturn({
@@ -46,7 +70,7 @@ returnsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
       productId: item.productId,
       batchId: item.batchId || null,
       quantity: Number(item.quantity),
-      unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
+      unitPrice: Number(item.unitPrice),
       reason: item.reason || null,
     })),
     userId: authedReq.user.id,

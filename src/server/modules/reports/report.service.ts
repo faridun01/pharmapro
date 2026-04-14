@@ -1,7 +1,5 @@
 import { prisma } from '../../infrastructure/prisma';
-import { NotFoundError, ValidationError } from '../../common/errors';
 import { z } from 'zod';
-import { parseAuditJson } from '../../common/utils';
 
 export const ReportParamsSchema = z.object({
   preset: z.enum(['month', 'q1', 'q2', 'q3', 'q4', 'year', 'all']).optional().default('month'),
@@ -61,175 +59,375 @@ const addToAging = (aging: AgingBuckets, dueDate: Date | null, amount: number, n
   aging.bucket90Plus += value;
 };
 
+const resolveRange = (params: ReportParams) => {
+  const { from, to, preset } = params;
+  const now = new Date();
+
+  if (from || to) {
+    const explicitTo = to ? new Date(to) : now;
+    const explicitFrom = from ? new Date(from) : new Date(explicitTo.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { fromDate: explicitFrom, toDate: explicitTo };
+  }
+
+  let fromDate: Date;
+  let toDate = now;
+  switch (preset) {
+    case 'q1':
+      fromDate = new Date(now.getFullYear(), 0, 1);
+      toDate = new Date(now.getFullYear(), 2, 31, 23, 59, 59, 999);
+      break;
+    case 'q2':
+      fromDate = new Date(now.getFullYear(), 3, 1);
+      toDate = new Date(now.getFullYear(), 5, 30, 23, 59, 59, 999);
+      break;
+    case 'q3':
+      fromDate = new Date(now.getFullYear(), 6, 1);
+      toDate = new Date(now.getFullYear(), 8, 30, 23, 59, 59, 999);
+      break;
+    case 'q4':
+      fromDate = new Date(now.getFullYear(), 9, 1);
+      toDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+      break;
+    case 'year':
+      fromDate = new Date(now.getFullYear(), 0, 1);
+      break;
+    case 'all':
+      fromDate = new Date(2020, 0, 1);
+      break;
+    case 'month':
+    default:
+      fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      break;
+  }
+
+  return { fromDate, toDate };
+};
+
 export class ReportService {
   async getFinanceReport(params: ReportParams) {
-    const { from, to, preset } = params;
+    const { fromDate, toDate } = resolveRange(params);
+    const now = new Date();
 
-    // Range logic moved from routes
-    let fromDate: Date;
-    let toDate: Date = to ? new Date(to) : new Date();
+    const invoiceWhere = {
+      createdAt: { gte: fromDate, lte: toDate },
+      status: { not: 'CANCELLED' as const },
+    };
 
-    if (from && to) {
-      fromDate = new Date(from);
-    } else {
-      const now = new Date();
-      switch (preset) {
-        case 'q1': fromDate = new Date(now.getFullYear(), 0, 1); toDate = new Date(now.getFullYear(), 2, 31, 23, 59, 59); break;
-        case 'q2': fromDate = new Date(now.getFullYear(), 3, 1); toDate = new Date(now.getFullYear(), 5, 30, 23, 59, 59); break;
-        case 'q3': fromDate = new Date(now.getFullYear(), 6, 1); toDate = new Date(now.getFullYear(), 8, 30, 23, 59, 59); break;
-        case 'q4': fromDate = new Date(now.getFullYear(), 9, 1); toDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59); break;
-        case 'year': fromDate = new Date(now.getFullYear(), 0, 1); break;
-        case 'all': fromDate = new Date(2020, 0, 1); break;
-        case 'month':
-        default:
-          fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
-          break;
-      }
-    }
-
-    const whereRange = { createdAt: { gte: fromDate, lte: toDate } };
-
-    // 1. KPIs
-    const [invoices, returns, writeOffs, items] = await Promise.all([
+    const [
+      invoices,
+      returns,
+      writeOffs,
+      receivables,
+      payables,
+      batches,
+      purchaseInvoices,
+      payments,
+      expenses,
+      purchaseInvoiceItems,
+      returnItems,
+    ] = await Promise.all([
       prisma.invoice.findMany({
-        where: { ...whereRange, status: { notIn: ['CANCELLED'] } },
-        include: { items: true, payments: true },
+        where: invoiceWhere,
+        include: {
+          items: {
+            include: {
+              batch: {
+                select: {
+                  costBasis: true,
+                },
+              },
+            },
+          },
+          payments: true,
+          receivables: true,
+        },
       }),
       prisma.return.findMany({
-        where: { createdAt: { gte: fromDate, lte: toDate }, status: 'COMPLETED' },
+        where: {
+          createdAt: { gte: fromDate, lte: toDate },
+          status: 'COMPLETED',
+        },
+        include: {
+          items: true,
+        },
       }),
-      prisma.batchMovement.findMany({
-        where: { date: { gte: fromDate, lte: toDate }, type: 'WRITE_OFF' },
-        include: { batch: true },
+      prisma.writeOff.findMany({
+        where: {
+          createdAt: { gte: fromDate, lte: toDate },
+        },
+        include: {
+          items: true,
+        },
       }),
-      prisma.invoiceItem.findMany({
-          where: { invoice: { ...whereRange, status: { notIn: ['CANCELLED'] } } },
-          include: { batch: true }
-      })
+      prisma.receivable.findMany({
+        where: {
+          status: { not: 'PAID' },
+        },
+      }),
+      prisma.payable.findMany({
+        where: {
+          status: { not: 'PAID' },
+        },
+      }),
+      prisma.batch.findMany({
+        where: {
+          quantity: { gt: 0 },
+        },
+        include: {
+          product: true,
+        },
+      }),
+      prisma.purchaseInvoice.findMany({
+        where: {
+          invoiceDate: { gte: fromDate, lte: toDate },
+          status: { not: 'CANCELLED' },
+        },
+        include: {
+          items: true,
+          payments: true,
+          payables: true,
+        },
+      }),
+      prisma.payment.findMany({
+        where: {
+          paymentDate: { gte: fromDate, lte: toDate },
+          status: { not: 'CANCELLED' },
+        },
+      }),
+      prisma.expense.findMany({
+        where: {
+          date: { gte: fromDate, lte: toDate },
+        },
+      }),
+      prisma.purchaseInvoiceItem.findMany({
+        where: {
+          purchaseInvoice: {
+            invoiceDate: { gte: fromDate, lte: toDate },
+            status: { not: 'CANCELLED' },
+          },
+        },
+      }),
+      prisma.returnItem.findMany({
+        where: {
+          return: {
+            createdAt: { gte: fromDate, lte: toDate },
+            status: 'COMPLETED',
+          },
+        },
+      }),
     ]);
 
-    const revenueGross = invoices.reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
-    const customerReturnsAmount = returns.reduce((sum, ret) => sum + Number(ret.totalAmount), 0);
-    const netRevenue = revenueGross - customerReturnsAmount;
-    
-    // Simple COGS calculation (sum of unitCost * quantity for sold items)
-    // In production we'd use batch.costBasis
-    const cogs = items.reduce((sum, item) => {
-        const cost = Number(item.batch?.costBasis || 0);
-        return sum + (cost * Number(item.quantity));
-    }, 0);
-
+    const activeInvoices = invoices.filter((invoice) => invoice.status !== 'RETURNED');
+    const revenueGross = activeInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
+    const customerReturnsAmount = returns
+      .filter((entry) => entry.type === 'CUSTOMER')
+      .reduce((sum, entry) => sum + Number(entry.totalAmount || 0), 0);
+    const netRevenue = Math.max(0, revenueGross - customerReturnsAmount);
+    const cogs = activeInvoices.reduce((sum, invoice) => sum + invoice.items.reduce((itemSum, item) => {
+      const unitCost = Number(item.batch?.costBasis || 0);
+      return itemSum + (Number(item.quantity || 0) * unitCost);
+    }, 0), 0);
     const grossProfit = netRevenue - cogs;
     const grossMarginPct = netRevenue > 0 ? (grossProfit / netRevenue) * 100 : 0;
 
-    // 2. Debt Analysis
-    const [receivables, payables] = await Promise.all([
-      prisma.receivable.findMany({ where: { status: { not: 'PAID' } } }),
-      prisma.payable.findMany({ where: { status: { not: 'PAID' } } }),
-    ]);
+    const writeOffAmount = writeOffs.reduce((sum, entry) => sum + entry.items.reduce((itemSum, item) => itemSum + Number(item.lineTotal || (Number(item.unitCost || 0) * Number(item.quantity || 0))), 0), 0);
+    const expenseTotal = expenses.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    const operatingProfit = grossProfit - writeOffAmount - expenseTotal;
+    const operatingMarginPct = netRevenue > 0 ? (operatingProfit / netRevenue) * 100 : 0;
+    const taxSales = activeInvoices.reduce((sum, invoice) => sum + Number(invoice.taxAmount || 0), 0);
+    const taxPurchases = purchaseInvoices.reduce((sum, invoice) => sum + Number(invoice.taxAmount || 0), 0);
 
-    const now = new Date();
     const arAging = emptyAging();
     const apAging = emptyAging();
+    let receivableOverdue = 0;
+    let payableOverdue = 0;
 
-    for (const r of receivables) {
-        addToAging(arAging, r.dueDate, Number(r.remainingAmount), now);
+    for (const receivable of receivables) {
+      const remaining = Number(receivable.remainingAmount || 0);
+      addToAging(arAging, receivable.dueDate, remaining, now);
+      if (receivable.dueDate && receivable.dueDate.getTime() < now.getTime()) {
+        receivableOverdue += remaining;
+      }
     }
-    for (const p of payables) {
-        addToAging(apAging, p.dueDate, Number(p.remainingAmount), now);
+
+    for (const payable of payables) {
+      const remaining = Number(payable.remainingAmount || 0);
+      addToAging(apAging, payable.dueDate, remaining, now);
+      if (payable.dueDate && payable.dueDate.getTime() < now.getTime()) {
+        payableOverdue += remaining;
+      }
     }
 
-    const receivableTotal = arAging.total;
-    const payableTotal = apAging.total;
+    const inventoryDetailMap = new Map<string, {
+      productId: string;
+      name: string;
+      sku: string;
+      totalStock: number;
+      soldUnits: number;
+      returnedUnits: number;
+      writeOffUnits: number;
+      costValue: number;
+      retailValue: number;
+    }>();
 
-    // 3. Inventory Value & Details
-    const [batches, allInvoicesForStats] = await Promise.all([
-        prisma.batch.findMany({
-            where: { quantity: { gt: 0 } },
-            include: { product: true }
-        }),
-        prisma.invoice.findMany({
-          where: { ...whereRange, status: { notIn: ['CANCELLED'] } },
-          include: { items: true }
-        })
-    ]);
-
-    const inventoryDetailMap = new Map();
     let inventoryCostValue = 0;
     let inventoryRetailValue = 0;
 
-    for (const b of batches) {
-        const costVal = Number(b.quantity) * Number(b.costBasis || 0);
-        const retailVal = Number(b.quantity) * Number(b.product.sellingPrice || 0);
-        inventoryCostValue += costVal;
-        inventoryRetailValue += retailVal;
+    for (const batch of batches) {
+      const quantity = Number(batch.quantity || 0);
+      const costValue = quantity * Number(batch.costBasis || 0);
+      const retailValue = quantity * Number(batch.product.sellingPrice || 0);
+      inventoryCostValue += costValue;
+      inventoryRetailValue += retailValue;
 
-        const existing = inventoryDetailMap.get(b.productId) || { 
-            productId: b.productId, 
-            name: b.product.name, 
-            sku: b.product.sku, 
-            totalStock: 0, 
-            soldUnits: 0, 
-            returnedUnits: 0, 
-            writeOffUnits: 0, 
-            costValue: 0, 
-            retailValue: 0 
+      const existing = inventoryDetailMap.get(batch.productId) || {
+        productId: batch.productId,
+        name: batch.product.name,
+        sku: batch.product.sku,
+        totalStock: 0,
+        soldUnits: 0,
+        returnedUnits: 0,
+        writeOffUnits: 0,
+        costValue: 0,
+        retailValue: 0,
+      };
+
+      existing.totalStock += quantity;
+      existing.costValue += costValue;
+      existing.retailValue += retailValue;
+      inventoryDetailMap.set(batch.productId, existing);
+    }
+
+    for (const invoice of activeInvoices) {
+      for (const item of invoice.items) {
+        const row = inventoryDetailMap.get(item.productId);
+        if (row) row.soldUnits += Number(item.quantity || 0);
+      }
+    }
+
+    for (const item of returnItems) {
+      const row = inventoryDetailMap.get(item.productId);
+      if (row) row.returnedUnits += Number(item.quantity || 0);
+    }
+
+    for (const writeOff of writeOffs) {
+      for (const item of writeOff.items) {
+        const row = inventoryDetailMap.get(item.productId);
+        if (row) row.writeOffUnits += Number(item.quantity || 0);
+      }
+    }
+
+    const trendMap = new Map<string, { month: string; revenue: number; expenses: number; purchases: number }>();
+    for (let i = 11; i >= 0; i -= 1) {
+      const date = new Date(toDate);
+      date.setMonth(date.getMonth() - i);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      trendMap.set(key, { month: key, revenue: 0, expenses: 0, purchases: 0 });
+    }
+
+    for (const invoice of activeInvoices) {
+      const key = `${invoice.createdAt.getFullYear()}-${String(invoice.createdAt.getMonth() + 1).padStart(2, '0')}`;
+      if (trendMap.has(key)) {
+        trendMap.get(key)!.revenue += Number(invoice.totalAmount || 0);
+      }
+    }
+
+    for (const expense of expenses) {
+      const key = `${expense.date.getFullYear()}-${String(expense.date.getMonth() + 1).padStart(2, '0')}`;
+      if (trendMap.has(key)) {
+        trendMap.get(key)!.expenses += Number(expense.amount || 0);
+      }
+    }
+
+    for (const purchaseInvoice of purchaseInvoices) {
+      const key = `${purchaseInvoice.invoiceDate.getFullYear()}-${String(purchaseInvoice.invoiceDate.getMonth() + 1).padStart(2, '0')}`;
+      if (trendMap.has(key)) {
+        trendMap.get(key)!.purchases += Number(purchaseInvoice.totalAmount || 0);
+      }
+    }
+
+    const expenseByCategory = expenses.reduce<Record<string, number>>((acc, expense) => {
+      const key = String(expense.category || 'OTHER').trim() || 'OTHER';
+      acc[key] = (acc[key] || 0) + Number(expense.amount || 0);
+      return acc;
+    }, {});
+
+    const byMethod = payments.reduce<Record<string, number>>((acc, payment) => {
+      const key = String(payment.method || 'OTHER');
+      acc[key] = (acc[key] || 0) + Number(payment.amount || 0);
+      return acc;
+    }, {});
+    const cashflowIn = payments
+      .filter((payment) => payment.direction === 'IN')
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const cashflowOut = payments
+      .filter((payment) => payment.direction === 'OUT')
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+
+    const saleDetails = activeInvoices.map((invoice) => {
+      const invoicePaidAmount = invoice.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      const outstandingAmount = invoice.receivables.length > 0
+        ? Math.max(0, Number(invoice.receivables[0].remainingAmount || 0))
+        : Math.max(0, Number(invoice.totalAmount || 0) - invoicePaidAmount);
+
+      return {
+        invoiceId: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+        createdAt: invoice.createdAt.toISOString(),
+        customer: invoice.customer || 'Розничный покупатель',
+        paymentType: invoice.paymentType,
+        totalAmount: Number(invoice.totalAmount || 0),
+        paidAmount: invoicePaidAmount,
+        outstandingAmount,
+        itemCount: invoice.items.length,
+        soldUnits: invoice.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+        items: invoice.items.map((item) => {
+          const unitCost = Number(item.batch?.costBasis || 0);
+          const lineTotal = Number(item.totalPrice || 0);
+          const lineProfit = lineTotal - (Number(item.quantity || 0) * unitCost);
+
+          return {
+            productId: item.productId,
+            productName: item.productName,
+            sku: item.batchNo || '-',
+            quantity: Number(item.quantity || 0),
+            unitPrice: Number(item.unitPrice || 0),
+            unitCost,
+            lineTotal,
+            lineProfit,
+          };
+        }),
+      };
+    });
+
+    const productTotalsMap = new Map<string, { productId: string; name: string; sku: string; soldUnits: number; salesCount: number; revenue: number }>();
+    for (const sale of saleDetails) {
+      for (const item of sale.items) {
+        const existing = productTotalsMap.get(item.productId) || {
+          productId: item.productId,
+          name: item.productName,
+          sku: item.sku,
+          soldUnits: 0,
+          salesCount: 0,
+          revenue: 0,
         };
-        existing.totalStock += Number(b.quantity);
-        existing.costValue += costVal;
-        existing.retailValue += retailVal;
-        inventoryDetailMap.set(b.productId, existing);
+        existing.soldUnits += item.quantity;
+        existing.salesCount += 1;
+        existing.revenue += item.lineTotal;
+        productTotalsMap.set(item.productId, existing);
+      }
     }
 
-    // Add stats to inventoryDetails
-    for (const inv of allInvoicesForStats) {
-        for (const item of inv.items) {
-            const row = inventoryDetailMap.get(item.productId);
-            if (row) row.soldUnits += Number(item.quantity);
-        }
-    }
-
-    // 4. Trend Analysis (12 Months)
-    const trendMap = new Map();
-    for (let i = 11; i >= 0; i--) {
-        const d = new Date(toDate);
-        d.setMonth(d.getMonth() - i);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        trendMap.set(key, { month: key, revenue: 0, expenses: 0, purchases: 0 });
-    }
-
-    // Map sales to trends
-    for (const inv of invoices) {
-        const key = `${inv.createdAt.getFullYear()}-${String(inv.createdAt.getMonth() + 1).padStart(2, '0')}`;
-        if (trendMap.has(key)) {
-            trendMap.get(key).revenue += Number(inv.totalAmount);
-        }
-    }
-
-    // 5. Detailed Sales (Current Month / Preset)
-    const saleDetails = invoices.map(inv => ({
-        invoiceId: inv.id,
-        invoiceNo: inv.invoiceNo,
-        createdAt: inv.createdAt.toISOString(),
-        customer: inv.customer || 'Розничный покупатель',
-        paymentType: inv.paymentType,
-        totalAmount: Number(inv.totalAmount),
-        paidAmount: inv.payments.reduce((sum, p) => sum + Number(p.amount), 0),
-        outstandingAmount: Math.max(0, Number(inv.totalAmount) - inv.payments.reduce((sum, p) => sum + Number(p.amount), 0)),
-        itemCount: inv.items.length,
-        soldUnits: inv.items.reduce((sum, i) => sum + Number(i.quantity), 0),
-        items: inv.items.map(i => ({
-            productId: i.productId,
-            productName: i.productName,
-            sku: i.batchNo || '-',
-            quantity: Number(i.quantity),
-            unitPrice: Number(i.unitPrice),
-            lineTotal: Number(i.totalPrice)
-        }))
-    }));
+    const paidCount = invoices.filter((invoice) => invoice.paymentStatus === 'PAID').length;
+    const pendingCount = invoices.filter((invoice) => invoice.paymentStatus === 'UNPAID' || invoice.paymentStatus === 'PARTIALLY_PAID' || invoice.status === 'PENDING').length;
+    const returnedCount = invoices.filter((invoice) => invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED').length;
+    const cancelledCount = invoices.filter((invoice) => invoice.status === 'CANCELLED').length;
+    const totalCount = invoices.length;
+    const avgTicket = activeInvoices.length > 0 ? revenueGross / activeInvoices.length : 0;
+    const purchaseUnpaidCount = purchaseInvoices.filter((invoice) => invoice.paymentStatus === 'UNPAID' || invoice.paymentStatus === 'PARTIALLY_PAID').length;
 
     return {
-      range: { preset, from: fromDate.toISOString(), to: toDate.toISOString() },
+      range: { preset: params.preset, from: fromDate.toISOString(), to: toDate.toISOString() },
       kpi: {
         revenueGross,
         customerReturnsAmount,
@@ -237,30 +435,74 @@ export class ReportService {
         cogs,
         grossProfit,
         grossMarginPct,
-        operatingProfit: grossProfit - (writeOffs.reduce((sum, w) => sum + (Number(w.quantity) * Number(w.batch?.costBasis || 0)), 0)),
-        operatingMarginPct: netRevenue > 0 ? ((grossProfit - 0) / netRevenue) * 100 : 0,
-        expenseTotal: 0,
-        writeOffAmount: writeOffs.reduce((sum, w) => sum + (Number(w.quantity) * Number(w.batch?.costBasis || 0)), 0),
+        operatingProfit,
+        operatingMarginPct,
+        expenseTotal,
+        writeOffAmount,
+        taxSales,
+        taxPurchases,
+        taxNet: taxSales - taxPurchases,
+      },
+      invoices: {
+        totalCount,
+        paidCount,
+        pendingCount,
+        returnedCount,
+        cancelledCount,
+        avgTicket,
+      },
+      cashflow: {
+        inflow: cashflowIn,
+        outflow: cashflowOut,
+        net: cashflowIn - cashflowOut,
+        byMethod,
       },
       debts: {
-        receivableTotal,
-        payableTotal,
+        receivableTotal: arAging.total,
+        receivableOverdue,
+        payableTotal: apAging.total,
+        payableOverdue,
+        netWorkingCapitalExposure: arAging.total - apAging.total,
         arAging,
         apAging,
-        netWorkingCapitalExposure: receivableTotal - payableTotal,
+      },
+      purchases: {
+        total: purchaseInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0),
+        count: purchaseInvoices.length,
+        unpaidCount: purchaseUnpaidCount,
       },
       inventory: {
         costValue: inventoryCostValue,
         retailValue: inventoryRetailValue,
         unrealizedMargin: inventoryRetailValue - inventoryCostValue,
-        details: Array.from(inventoryDetailMap.values()).sort((a, b) => b.retailValue - a.retailValue).slice(0, 50),
+        details: Array.from(inventoryDetailMap.values()).sort((left, right) => right.retailValue - left.retailValue).slice(0, 100),
       },
+      balanceLike: {
+        cashLike: cashflowIn - cashflowOut,
+        inventoryCostValue,
+        receivableTotal: arAging.total,
+        payableTotal: apAging.total,
+        totalAssetsLike: (cashflowIn - cashflowOut) + inventoryCostValue + arAging.total,
+        totalLiabilitiesLike: apAging.total,
+        equityLike: ((cashflowIn - cashflowOut) + inventoryCostValue + arAging.total) - apAging.total,
+      },
+      expenseByCategory,
       trend: Array.from(trendMap.values()),
       currentMonthSales: {
-          from: fromDate.toISOString(),
-          to: toDate.toISOString(),
-          saleDetails
-      }
+        from: fromDate.toISOString(),
+        to: toDate.toISOString(),
+        saleDetails,
+        productTotals: Array.from(productTotalsMap.values()).sort((left, right) => right.revenue - left.revenue).slice(0, 50),
+      },
+      meta: {
+        source: {
+          invoiceCount: invoices.length,
+          purchaseInvoiceCount: purchaseInvoices.length,
+          paymentCount: payments.length,
+          expenseCount: expenses.length,
+          purchaseItemCount: purchaseInvoiceItems.length,
+        },
+      },
     };
   }
 }

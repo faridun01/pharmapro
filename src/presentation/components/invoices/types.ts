@@ -1,6 +1,6 @@
 import { Invoice } from '../../../core/domain';
 
-export type DateFilterMode = 'all' | 'today' | 'month' | 'year' | 'custom';
+export type DateFilterMode = 'all' | 'today' | 'week' | 'month' | 'year' | 'custom';
 
 export type EditableInvoiceItem = {
   id: string;

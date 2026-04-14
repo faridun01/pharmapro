@@ -36,6 +36,16 @@ const getInvoiceOutstandingAmount = (invoice: {
   return Math.max(0, Number(invoice.totalAmount || 0) - getInvoicePaidAmount(invoice));
 };
 
+const getReceivableRemainingAmount = (receivable: {
+  originalAmount?: number | null;
+  paidAmount?: number | null;
+  remainingAmount?: number | null;
+}) => {
+  const explicit = Number(receivable.remainingAmount ?? NaN);
+  if (Number.isFinite(explicit)) return Math.max(0, explicit);
+  return Math.max(0, Number(receivable.originalAmount || 0) - Number(receivable.paidAmount || 0));
+};
+
 const canManageCompanyProfile = (role: string | undefined) => {
   const normalized = String(role || '').toUpperCase();
   return normalized === 'ADMIN' || normalized === 'OWNER';
@@ -210,7 +220,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
   const chartMode = preset === 'month' ? 'day' : 'month';
 
-  const [products, salesInvoicesInRange, salesPaymentsInRange, ordinaryOpenInvoices, creditInvoices, batches, writeoffsMonth, monthlySalesInvoices] = await Promise.all([
+  const [products, salesInvoicesInRange, ordinaryOpenInvoices, creditInvoices, batches, writeoffsMonth, monthlySalesInvoices, receivables, purchasePayables] = await Promise.all([
     prisma.product.findMany({
       where: { isActive: true },
       select: {
@@ -225,8 +235,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     prisma.invoice.findMany({
       where: {
         createdAt: { gte: from, lte: to },
-        paymentType: { not: 'CREDIT' },
-        status: { notIn: ['CANCELLED', 'RETURNED'] },
+        status: { notIn: ['CANCELLED'] },
       },
       select: {
         id: true,
@@ -248,17 +257,6 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
             amount: true,
           },
         },
-      },
-    }),
-    prisma.payment.findMany({
-      where: {
-        paymentDate: { gte: from, lte: to },
-        direction: 'IN',
-        invoiceId: { not: null },
-      },
-      select: {
-        amount: true,
-        paymentDate: true,
       },
     }),
     prisma.invoice.findMany({
@@ -313,11 +311,14 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
       },
     }),
     prisma.batch.findMany({
-      where: {},
+      where: {
+        quantity: { gt: 0 },
+      },
       select: {
         id: true,
         productId: true,
         batchNumber: true,
+        quantity: true,
         product: {
           select: {
             name: true,
@@ -344,11 +345,12 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
       where: {
         createdAt: { gte: monthStart, lte: monthEnd },
         paymentType: { not: 'CREDIT' },
-        status: { notIn: ['CANCELLED', 'RETURNED'] },
+        status: { notIn: ['CANCELLED'] },
       },
       select: {
         id: true,
         totalAmount: true,
+        status: true,
         items: {
           select: {
             quantity: true,
@@ -359,6 +361,39 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
             },
           },
         },
+      },
+    }),
+    prisma.receivable.findMany({
+      where: {
+        status: { not: 'PAID' },
+      },
+      select: {
+        id: true,
+        invoiceId: true,
+        originalAmount: true,
+        paidAmount: true,
+        remainingAmount: true,
+        dueDate: true,
+        customer: {
+          select: {
+            name: true,
+          },
+        },
+        invoice: {
+          select: {
+            invoiceNo: true,
+            customer: true,
+          },
+        },
+      },
+    }),
+    prisma.payable.findMany({
+      where: {
+        status: { not: 'PAID' },
+      },
+      select: {
+        remainingAmount: true,
+        dueDate: true,
       },
     }),
   ]);
@@ -380,11 +415,11 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     }))
     .sort((left, right) => (left.currentStock - left.minStock) - (right.currentStock - right.minStock));
 
-  const expiredBatchesCount = batches.filter(b => b.expiryDate && new Date(b.expiryDate) < now).length;
+  const expiredBatchesCount = batches.filter(b => Number(b.quantity || 0) > 0 && b.expiryDate && new Date(b.expiryDate) < now).length;
   const expiringBatchesCount = batches.filter(b => {
     if (!b.expiryDate) return false;
     const expDate = new Date(b.expiryDate);
-    return expDate >= now && expDate <= thirtyDaysLater;
+    return Number(b.quantity || 0) > 0 && expDate >= now && expDate <= thirtyDaysLater;
   }).length;
   
   const expiringItems = batches
@@ -414,18 +449,103 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
 
   const totalDebtorOutstanding = debtorOpenInvoices.reduce((sum, invoice) => sum + getInvoiceOutstanding(invoice), 0);
   const totalDebtorCustomersCount = new Set(debtorOpenInvoices.map((invoice) => getDebtorCustomerKey(invoice))).size;
-
-  const revenueInRange = salesPaymentsInRange.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const revenueGrossInRange = salesInvoicesInRange
+    .filter((invoice) => invoice.status !== 'RETURNED')
+    .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
+  const returnsInRange = salesInvoicesInRange
+    .filter((invoice) => invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED')
+    .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
+  const revenueInRange = Math.max(0, revenueGrossInRange - returnsInRange);
   const rangeDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1);
   const avgDailyRevenue = revenueInRange / rangeDays;
+  const salesByKey = new Map<string, number>();
+  for (const invoice of salesInvoicesInRange) {
+    const invoiceDate = new Date(invoice.createdAt);
+    const key = chartMode === 'day'
+      ? invoiceDate.toISOString().slice(0, 10)
+      : `${invoiceDate.getFullYear()}-${String(invoiceDate.getMonth() + 1).padStart(2, '0')}`;
+    const sign = invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED' ? -1 : 1;
+    salesByKey.set(key, (salesByKey.get(key) || 0) + (Number(invoice.totalAmount || 0) * sign));
+  }
 
-  const revenueTrend = chartMode === 'day' 
+  const revenueTrend = chartMode === 'day'
     ? Array.from({ length: Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1 }).map((_, i) => {
-        const d = new Date(from); d.setDate(d.getDate() + i);
-        const dayStr = d.toISOString().slice(0, 10);
-        return { key: dayStr, name: d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }), sales: 0 };
+        const date = new Date(from);
+        date.setDate(date.getDate() + i);
+        const key = date.toISOString().slice(0, 10);
+        return {
+          key,
+          name: date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }),
+          sales: Number(salesByKey.get(key) || 0),
+        };
+      })
+    : Array.from({ length: ((to.getFullYear() - from.getFullYear()) * 12) + (to.getMonth() - from.getMonth()) + 1 }).map((_, i) => {
+        const date = new Date(from.getFullYear(), from.getMonth() + i, 1);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        return {
+          key,
+          name: date.toLocaleDateString('ru-RU', { month: 'short', year: '2-digit' }),
+          sales: Number(salesByKey.get(key) || 0),
+        };
+      });
+
+  const monthlyRevenueGross = monthlySalesInvoices
+    .filter((invoice) => invoice.status !== 'RETURNED')
+    .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
+  const monthlyReturnAmount = monthlySalesInvoices
+    .filter((invoice) => invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED')
+    .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
+  const monthlyCogs = monthlySalesInvoices
+    .filter((invoice) => invoice.status !== 'RETURNED')
+    .reduce((sum, invoice) => sum + invoice.items.reduce((itemSum, item) => itemSum + (Number(item.quantity || 0) * Number(item.batch?.costBasis || 0)), 0), 0);
+  const monthlyNetRevenue = Math.max(0, monthlyRevenueGross - monthlyReturnAmount);
+  const grossMarginMonth = monthlyNetRevenue - monthlyCogs;
+  const writeOffAmountMonth = writeoffsMonth.reduce((sum, writeoff) => sum + Number(
+    writeoff.totalAmount ||
+    writeoff.items.reduce((itemSum, item) => itemSum + Number(item.lineTotal || (Number(item.unitCost || 0) * Number(item.quantity || 0))), 0),
+  ), 0);
+
+  const overdueItems = receivables
+    .map((receivable) => {
+      const remainingAmount = getReceivableRemainingAmount(receivable);
+      if (!receivable.dueDate || remainingAmount <= 0) return null;
+      const dueDate = new Date(receivable.dueDate);
+      const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysOverdue <= 0) return null;
+
+      return {
+        invoiceId: receivable.invoiceId || receivable.id,
+        invoiceNo: receivable.invoice?.invoiceNo || '—',
+        customerName: receivable.customer?.name || receivable.invoice?.customer || 'Покупатель',
+        remainingAmount,
+        daysOverdue,
+      };
     })
-    : []; // Trending logic simplified for brevity in dashboard
+    .filter(Boolean)
+    .sort((left, right) => Number(right?.daysOverdue || 0) - Number(left?.daysOverdue || 0));
+
+  const dueTomorrowItems = receivables
+    .map((receivable) => {
+      const remainingAmount = getReceivableRemainingAmount(receivable);
+      if (!receivable.dueDate || remainingAmount <= 0) return null;
+      const dueDate = new Date(receivable.dueDate);
+      if (dueDate < tomorrowStart || dueDate >= tomorrowEnd) return null;
+
+      return {
+        invoiceId: receivable.invoiceId || receivable.id,
+        invoiceNo: receivable.invoice?.invoiceNo || '—',
+        customerName: receivable.customer?.name || receivable.invoice?.customer || 'Покупатель',
+        remainingAmount,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => Number(right?.remainingAmount || 0) - Number(left?.remainingAmount || 0));
+
+  const totalReceivableOutstanding = receivables.reduce((sum, receivable) => sum + getReceivableRemainingAmount(receivable), 0);
+  const overdueAmountTotal = overdueItems.reduce((sum, item) => sum + Number(item?.remainingAmount || 0), 0);
+  const overdueCustomersCount = new Set(overdueItems.map((item) => String(item?.customerName || '').toLocaleLowerCase('ru-RU'))).size;
+  const dueTomorrowAmountTotal = dueTomorrowItems.reduce((sum, item) => sum + Number(item?.remainingAmount || 0), 0);
+  const payableTotal = purchasePayables.reduce((sum, payable) => sum + Number(payable.remainingAmount || 0), 0);
 
   const result = {
     range: { preset, from, to },
@@ -434,8 +554,20 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     invoices: { unpaidCount: unpaidInvoices.length, unpaidAmount, averageUnpaid: unpaidInvoices.length > 0 ? unpaidAmount / unpaidInvoices.length : 0 },
     revenue: { total: revenueInRange, averageDaily: avgDailyRevenue, recognizedInvoiceCount: salesInvoicesInRange.length },
     revenueTrend: { mode: chartMode, items: revenueTrend },
-    finance: { outstandingOrdinarySales: unpaidAmount, totalDebtorOutstanding, writeOffAmountMonth: 0, grossMarginMonth: 0 },
-    summary: { totalProducts: products.length, alertCount: lowStockProducts.length + expiredBatchesCount + expiringBatchesCount },
+    finance: { outstandingOrdinarySales: unpaidAmount, totalDebtorOutstanding, writeOffAmountMonth, grossMarginMonth, payableTotal },
+    creditReceivables: {
+      totalOutstandingAmount: totalReceivableOutstanding,
+      totalCustomersCount: totalDebtorCustomersCount,
+      openCount: receivables.filter((entry) => getReceivableRemainingAmount(entry) > 0).length,
+      overdueAmountTotal,
+      overdueCount: overdueItems.length,
+      overdueCustomersCount,
+      overdueItems: overdueItems.slice(0, 5),
+      dueTomorrowAmountTotal,
+      dueTomorrowCount: dueTomorrowItems.length,
+      dueTomorrowItems: dueTomorrowItems.slice(0, 5),
+    },
+    summary: { totalProducts: products.length, totalBatches: batches.length, alertCount: lowStockProducts.length + expiredBatchesCount + expiringBatchesCount + overdueItems.length },
     inventoryHighlights: { totalInventoryUnits: products.reduce((sum, p) => sum + Number(p.totalStock || 0), 0), lowStockItems: lowStockProducts.slice(0, 5), expiringItems }
   };
 

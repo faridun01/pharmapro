@@ -2,6 +2,7 @@ import { prisma } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { reportCache } from '../../common/cache';
+import { computeBatchStatus } from '../../common/batchStatus';
 
 export type RestockItemInput = {
   productId: string;
@@ -33,14 +34,6 @@ export type PurchaseInvoiceImportInput = {
   taxAmount?: number;
   comment?: string;
   items: PurchaseInvoiceImportItemInput[];
-};
-
-const getBatchStatus = (expiryDate: Date): 'CRITICAL' | 'STABLE' | 'NEAR_EXPIRY' | 'EXPIRED' => {
-  const diffDays = Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (diffDays <= 0) return 'EXPIRED';
-  if (diffDays <= 30) return 'CRITICAL';
-  if (diffDays <= 90) return 'NEAR_EXPIRY';
-  return 'STABLE';
 };
 
 const mapProductStatus = (totalStock: number, minStock: number) => {
@@ -86,7 +79,7 @@ export class InventoryService {
           manufacturedDate: input.manufacturedDate,
           receivedAt: new Date(),
           expiryDate: input.expiryDate,
-          status: getBatchStatus(input.expiryDate),
+          status: computeBatchStatus(input.expiryDate),
           productId: input.productId,
         },
       });
@@ -404,7 +397,7 @@ export class InventoryService {
             manufacturedDate: item.manufacturedDate,
             receivedAt: input.invoiceDate,
             expiryDate: item.expiryDate,
-            status: getBatchStatus(item.expiryDate),
+            status: computeBatchStatus(item.expiryDate),
             productId: product.id,
             purchaseItemId: purchaseItem.id,
           },

@@ -4,6 +4,7 @@ import { NotFoundError, ValidationError } from '../../common/errors';
 import { computeProductStatus } from '../../common/productStatus';
 import { reportCache } from '../../common/cache';
 import { resolveCustomerDueDate } from '../../common/customerTerms';
+import { computeBatchStatus } from '../../common/batchStatus';
 
 export type SaleItemInput = {
   productId: string;
@@ -136,9 +137,9 @@ export class SalesService {
           batches: {
             where: { quantity: { gt: 0 } },
             orderBy: [
+              { expiryDate: 'asc' },
               { receivedAt: 'asc' },
               { createdAt: 'asc' },
-              { expiryDate: 'asc' },
             ],
           },
         },
@@ -165,7 +166,7 @@ export class SalesService {
 
         let remainingToDeduct = quantity;
 
-        // FIFO: deduct from the oldest received batches first.
+        // FEFO for pharmacy inventory: consume the earliest expiry first.
         for (const batch of validBatches) {
           if (remainingToDeduct <= 0) break;
 
@@ -182,6 +183,7 @@ export class SalesService {
               quantity: nextQty,
               currentQty: nextCurrent,
               availableQty: nextAvailable,
+              status: computeBatchStatus(batch.expiryDate),
             },
           });
 

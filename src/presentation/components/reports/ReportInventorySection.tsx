@@ -11,41 +11,65 @@ interface Props {
 export const ReportInventorySection: React.FC<Props> = ({ data, currencyCode }) => {
   const { t } = useTranslation();
   const inventory = data.inventory;
+  const totalSoldUnits = inventory.details.reduce((sum, row) => sum + row.soldUnits, 0);
+  const totalReturnedUnits = inventory.details.reduce((sum, row) => sum + row.returnedUnits, 0);
+  const totalWriteOffUnits = inventory.details.reduce((sum, row) => sum + row.writeOffUnits, 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-8">
-      <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-        <h3 className="font-semibold text-slate-800">{t('reports.inventoryPerformance')}</h3>
-        <span className="text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-700">
-            {inventory.details.length} {t('reports.activeItems')}
-        </span>
+    <div className="space-y-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Товаров в отчете</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{inventory.details.length}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Продано / возвращено</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{totalSoldUnits} / {totalReturnedUnits}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Списано / нереализованная маржа</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{totalWriteOffUnits} / {formatMoney(inventory.unrealizedMargin, currencyCode)}</p>
+        </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50/50">
-              <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{t('reports.product')}</th>
-              <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">{t('reports.stock')}</th>
-              <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">{t('reports.sold')}</th>
-              <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">{t('reports.costValue')}</th>
-              <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">{t('reports.retailValue')}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {inventory.details.map((row) => (
-              <tr key={row.productId} className="hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-slate-900">{row.name}</div>
-                  <div className="text-xs text-slate-400">{row.sku}</div>
-                </td>
-                <td className="px-6 py-4 text-right text-sm text-slate-600">{row.totalStock}</td>
-                <td className="px-6 py-4 text-right text-sm text-slate-600">{row.soldUnits}</td>
-                <td className="px-6 py-4 text-right text-sm text-slate-600">{formatMoney(row.costValue, currencyCode)}</td>
-                <td className="px-6 py-4 text-right text-sm font-semibold text-slate-900">{formatMoney(row.retailValue, currencyCode)}</td>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <h3 className="font-semibold text-slate-800">{t('reports.inventoryPerformance')}</h3>
+          <span className="text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-700">
+              {inventory.details.length} {t('reports.activeItems')}
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50">
+                <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{t('reports.product')}</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">{t('reports.stock')}</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">{t('reports.sold')}</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Возвраты</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Списания</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">{t('reports.costValue')}</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">{t('reports.retailValue')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {inventory.details.map((row) => (
+                <tr key={row.productId} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-medium text-slate-900">{row.name}</div>
+                    <div className="text-xs text-slate-400">{row.sku}</div>
+                  </td>
+                  <td className="px-6 py-4 text-right text-sm text-slate-600">{row.totalStock}</td>
+                  <td className="px-6 py-4 text-right text-sm text-slate-600">{row.soldUnits}</td>
+                  <td className="px-6 py-4 text-right text-sm text-slate-600">{row.returnedUnits}</td>
+                  <td className="px-6 py-4 text-right text-sm text-slate-600">{row.writeOffUnits}</td>
+                  <td className="px-6 py-4 text-right text-sm text-slate-600">{formatMoney(row.costValue, currencyCode)}</td>
+                  <td className="px-6 py-4 text-right text-sm font-semibold text-slate-900">{formatMoney(row.retailValue, currencyCode)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

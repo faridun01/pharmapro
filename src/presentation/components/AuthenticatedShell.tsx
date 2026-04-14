@@ -88,7 +88,7 @@ const NotificationsView = lazyNamedImport(() => import('./NotificationsView'), '
 const POSView = lazyNamedImport(() => import('./POSView'), 'POSView');
 const InventoryView = lazyNamedImport(() => import('./InventoryView'), 'InventoryView');
 const InvoicesView = lazyNamedImport(() => import('./InvoicesView'), 'InvoicesView');
-const SuppliersView = lazyNamedImport(() => import('./SuppliersView'), 'SuppliersView');
+const SuppliersPage = lazyNamedImport(() => import('./SuppliersPage'), 'SuppliersPage');
 const ReportsView = lazyNamedImport(() => import('./ReportsView'), 'ReportsView');
 const SettingsView = lazyNamedImport(() => import('./SettingsView'), 'SettingsView');
 const ReturnView = lazyNamedImport(() => import('./ReturnView'), 'ReturnView');
@@ -187,7 +187,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       case 'inventory': return <InventoryView />;
       case 'invoices': return <InvoicesView viewMode="history" />;
       case 'debtors': return <InvoicesView viewMode="debtors" />;
-      case 'suppliers': return <SuppliersView />;
+      case 'suppliers': return <SuppliersPage />;
       case 'reports': return <ReportsView />;
       case 'returns': return <ReturnView />;
       case 'writeoffs': return <WriteOffView />;

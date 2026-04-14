@@ -118,6 +118,15 @@ export const InvoicesView: React.FC<{
     if (dateFilterMode === 'all') return true;
     const invoiceDay = toLocalDayKey(createdAt);
     if (dateFilterMode === 'today') return invoiceDay === todayIso;
+    if (dateFilterMode === 'week') {
+      // Calculate start of week (Monday)
+      const now = new Date();
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const weekStart = new Date(now.setDate(diff));
+      const weekStartIso = formatDateInputValue(weekStart);
+      return invoiceDay >= weekStartIso && invoiceDay <= todayIso;
+    }
     if (dateFilterMode === 'month') return invoiceDay >= monthStartIso && invoiceDay <= todayIso;
     if (dateFilterMode === 'year') return invoiceDay >= yearStartIso && invoiceDay <= todayIso;
     const from = dateFrom || todayIso;
@@ -280,6 +289,64 @@ export const InvoicesView: React.FC<{
       </div>
 
       <div className="flex flex-col gap-4 bg-white/50 backdrop-blur-md rounded-3xl p-6 border border-[#5A5A40]/5 shadow-sm">
+        {/* Quick date filter presets for sales history */}
+        {!isDebtorsView && (
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <button
+              className={`px-3 py-2 rounded-xl text-sm font-medium border transition-all ${dateFilterMode === 'today' ? 'bg-[#5A5A40] text-white' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10'}`}
+              onClick={() => {
+                setDateFilterMode('today');
+                setDateFrom(todayIso);
+                setDateTo(todayIso);
+              }}
+            >Сегодня</button>
+            <button
+              className={`px-3 py-2 rounded-xl text-sm font-medium border transition-all ${dateFilterMode === 'week' ? 'bg-[#5A5A40] text-white' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10'}`}
+              onClick={() => {
+                // Calculate start of week (Monday)
+                const now = new Date();
+                const day = now.getDay();
+                const diff = now.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
+                const weekStart = new Date(now.setDate(diff));
+                const weekStartIso = formatDateInputValue(weekStart);
+                setDateFilterMode('week');
+                setDateFrom(weekStartIso);
+                setDateTo(todayIso);
+              }}
+            >Неделя</button>
+            <button
+              className={`px-3 py-2 rounded-xl text-sm font-medium border transition-all ${dateFilterMode === 'month' ? 'bg-[#5A5A40] text-white' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10'}`}
+              onClick={() => {
+                setDateFilterMode('month');
+                setDateFrom(monthStartIso);
+                setDateTo(todayIso);
+              }}
+            >Месяц</button>
+            <button
+              className={`px-3 py-2 rounded-xl text-sm font-medium border transition-all ${dateFilterMode === 'custom' ? 'bg-[#5A5A40] text-white' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10'}`}
+              onClick={() => setDateFilterMode('custom')}
+            >Период...</button>
+            {dateFilterMode === 'custom' && (
+              <span className="flex items-center gap-1 ml-2">
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => setDateFrom(e.target.value)}
+                  className="px-2 py-1 rounded border text-sm"
+                  style={{ minWidth: 120 }}
+                />
+                <span className="mx-1">—</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={e => setDateTo(e.target.value)}
+                  className="px-2 py-1 rounded border text-sm"
+                  style={{ minWidth: 120 }}
+                />
+              </span>
+            )}
+          </div>
+        )}
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative group w-full xl:max-w-85">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
@@ -401,7 +468,11 @@ export const InvoicesView: React.FC<{
 
       {/* Modals */}
       <InvoicePaymentModal 
-        isOpen={!!paymentModalInvoice} onClose={() => setPaymentModalInvoice(null)} 
+        isOpen={!!paymentModalInvoice} 
+        onClose={() => {
+          setPaymentModalInvoice(null);
+          refreshInvoices();
+        }}
         invoice={paymentModalInvoice} currencyCode={currencyCode} 
         busyId={busyId} setBusyId={setBusyId} getInvoiceOutstandingAmount={getInvoiceOutstandingAmount}
       />

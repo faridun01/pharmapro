@@ -2,6 +2,8 @@ import { Prisma, ProductStatus } from '@prisma/client';
 import { prisma } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
 import { findExistingProductByName } from '../../common/productName';
+import { computeBatchStatus } from '../../common/batchStatus';
+import { computeProductStatus } from '../../common/productStatus';
 import { 
   buildGeneratedSku, 
   isBarcodeConflictError, 
@@ -81,8 +83,18 @@ export class ProductService {
       })
     ]);
 
+    const itemsWithFreshBatchStatus = items.map((product) => ({
+      ...product,
+      batches: product.batches
+        .map((batch) => ({
+          ...batch,
+          status: computeBatchStatus(batch.expiryDate),
+        }))
+        .sort((left, right) => new Date(left.expiryDate).getTime() - new Date(right.expiryDate).getTime()),
+    }));
+
     return {
-      items,
+      items: itemsWithFreshBatchStatus,
       pagination: {
         total,
         page,
@@ -107,7 +119,15 @@ export class ProductService {
       },
     });
     if (!product) throw new NotFoundError(`Product ${id} not found`);
-    return product;
+    return {
+      ...product,
+      batches: product.batches
+        .map((batch) => ({
+          ...batch,
+          status: computeBatchStatus(batch.expiryDate),
+        }))
+        .sort((left, right) => new Date(left.expiryDate).getTime() - new Date(right.expiryDate).getTime()),
+    };
   }
 
   async createProduct(rawData: any, userId: string, userRole: any) {
@@ -117,6 +137,7 @@ export class ProductService {
     }
     const data = parseResult.data;
     const batches = data.batches;
+    const initialStock = (batches || []).reduce((sum, batch) => sum + Math.max(0, Number(batch.quantity || 0)), 0);
     
     const productData = {
       name: data.name,
@@ -170,8 +191,8 @@ export class ProductService {
         data: {
           ...productData,
           sku: resolvedSku,
-          status: mapProductStatus(data.status) ?? 'ACTIVE',
-          totalStock: 0,
+          status: mapProductStatus(data.status) ?? computeProductStatus(initialStock, data.minStock),
+          totalStock: initialStock,
           batches: {
             create: (batches || []).map((b: any) => ({
               batchNumber: b.batchNumber || b.id,
@@ -186,7 +207,7 @@ export class ProductService {
               warehouseId: b.warehouseId,
               manufacturedDate: b.manufacturedDate ? new Date(b.manufacturedDate) : undefined,
               expiryDate: b.expiryDate ? new Date(b.expiryDate) : undefined,
-              status: mapBatchStatus(b.status),
+              status: b.expiryDate ? computeBatchStatus(b.expiryDate) : mapBatchStatus(b.status),
               movements: {
                 create: (b.movements || []).map((m: any) => ({
                   type: m.type || 'RESTOCK',
