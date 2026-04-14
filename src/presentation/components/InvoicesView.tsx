@@ -329,24 +329,40 @@ export const InvoicesView: React.FC<{
                   isDebtorsView
                     ? debtorGroups
                         .slice(pageStartIndex, pageStartIndex + itemsPerPage)
-                        .flatMap((group, groupIdx) =>
-                          group.invoices.map((invoice, idx) => (
-                            <InvoiceTableRow
-                              key={invoice.id}
-                              invoice={{ ...invoice, customer: group.customer }}
-                              index={pageStartIndex + groupIdx + idx + 1}
-                              currencyCode={currencyCode}
-                              busyId={busyId}
-                              isDebtorsView={isDebtorsView}
-                              onDetails={setDetailsInvoice}
-                              onPrint={printInvoice}
-                              onPayment={setPaymentModalInvoice}
-                              onEdit={setEditModalInvoice}
-                              onReturn={setReturnModalInvoice}
-                              onDelete={setDeleteModalInvoice}
-                            />
-                          ))
-                        )
+                        .map((group, groupIdx) => (
+                          <tr key={group.key} className="hover:bg-[#f5f5f0]/30 transition-colors group align-top cursor-pointer" onClick={() => setDetailsDebtor(group)}>
+                            <td className="px-4 py-3.5 text-center">
+                              <span className="inline-flex min-w-7 h-7 items-center justify-center rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-[12px] font-bold">{pageStartIndex + groupIdx + 1}</span>
+                            </td>
+                            <td className="px-6 py-3.5">
+                              <span className="font-bold text-[#5A5A40]">Покупатель: {group.customer}</span>
+                            </td>
+                            <td className="px-6 py-3.5">
+                              <span className="text-[12px] text-[#5A5A40]/60">{group.latestActivityAt ? new Date(group.latestActivityAt).toLocaleDateString() : ''}</span>
+                            </td>
+                            <td className="px-6 py-3.5">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
+                                ● Долг
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <span className="text-[12px] font-semibold text-[#5A5A40]">{group.totalUnits} ед.</span>
+                              <span className="text-[9px] text-[#5A5A40]/40 ml-2">{group.invoiceCount} накл.</span>
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <span className="text-[13px] font-bold text-[#5A5A40]">{group.totalAmount.toFixed(2)}</span>
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <span className="text-[13px] font-semibold text-emerald-700">{group.totalPaid.toFixed(2)}</span>
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <span className="text-[13px] font-semibold text-rose-700">{group.totalOutstanding.toFixed(2)}</span>
+                            </td>
+                            <td className="px-6 py-3.5 text-right">
+                              <span className="text-xs text-[#5A5A40]/30">Открыть детали</span>
+                            </td>
+                          </tr>
+                        ))
                     : filteredInvoices
                         .slice(pageStartIndex, pageStartIndex + itemsPerPage)
                         .map((item, idx) => (

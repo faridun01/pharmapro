@@ -74,7 +74,7 @@ export const InvoicePaymentModal: React.FC<InvoicePaymentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-110 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#5A5A40]/10 overflow-hidden">
         <div className="px-6 py-4 bg-[#5A5A40] text-white flex items-center justify-between">
           <h3 className="text-base font-bold">Внесение оплаты</h3>
