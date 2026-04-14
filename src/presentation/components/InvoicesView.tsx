@@ -324,26 +324,47 @@ export const InvoicesView: React.FC<{
               </thead>
               <tbody className="divide-y divide-[#5A5A40]/5">
                 {isInitialInvoicesLoading ? (
-                   <tr><td colSpan={9} className="p-8 text-center text-sm text-[#5A5A40]/40">Загрузка...</td></tr>
+                  <tr><td colSpan={9} className="p-8 text-center text-sm text-[#5A5A40]/40">Загрузка...</td></tr>
                 ) : (
-                  (isDebtorsView ? debtorGroups : filteredInvoices)
-                    .slice(pageStartIndex, pageStartIndex + itemsPerPage)
-                    .map((item, idx) => (
-                      <InvoiceTableRow 
-                        key={item.id || (item as any).key}
-                        invoice={item}
-                        index={pageStartIndex + idx + 1}
-                        currencyCode={currencyCode}
-                        busyId={busyId}
-                        isDebtorsView={isDebtorsView}
-                        onDetails={setDetailsInvoice}
-                        onPrint={printInvoice}
-                        onPayment={setPaymentModalInvoice}
-                        onEdit={setEditModalInvoice}
-                        onReturn={setReturnModalInvoice}
-                        onDelete={setDeleteModalInvoice}
-                      />
-                    ))
+                  isDebtorsView
+                    ? debtorGroups
+                        .slice(pageStartIndex, pageStartIndex + itemsPerPage)
+                        .flatMap((group, groupIdx) =>
+                          group.invoices.map((invoice, idx) => (
+                            <InvoiceTableRow
+                              key={invoice.id}
+                              invoice={{ ...invoice, customer: group.customer }}
+                              index={pageStartIndex + groupIdx + idx + 1}
+                              currencyCode={currencyCode}
+                              busyId={busyId}
+                              isDebtorsView={isDebtorsView}
+                              onDetails={setDetailsInvoice}
+                              onPrint={printInvoice}
+                              onPayment={setPaymentModalInvoice}
+                              onEdit={setEditModalInvoice}
+                              onReturn={setReturnModalInvoice}
+                              onDelete={setDeleteModalInvoice}
+                            />
+                          ))
+                        )
+                    : filteredInvoices
+                        .slice(pageStartIndex, pageStartIndex + itemsPerPage)
+                        .map((item, idx) => (
+                          <InvoiceTableRow
+                            key={item.id}
+                            invoice={item}
+                            index={pageStartIndex + idx + 1}
+                            currencyCode={currencyCode}
+                            busyId={busyId}
+                            isDebtorsView={isDebtorsView}
+                            onDetails={setDetailsInvoice}
+                            onPrint={printInvoice}
+                            onPayment={setPaymentModalInvoice}
+                            onEdit={setEditModalInvoice}
+                            onReturn={setReturnModalInvoice}
+                            onDelete={setDeleteModalInvoice}
+                          />
+                        ))
                 )}
                 {fillerRowsCount > 0 && Array.from({ length: fillerRowsCount }).map((_, i) => <tr key={`f-${i}`} className="h-16" />)}
               </tbody>

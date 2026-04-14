@@ -6,6 +6,74 @@ import { auditService } from '../../services/audit.service';
 
 export const suppliersRouter = Router();
 
+// Получить все партии по поставщику
+suppliersRouter.get('/:id/batches', authenticate, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const batches = await prisma.batch.findMany({
+    where: { supplierId: id },
+    include: {
+      product: { select: { name: true, sku: true } },
+    },
+    orderBy: { expiryDate: 'asc' },
+  });
+  // Формируем ответ: продукт, партия, количество, срок годности
+  const result = batches.map(b => ({
+    batchNumber: b.batchNumber,
+    productName: b.product?.name,
+    productSku: b.product?.sku,
+    quantity: b.quantity,
+    expiryDate: b.expiryDate,
+  }));
+  res.json({
+    count: result.length,
+    nearestExpiry: result.length > 0 ? result[0].expiryDate : null,
+    batches: result,
+  });
+
+}));
+// Получить сводку по поставщику: партии, оплаты, долги
+suppliersRouter.get('/:id/summary', authenticate, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Получаем все приходы (PurchaseInvoice) этого поставщика
+  const purchaseInvoices = await prisma.purchaseInvoice.findMany({
+    where: { supplierId: id },
+    orderBy: { invoiceDate: 'desc' },
+    include: {
+      payments: true,
+      payables: true,
+    },
+  });
+
+  // Считаем по каждой партии: оплачено, долг
+  const invoiceSummaries = purchaseInvoices.map(inv => {
+    const paid = inv.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const payable = inv.payables.length > 0 ? inv.payables[0] : null;
+    return {
+      id: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      invoiceDate: inv.invoiceDate,
+      totalAmount: inv.totalAmount,
+      paidAmount: paid,
+      debtAmount: payable ? payable.remainingAmount : (inv.totalAmount - paid),
+      status: inv.status,
+      paymentStatus: inv.paymentStatus,
+    };
+  });
+
+  // Общий долг и оплата по поставщику
+  const allPayables = await prisma.payable.findMany({ where: { supplierId: id } });
+  const allPayments = await prisma.payment.findMany({ where: { supplierId: id } });
+  const totalDebt = allPayables.reduce((sum, p) => sum + (p.remainingAmount || 0), 0);
+  const totalPaid = allPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  res.json({
+    invoices: invoiceSummaries,
+    totalDebt,
+    totalPaid,
+  });
+}));
+
 suppliersRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
   const suppliers = await prisma.supplier.findMany({
     where: { isActive: true },

@@ -11,18 +11,19 @@
  */
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentDir =
+  typeof __dirname !== 'undefined'
+    ? __dirname
+    : path.dirname(process.argv[1] || process.cwd());
 
 // Try candidate paths in priority order so the backend finds .env regardless
 // of how the exe was launched (from project root, from resources dir, etc.)
 const candidates = [
   process.env.PHARMAPRO_ENV_FILE,         // explicit override from Electron main
   path.join(process.cwd(), '.env'),        // inherited CWD
-  path.join(__dirname, '../../.env'),      // project root in dev
+  path.join(currentDir, '../../.env'),     // project root in dev / dist-server in prod
   // Desktop-specific paths
   process.env.APPDATA ? path.join(process.env.APPDATA, 'pharmapro', '.env') : null,
   process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library/Application Support', 'pharmapro', '.env') : null,

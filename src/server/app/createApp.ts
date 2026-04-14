@@ -17,6 +17,7 @@ import { reportsRouter } from '../modules/reports/reports.routes';
 import { systemRouter } from '../modules/system/system.routes';
 import { devRouter } from '../modules/dev/dev.routes';
 import { errorMiddleware } from '../common/http';
+import { prisma } from '../infrastructure/prisma';
 
 export const createApp = () => {
   const app = express();

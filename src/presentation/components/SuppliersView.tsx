@@ -37,6 +37,31 @@ export const SuppliersView: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState<SupplierForm>(INITIAL_FORM);
   const [initialLoadPending, setInitialLoadPending] = useState(false);
+  // Новое: summary и batches по каждому supplier.id
+  const [supplierStats, setSupplierStats] = useState<Record<string, {
+    summary?: { totalDebt: number; totalPaid: number };
+    batches?: { count: number; nearestExpiry: string | null };
+    invoices?: any[];
+    batchList?: any[];
+  }>>({});
+  const [openSupplierId, setOpenSupplierId] = useState<string | null>(null);
+
+  // Загрузка summary и batches для всех suppliers
+  useEffect(() => {
+    suppliers.forEach((s) => {
+      if (!supplierStats[s.id]) {
+        fetch(`/api/suppliers/${s.id}/summary`, { headers: authHeaders() })
+          .then(r => r.json())
+          .then(data => setSupplierStats(prev => ({ ...prev, [s.id]: { ...prev[s.id], summary: { totalDebt: data.totalDebt, totalPaid: data.totalPaid }, invoices: data.invoices } })))
+          .catch(() => {});
+        fetch(`/api/suppliers/${s.id}/batches`, { headers: authHeaders() })
+          .then(r => r.json())
+          .then(data => setSupplierStats(prev => ({ ...prev, [s.id]: { ...prev[s.id], batches: { count: data.count, nearestExpiry: data.nearestExpiry }, batchList: data.batches } })))
+          .catch(() => {});
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suppliers]);
 
   useEffect(() => {
     if (suppliers.length > 0) {
@@ -191,8 +216,10 @@ export const SuppliersView: React.FC = () => {
             </div>
           </div>
         ))}
-        {filteredSuppliers.map((supplier) => (
-          <div key={supplier.id} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 hover:-translate-y-1 hover:shadow-xl transition-all group">
+        {filteredSuppliers.map((supplier) => {
+          const stats = supplierStats[supplier.id] || {};
+          return (
+          <div key={supplier.id} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 hover:-translate-y-1 hover:shadow-xl transition-all group cursor-pointer" onClick={() => setOpenSupplierId(supplier.id)}>
             <div className="flex justify-between items-start mb-6">
               <div className="w-14 h-14 bg-[#f5f5f0] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
                 <Truck size={28} />
@@ -236,24 +263,90 @@ export const SuppliersView: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4 pt-6 border-t border-[#5A5A40]/5">
               <div className="bg-[#f5f5f0]/50 p-3 rounded-2xl">
-                <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-1">{t('Products')}</p>
+                <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-1">Партии</p>
                 <div className="flex items-center gap-2 text-[#5A5A40]">
                   <Package size={14} />
-                  <span className="text-sm font-bold">{t('Linked')}</span>
+                  <span className="text-sm font-bold">{stats.batches ? stats.batches.count : '—'}</span>
                 </div>
+                <div className="text-xs text-[#5A5A40]/50 mt-1">Ближайший срок: {stats.batches && stats.batches.nearestExpiry ? new Date(stats.batches.nearestExpiry).toLocaleDateString() : '—'}</div>
               </div>
               <div className="bg-[#f5f5f0]/50 p-3 rounded-2xl">
-                <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-1">{t('Status')}</p>
-                <div className="flex items-center gap-2 text-[#5A5A40]">
-                  <DollarSign size={14} />
-                  <span className="text-sm font-bold">{t('Active')}</span>
+                <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-1">Финансы</p>
+                <div className="flex flex-col gap-1 text-[#5A5A40] text-xs">
+                  <span>Долг: <b>{stats.summary ? stats.summary.totalDebt.toFixed(2) : '—'}</b></span>
+                  <span>Оплачено: <b>{stats.summary ? stats.summary.totalPaid.toFixed(2) : '—'}</b></span>
                 </div>
               </div>
             </div>
           </div>
-        ))}
-
-        {!initialLoadPending && filteredSuppliers.length === 0 && (
+        );
+        })}
+                {/* Модалка истории по поставщику */}
+                {openSupplierId && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                      <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
+                        <h3 className="text-xl font-bold text-[#5A5A40]">История по поставщику</h3>
+                        <button onClick={() => setOpenSupplierId(null)} className="p-2 rounded-xl hover:bg-[#f5f5f0]">
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <div className="p-6 space-y-6">
+                        <div>
+                          <h4 className="text-sm font-bold mb-2">Приходы (Invoices)</h4>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full text-xs">
+                              <thead><tr className="text-[#5A5A40]/60">
+                                <th className="px-2 py-1 text-left">Номер</th>
+                                <th className="px-2 py-1 text-left">Дата</th>
+                                <th className="px-2 py-1 text-right">Сумма</th>
+                                <th className="px-2 py-1 text-right">Оплачено</th>
+                                <th className="px-2 py-1 text-right">Долг</th>
+                                <th className="px-2 py-1 text-center">Статус</th>
+                              </tr></thead>
+                              <tbody>
+                                {(supplierStats[openSupplierId]?.invoices || []).map((inv, idx) => (
+                                  <tr key={inv.id || idx} className="border-b last:border-0">
+                                    <td className="px-2 py-1">{inv.invoiceNumber}</td>
+                                    <td className="px-2 py-1">{inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString() : ''}</td>
+                                    <td className="px-2 py-1 text-right">{inv.totalAmount?.toFixed(2)}</td>
+                                    <td className="px-2 py-1 text-right">{inv.paidAmount?.toFixed(2)}</td>
+                                    <td className="px-2 py-1 text-right">{inv.debtAmount?.toFixed(2)}</td>
+                                    <td className="px-2 py-1 text-center">{inv.status}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold mb-2 mt-6">Партии</h4>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full text-xs">
+                              <thead><tr className="text-[#5A5A40]/60">
+                                <th className="px-2 py-1 text-left">Партия</th>
+                                <th className="px-2 py-1 text-left">Товар</th>
+                                <th className="px-2 py-1 text-right">Кол-во</th>
+                                <th className="px-2 py-1 text-right">Срок годн.</th>
+                              </tr></thead>
+                              <tbody>
+                                {(supplierStats[openSupplierId]?.batchList || []).map((b, idx) => (
+                                  <tr key={b.batchNumber || idx} className="border-b last:border-0">
+                                    <td className="px-2 py-1">{b.batchNumber}</td>
+                                    <td className="px-2 py-1">{b.productName}</td>
+                                    <td className="px-2 py-1 text-right">{b.quantity}</td>
+                                    <td className="px-2 py-1 text-right">{b.expiryDate ? new Date(b.expiryDate).toLocaleDateString() : ''}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}  
+              {!initialLoadPending && filteredSuppliers.length === 0 && (
           <div className="md:col-span-2 xl:col-span-3 rounded-3xl border border-[#5A5A40]/10 bg-white px-6 py-12 text-center text-[#5A5A40]/50">
             Поставщики не найдены.
           </div>

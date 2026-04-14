@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 import type { OcrConfidence, OcrResult, OcrResultItem } from './ocr.types';
-import { runOllamaTextNormalization, runOllamaVisionOcr } from './ollama.engine';
+// ...existing code...
 import { runPdfOcr } from './pdf.engine';
 
 type PdfParseResult = { text: string };
@@ -55,7 +55,7 @@ type RenderedPdfPage = {
 
 export type ProcessPdfDocumentResult = {
   pdfType: PdfType;
-  engine: 'pdf+camelot' | 'pdf+ollama' | 'pdf+vision+ollama' | 'pdf+legacy';
+  engine: 'pdf+camelot' | 'pdf+legacy';
   result: OcrResult;
   warnings: string[];
 };
@@ -419,37 +419,7 @@ export async function processPdfDocument(pdfBase64: string): Promise<ProcessPdfD
     }
   }
 
-  if (pdfType === 'scan') {
-    try {
-      const renderedPage = await renderPdfPageForVision(fileBuffer);
-      const result = await runOllamaVisionOcr(renderedPage.imageBase64, renderedPage.mimeType || 'image/png');
-      return {
-        pdfType,
-        engine: 'pdf+vision+ollama',
-        result: {
-          ...result,
-          confidenceSummary: buildConfidenceSummary(result.items),
-        },
-        warnings,
-      };
-    } catch (error) {
-      warnings.push(error instanceof Error ? error.message : 'PDF render fallback failed');
-      console.warn('[OCR] PDF render fallback failed, using legacy PDF parser');
-    }
-  }
-
-  if (rawText) {
-    const normalized = await runOllamaTextNormalization(rawText);
-    return {
-      pdfType,
-      engine: 'pdf+ollama',
-      result: {
-        ...normalized,
-        confidenceSummary: buildConfidenceSummary(normalized.items),
-      },
-      warnings,
-    };
-  }
+  // Удалены ветки ollama. Теперь только Camelot и legacy.
 
   const legacy = await runPdfOcr(pdfBase64);
   return {

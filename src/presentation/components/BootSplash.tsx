@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Pill, ShieldCheck } from 'lucide-react';
+import { Pill } from 'lucide-react';
 
 export const BootSplash: React.FC<{
   isVisible: boolean;
@@ -195,7 +195,5 @@ export const BootSplash: React.FC<{
         </motion.div>
       )}
     </AnimatePresence>
-  );
-};
   );
 };

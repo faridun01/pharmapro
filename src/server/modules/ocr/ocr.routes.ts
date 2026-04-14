@@ -11,7 +11,7 @@ import { ValidationError } from '../../common/errors';
 import { findExistingProductByName } from '../../common/productName';
 import { prisma } from '../../infrastructure/prisma';
 import { inventoryService } from '../inventory/inventory.service';
-import { checkOllamaAvailability, getOllamaModelName, runOllamaVisionOcr } from './ollama.engine';
+// ...existing code...
 import { processPdfDocument } from './pdf.hybrid';
 
 // --- Types ---
@@ -180,15 +180,14 @@ const readInvoiceWithOcr = async (imageBase64: string, mimeType: string) => {
   const isPdf = mimeType === 'application/pdf' || mimeType === 'pdf';
 
   let parsedHeader: { invoiceNumber?: string; supplierName?: string; invoiceDate?: string; items?: ParsedInvoiceItem[]; rawText?: string };
-  let resolvedEngine: 'ollama' | 'pdf+ollama' | 'pdf+camelot' | 'pdf+vision+ollama' | 'pdf+legacy';
+  let resolvedEngine: 'pdf+camelot' | 'pdf+legacy';
 
   if (isPdf) {
     const processed = await processPdfDocument(imageBase64);
     parsedHeader = processed.result;
     resolvedEngine = processed.engine;
   } else {
-    parsedHeader = await runOllamaVisionOcr(imageBase64, mimeType);
-    resolvedEngine = 'ollama';
+    // ...existing code...
   }
 
   return { parsedHeader, resolvedEngine };
@@ -310,7 +309,7 @@ const runStructuredImportPreview = async (fileBase64: string, fileName?: string,
 
 /** GET /engines - tells the frontend which engines are available */
 ocrRouter.get('/engines', async (_req, res) => {
-  res.json({ ollama: await checkOllamaAvailability(), model: getOllamaModelName() });
+  // ...existing code...
 });
 
 ocrRouter.post('/structured-preview', authenticate, asyncHandler(async (req, res) => {

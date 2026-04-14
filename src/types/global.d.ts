@@ -19,6 +19,7 @@ interface Window {
 			close: () => void;
 		};
 		authHeaders?: () => Promise<Record<string, string>> | Record<string, string>;
+		saveDatabaseConfig?: (url: string) => Promise<{ success: boolean; error?: string }>;
 		markRuntime?: (name: string, details?: Record<string, unknown>) => void;
 	};
 	__pharmaproRuntimeMarks?: Record<string, boolean>;
