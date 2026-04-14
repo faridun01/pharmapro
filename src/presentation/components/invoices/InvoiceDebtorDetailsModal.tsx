@@ -72,6 +72,7 @@ export const InvoiceDebtorDetailsModal: React.FC<InvoiceDebtorDetailsModalProps>
               </thead>
               <tbody>
                 {[...debtor.invoices]
+                  .filter((invoice: any) => invoice.status !== 'CANCELLED' && invoice.status !== 'RETURNED')
                   .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
                   .map((invoice: any) => {
                     const paidAmount = Number(invoice.paidAmountTotal ?? 0);
