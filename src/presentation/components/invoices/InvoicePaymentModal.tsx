@@ -161,11 +161,16 @@ export const InvoicePaymentModal: React.FC<InvoicePaymentModalProps> = ({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={busyId === invoice?.id}
+              disabled={busyId === invoice?.id || invoice?.status === 'CANCELLED' || invoice?.status === 'RETURNED'}
               className="py-2.5 rounded-xl bg-[#5A5A40] text-white text-sm font-semibold hover:bg-[#4A4A30] disabled:opacity-50 transition-colors"
             >
               {busyId === invoice?.id ? 'Сохраняю...' : 'Подтвердить оплату'}
             </button>
+            {invoice?.status === 'CANCELLED' || invoice?.status === 'RETURNED' ? (
+              <div className="col-span-2 text-center text-xs text-red-600 mt-2">
+                Оплата невозможна: накладная отменена или возвращена
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
