@@ -327,7 +327,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         },
       },
     }),
-    prisma.receivable.findMany({
+    prisma.debt.findMany({
       where: {
         status: { not: 'PAID' },
       },
@@ -402,15 +402,12 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const unpaidInvoices = ordinaryOpenInvoices.filter(inv => getInvoiceOutstanding(inv) > 0);
   const unpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + getInvoiceOutstanding(inv), 0);
 
-  const totalDebtorOutstanding = 0;
-  const totalDebtorCustomersCount = 0;
-  const revenueGrossInRange = salesInvoicesInRange
-    .filter((invoice) => invoice.status !== 'RETURNED')
+  const totalDebtorOutstanding = receivables.reduce((sum, r) => sum + Number(r.remainingAmount || 0), 0);
+  const totalDebtorCustomersCount = new Set(receivables.map((r) => String(r.id))).size;
+
+  const revenueInRange = salesInvoicesInRange
+    .filter((invoice) => invoice.status !== 'CANCELLED')
     .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
-  const returnsInRange = salesInvoicesInRange
-    .filter((invoice) => invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED')
-    .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
-  const revenueInRange = Math.max(0, revenueGrossInRange - returnsInRange);
   const rangeDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1);
   const avgDailyRevenue = revenueInRange / rangeDays;
   const salesByKey = new Map<string, number>();
@@ -419,8 +416,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     const key = chartMode === 'day'
       ? invoiceDate.toISOString().slice(0, 10)
       : `${invoiceDate.getFullYear()}-${String(invoiceDate.getMonth() + 1).padStart(2, '0')}`;
-    const sign = invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED' ? -1 : 1;
-    salesByKey.set(key, (salesByKey.get(key) || 0) + (Number(invoice.totalAmount || 0) * sign));
+    salesByKey.set(key, (salesByKey.get(key) || 0) + Number(invoice.totalAmount || 0));
   }
 
   const revenueTrend = chartMode === 'day'
@@ -444,16 +440,12 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         };
       });
 
-  const monthlyRevenueGross = monthlySalesInvoices
-    .filter((invoice) => invoice.status !== 'RETURNED')
-    .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
-  const monthlyReturnAmount = monthlySalesInvoices
-    .filter((invoice) => invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED')
+  const monthlyNetRevenue = monthlySalesInvoices
+    .filter((invoice) => invoice.status !== 'CANCELLED')
     .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
   const monthlyCogs = monthlySalesInvoices
-    .filter((invoice) => invoice.status !== 'RETURNED')
-    .reduce((sum, invoice) => sum + invoice.items.reduce((itemSum, item) => itemSum + (Number(item.quantity || 0) * Number(item.batch?.costBasis || 0)), 0), 0);
-  const monthlyNetRevenue = Math.max(0, monthlyRevenueGross - monthlyReturnAmount);
+    .filter((invoice) => invoice.status !== 'CANCELLED')
+    .reduce((sum, invoice) => sum + (invoice.items || []).reduce((itemSum, item) => itemSum + (Number(item.quantity || 0) * Number(item.batch?.costBasis || 0)), 0), 0);
   const grossMarginMonth = monthlyNetRevenue - monthlyCogs;
   const writeOffAmountMonth = writeoffsMonth.reduce((sum, writeoff) => sum + Number(
     writeoff.totalAmount ||
