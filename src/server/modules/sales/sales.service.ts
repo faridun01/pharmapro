@@ -19,7 +19,8 @@ export type CompleteSaleInput = {
   discountAmount?: number; // Overall invoice discount
   taxAmount?: number;
   total: number;
-  paymentType: 'CASH' | 'CARD';
+  paymentType: 'CASH' | 'CARD' | 'CREDIT';
+  customerName?: string;
   paidAmount?: number;
   userId: string;
 }
@@ -205,8 +206,9 @@ export class SalesService {
           taxAmount: Number(input.taxAmount ?? 0),
           discount: Number(input.discountAmount ?? 0),
           paymentType: input.paymentType,
-          status: 'PAID',
-          paymentStatus: 'PAID',
+          customer: input.customerName,
+          status: input.paymentType === 'CREDIT' ? 'PENDING' : 'PAID',
+          paymentStatus: input.paymentType === 'CREDIT' ? 'UNPAID' : 'PAID',
           userId: input.userId,
           cashShiftId: activeShift.id,
           items: {
@@ -217,6 +219,18 @@ export class SalesService {
           items: true,
         },
       });
+
+      if (input.paymentType === 'CREDIT') {
+        await tx.debt.create({
+          data: {
+            invoiceId: createdInvoice.id,
+            customerName: input.customerName,
+            originalAmount: Number(input.total),
+            remainingAmount: Number(input.total),
+            status: 'OPEN',
+          },
+        });
+      }
 
       await auditService.log({
         userId: input.userId,
@@ -232,7 +246,7 @@ export class SalesService {
         },
       }, tx);
 
-      if (paidAmount > 0) {
+      if (paidAmount > 0 && input.paymentType !== 'CREDIT') {
         await tx.payment.create({
           data: {
             direction: 'IN',
@@ -273,7 +287,6 @@ export class SalesService {
       where: { id: invoiceId },
       include: {
         items: true,
-        receivables: true,
         payments: true,
       },
     });
@@ -313,12 +326,6 @@ export class SalesService {
       }
 
       // 2. Cancel financial entries
-      if (invoice.receivables.length > 0) {
-        await tx.receivable.updateMany({
-          where: { invoiceId },
-          data: { status: 'WRITTEN_OFF' },
-        });
-      }
 
       if (invoice.payments.length > 0) {
         await tx.payment.updateMany({
@@ -348,6 +355,78 @@ export class SalesService {
 
       return updatedInvoice;
     });
+  }
+
+  async payDebt(invoiceId: string, input: { amount: number, paymentMethod: 'CASH' | 'CARD', userId: string }) {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { debt: true }
+    });
+
+    if (!invoice) throw new NotFoundError('Invoice not found');
+    if (invoice.paymentType !== 'CREDIT') throw new ValidationError('This is not a debt invoice');
+    if (invoice.status === 'PAID') throw new ValidationError('This debt is already paid');
+
+    const result = await prisma.$transaction(async (tx) => {
+      const amount = Number(input.amount);
+      
+      if (!invoice.debt) throw new ValidationError('Debt record not found');
+
+      // Update Debt
+      const currentPaid = Number(invoice.debt.paidAmount || 0);
+      const newPaid = currentPaid + amount;
+      const isFullyPaid = newPaid >= Number(invoice.totalAmount);
+
+      const debtRecord = await tx.debt.update({
+        where: { id: invoice.debt.id },
+        data: {
+          paidAmount: newPaid,
+          remainingAmount: Math.max(0, Number(invoice.totalAmount) - newPaid),
+          status: isFullyPaid ? 'PAID' : 'PARTIAL'
+        }
+      });
+
+      // Record Payment
+      await tx.payment.create({
+        data: {
+          direction: 'IN',
+          counterpartyType: 'OTHER',
+          method: input.paymentMethod,
+          amount: amount,
+          paymentDate: new Date(),
+          status: 'PAID',
+          invoiceId: invoice.id,
+          createdById: input.userId,
+          comment: `Debt payment for invoice ${invoice.invoiceNo}`,
+        }
+      });
+
+      // Update Invoice Status if fully paid
+      if (isFullyPaid) {
+        await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            status: 'PAID',
+            paymentStatus: 'PAID'
+          }
+        });
+      } else {
+         await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            paymentStatus: 'PARTIALLY_PAID'
+          }
+        });
+      }
+
+      return debtRecord;
+    });
+
+    reportCache.invalidatePattern(/^metrics:dashboard:/);
+    reportCache.invalidatePattern(/^report:finance:/);
+    reportCache.invalidatePattern(/^report:debts:/);
+
+    return result;
   }
 }
 

@@ -15,7 +15,7 @@ import {
   Search,
   ShoppingCart,
   Trash2,
-  User as UserIcon,
+  User,
   Wallet,
 } from 'lucide-react';
 import { Product } from '../../core/domain';
@@ -125,7 +125,8 @@ export const POSView: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
-  const [paymentType, setPaymentType] = useState<'CASH' | 'CARD'>('CASH');
+  const [paymentType, setPaymentType] = useState<'CASH' | 'CARD' | 'CREDIT'>('CASH');
+  const [customerName, setCustomerName] = useState('');
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -449,80 +450,6 @@ export const POSView: React.FC = () => {
     }
   };
 
-  const handlePrintZReport = async () => {
-    if (!activeShift) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    try {
-      const res = await fetch(`/api/reports/shift/${activeShift.id}`, { headers: await buildApiHeaders() });
-      const data = await res.json();
-
-      const html = `
-        <html>
-          <head>
-            <title>Z-Отчет - ${activeShift.shiftNo}</title>
-            <style>
-              body { 
-                background: #6b7280; 
-                display: flex; 
-                justify-content: center; 
-                align-items: flex-start; 
-                margin: 0; 
-                padding: 40px 0;
-                font-family: monospace;
-              }
-              .paper { 
-                background: #fff; 
-                width: 80mm; 
-                padding: 5mm; 
-                box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-              }
-              @media print {
-                body { background: none; padding: 0; display: block; }
-                .paper { box-shadow: none; width: 100%; border: none; }
-                .print-btn { display: none; }
-              }
-              .print-btn {
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 10px 20px;
-                background: #5A5A40;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                cursor: pointer;
-                font-family: sans-serif;
-                font-weight: bold;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-              }
-            </style>
-          </head>
-          <body>
-            <button class="print-btn" onclick="window.print()">ПЕЧАТАТЬ</button>
-            <div class="paper">
-              <h2 style="text-align:center">Z-ОТЧЕТ</h2>
-              <div>Смена: ${activeShift.shiftNo}</div>
-              <div>Открыта: ${new Date(activeShift.openAt).toLocaleString()}</div>
-              <div>Кассир: ${user?.name}</div>
-              <hr/>
-              <div style="display:flex; justify-content:space-between"><span>ПРОДАЖИ (ИТОГО):</span> <span>${data.totalSales?.toFixed(2) || '0.00'}</span></div>
-              <div style="display:flex; justify-content:space-between"><span>НАЛИЧНЫЕ:</span> <span>${data.cashSales?.toFixed(2) || '0.00'}</span></div>
-              <div style="display:flex; justify-content:space-between"><span>КАРТА:</span> <span>${data.cardSales?.toFixed(2) || '0.00'}</span></div>
-              <hr/>
-              <div style="text-align:center">PHARMAPRO POS</div>
-            </div>
-          </body>
-        </html>
-      `;
-      printWindow.document.write(html);
-      printWindow.document.close();
-    } catch (err) {
-      printWindow.close();
-      setError('Ошибка при формировании Z-отчета');
-    }
-  };
 
   const handleComplete = async () => {
     if (cart.length === 0) return;
@@ -530,6 +457,11 @@ export const POSView: React.FC = () => {
     const missingPrescription = cart.find(it => it.prescription && !it.prescriptionPresented);
     if (missingPrescription) {
       setError(`Для товара "${missingPrescription.name}" требуется рецепт`);
+      return;
+    }
+
+    if (paymentType === 'CREDIT' && !customerName.trim()) {
+      setError('Имя клиента обязательно для продажи в долг');
       return;
     }
 
@@ -554,7 +486,8 @@ export const POSView: React.FC = () => {
         taxAmount: 0,
         total,
         paymentType,
-        paidAmount: total,
+        customerName: paymentType === 'CREDIT' ? customerName : undefined,
+        paidAmount: paymentType === 'CREDIT' ? 0 : total,
         userId: user?.id || '',
         date: new Date(),
       });
@@ -562,6 +495,7 @@ export const POSView: React.FC = () => {
       setSuccess(true);
       if (res && (res as any).id) handlePrintReceipt(res);
       setCart([]);
+      setCustomerName('');
       void loadActiveShift();
       window.setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -602,7 +536,6 @@ export const POSView: React.FC = () => {
                 <button type="button" onClick={() => setIsRecentSalesModal(true)} className="px-3 py-2 rounded-xl border border-[#5A5A40]/10 bg-white text-[#5A5A40] text-xs font-semibold hover:bg-[#f5f5f0] transition-colors">История</button>
                 {activeShift ? (
                   <>
-                    <button type="button" onClick={handlePrintZReport} className="px-3 py-2 rounded-xl border border-[#5A5A40]/10 bg-white text-[#5A5A40] text-xs font-semibold hover:bg-[#f5f5f0] transition-colors">Z-Отчет</button>
                     <button type="button" onClick={() => setIsCloseShiftModal(true)} className="px-3 py-2 rounded-xl bg-[#5A5A40] text-white text-xs font-semibold hover:bg-[#4A4A30] transition-colors">Закрыть смену</button>
                   </>
                 ) : (
@@ -746,15 +679,35 @@ export const POSView: React.FC = () => {
 
 
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setPaymentType('CASH')} className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[12px] transition-all ${paymentType === 'CASH' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
-                <Wallet size={14} />
+              <button onClick={() => setPaymentType('CASH')} className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[11px] transition-all ${paymentType === 'CASH' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
+                <Wallet size={13} />
                 Наличные
               </button>
-              <button onClick={() => setPaymentType('CARD')} className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[12px] transition-all ${paymentType === 'CARD' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
-                <CreditCard size={14} />
+              <button onClick={() => setPaymentType('CARD')} className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[11px] transition-all ${paymentType === 'CARD' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
+                <CreditCard size={13} />
                 Карта
               </button>
+              <button 
+                onClick={() => setPaymentType('CREDIT')} 
+                className={`col-span-2 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-bold text-[12px] transition-all shadow-sm ${paymentType === 'CREDIT' ? 'bg-amber-600 text-white shadow-amber-200' : 'bg-white text-amber-600 border border-amber-200 hover:bg-amber-50'}`}
+              >
+                <User size={14} />
+                В долг
+              </button>
             </div>
+
+            {paymentType === 'CREDIT' && (
+              <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                <label className="text-[10px] font-bold text-amber-700 uppercase tracking-widest px-1">Имя клиента (обязательно)</label>
+                <input 
+                  type="text" 
+                  value={customerName} 
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="ФИО клиента..."
+                  className="w-full px-3 py-2.5 bg-white border border-amber-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-amber-500/20 transition-all placeholder:text-amber-300 font-medium"
+                />
+              </div>
+            )}
 
 
             {error && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100 flex items-center gap-2"><AlertCircle size={14} />{error}</div>}

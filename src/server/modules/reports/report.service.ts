@@ -111,6 +111,7 @@ export class ReportService {
     const invoiceWhere = {
       createdAt: { gte: fromDate, lte: toDate },
       status: { not: 'CANCELLED' as const },
+      paymentType: { not: 'CREDIT' as const },
     };
 
     const [
@@ -486,6 +487,35 @@ export class ReportService {
         },
       },
     };
+  }
+  async getDebtsReport(params: ReportParams) {
+    const { fromDate, toDate } = resolveRange(params);
+    
+    const debts = await prisma.invoice.findMany({
+      where: {
+        paymentType: 'CREDIT',
+        status: { notIn: ['CANCELLED', 'PAID'] },
+      },
+      include: {
+        items: true,
+        payments: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const summary = debts.reduce((acc, inv) => {
+      const paid = inv.payments.reduce((sum, p) => sum + p.amount, 0);
+      const total = inv.totalAmount;
+      const debt = total - paid;
+      
+      acc.totalDebt += debt;
+      if (inv.paymentStatus === 'UNPAID') acc.unpaidCount++;
+      if (inv.paymentStatus === 'PARTIALLY_PAID') acc.partialCount++;
+      
+      return acc;
+    }, { totalDebt: 0, unpaidCount: 0, partialCount: 0, totalCount: debts.length });
+
+    return { items: debts, summary };
   }
 }
 

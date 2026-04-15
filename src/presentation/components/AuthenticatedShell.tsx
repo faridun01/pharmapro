@@ -93,9 +93,10 @@ const SettingsView = lazyNamedImport(() => import('./SettingsView'), 'SettingsVi
 const ReturnView = lazyNamedImport(() => import('./ReturnView'), 'ReturnView');
 const WriteOffView = lazyNamedImport(() => import('./WriteOffView'), 'WriteOffView');
 const ShiftView = lazyNamedImport(() => import('./ShiftView'), 'ShiftView');
-const PurchasesView = lazyNamedImport(() => import('./PurchasesView'), 'PurchasesView');
+const PurchasesView = lazyNamedImport(() => import('./PurchasesView.tsx'), 'PurchasesView');
 const AdminView = lazyNamedImport(() => import('./AdminView'), 'AdminView');
 const BatchesView = lazyNamedImport(() => import('./BatchesView'), 'BatchesView');
+const DebtsView = lazyNamedImport(() => import('./DebtsView.tsx'), 'DebtsView');
 
 const AppLoader: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Загрузка...', compact = false }) => (
   <div className={`${compact ? 'min-h-60' : 'h-full min-h-0'} flex items-center justify-center bg-[#f5f5f0]`}>
@@ -163,26 +164,27 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
 
   const menuItems = [
     { group: 'Торговля', items: [
-      { id: 'pos' as const, label: 'Кассовый терминал', icon: ShoppingCart },
-      { id: 'invoices' as const, label: 'История продаж', icon: Pill },
-      { id: 'returns' as const, label: 'Возвраты', icon: RotateCcw },
-      { id: 'inventory' as const, label: 'Инвентарь', icon: Package },
-      { id: 'shifts' as const, label: 'Смены', icon: Clock },
+      { id: 'pos' as SidebarView, label: 'Кассовый терминал', icon: ShoppingCart },
+      { id: 'invoices' as SidebarView, label: 'История продаж', icon: Pill },
+      { id: 'debts' as SidebarView, label: 'Долги (Кредит)', icon: Clock },
+      { id: 'returns' as SidebarView, label: 'Возвраты', icon: RotateCcw },
+      { id: 'inventory' as SidebarView, label: 'Инвентарь', icon: Package },
+      { id: 'shifts' as SidebarView, label: 'Смены', icon: Clock },
     ]},
     { group: 'Склад', items: [
-      { id: 'batches' as const, label: 'Партии товаров', icon: Package },
-      { id: 'purchases' as const, label: 'Приемка (Приход)', icon: CheckCircle2 },
-      { id: 'writeoffs' as const, label: 'Списания', icon: Trash2 },
+      { id: 'batches' as SidebarView, label: 'Партии товаров', icon: Package },
+      { id: 'purchases' as SidebarView, label: 'Приемка (Приход)', icon: CheckCircle2 },
+      { id: 'writeoffs' as SidebarView, label: 'Списания', icon: Trash2 },
     ]},
     { group: 'Аналитика', items: [
-      { id: 'dashboard' as const, label: 'Дашборд', icon: LayoutDashboard },
-      { id: 'reports' as const, label: 'Отчеты', icon: BarChart3 },
-      { id: 'suppliers' as const, label: 'Поставщики', icon: Truck },
+      { id: 'dashboard' as SidebarView, label: 'Дашборд', icon: LayoutDashboard },
+      { id: 'reports' as SidebarView, label: 'Отчеты', icon: BarChart3 },
+      { id: 'suppliers' as SidebarView, label: 'Поставщики', icon: Truck },
     ]},
     { group: 'Система', items: [
-      { id: 'notifications' as const, label: 'Уведомления', icon: Bell },
-      { id: 'admin' as const, label: 'Управление и Аудит', icon: ShieldCheck },
-      { id: 'settings' as const, label: 'Настройки', icon: Settings },
+      { id: 'notifications' as SidebarView, label: 'Уведомления', icon: Bell },
+      { id: 'admin' as SidebarView, label: 'Управление и Аудит', icon: ShieldCheck },
+      { id: 'settings' as SidebarView, label: 'Настройки', icon: Settings },
     ]},
   ];
 
@@ -255,6 +257,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       case 'inventory': return <InventoryView />;
       case 'batches': return <BatchesView />;
       case 'invoices': return <InvoicesView />;
+      case 'debts': return <DebtsView />;
       case 'suppliers': return <SuppliersPage />;
       case 'reports': return <ReportsView />;
       case 'returns': return <ReturnView />;
@@ -289,7 +292,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
         <header className="h-24 bg-white/80 backdrop-blur-md border-b border-[#5A5A40]/5 flex items-center justify-between px-10 shrink-0 z-20">
           <div className="flex flex-col">
             <h2 className="text-2xl font-black text-[#151619] tracking-tight">
-              {menuItems.flatMap(g => g.items).find(m => m.id === currentView)?.label || 'PharmaPro'}
+              {menuItems.flatMap(g => g.items).find((m: any) => m.id === currentView)?.label || 'PharmaPro'}
             </h2>
             <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-[0.2em] font-black">{new Date().toLocaleDateString('ru-RU', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
           </div>

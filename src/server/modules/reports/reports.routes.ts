@@ -198,6 +198,15 @@ reportsRouter.get('/finance', authenticate, requireRole(['ADMIN', 'OWNER']), asy
   res.json(result);
 }));
 
+reportsRouter.get('/debts', authenticate, asyncHandler(async (req, res) => {
+  const parseResult = ReportParamsSchema.safeParse(req.query);
+  if (!parseResult.success) {
+    throw new ValidationError(`Invalid parameters: ${parseResult.error.issues.map(e => e.message).join(', ')}`);
+  }
+  const result = await reportService.getDebtsReport(parseResult.data);
+  res.json(result);
+}));
+
 reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, res) => {
   const presetRaw = String(req.query.preset || 'month').toLowerCase();
   const preset: PeriodPreset = ['month', 'q1', 'q2', 'q3', 'q4', 'year', 'all'].includes(presetRaw)

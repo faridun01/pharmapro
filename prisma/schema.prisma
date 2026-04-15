@@ -79,6 +79,7 @@ enum ReturnStatus {
 enum RefundMethod {
   CASH
   CARD
+  STORE_BALANCE
 }
 
 enum WriteOffReason {
@@ -134,6 +135,7 @@ enum PriceType {
 enum CounterpartyType {
   SUPPLIER
   OTHER
+  CUSTOMER
 }
 
 enum PaymentDirection {
@@ -339,6 +341,7 @@ model Invoice {
   returns     Return[]
   cashShiftId String?
   cashShift   CashShift?    @relation(fields: [cashShiftId], references: [id])
+  debt        Debt?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -837,5 +840,21 @@ model SupplierPayable {
   createdAt   DateTime @default(now())
 
   @@index([supplierId, createdAt])
+}
+
+model Debt {
+  id              String      @id @default(uuid())
+  invoiceId       String?     @unique
+  invoice         Invoice?    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  customerName    String?
+  originalAmount  Float
+  paidAmount      Float       @default(0)
+  remainingAmount Float
+  dueDate         DateTime?
+  status          DebtStatus  @default(OPEN)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([customerName, status])
 }
 

@@ -321,8 +321,8 @@ export const DashboardView: React.FC = () => {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-[#5A5A40] tracking-tight">{t('Pharmacy Overview')}</h2>
-          <p className="text-[#5A5A40]/60 mt-1 italic">{t('Real-time analytics and inventory status')}</p>
+          <h2 className="text-2xl font-bold text-[#5A5A40] tracking-tight">{t('Pharmacy Overview')}</h2>
+          <p className="text-[#5A5A40]/60 mt-0.5 text-xs italic">{t('Real-time analytics and inventory status')}</p>
         </div>
       </div>
 
@@ -337,8 +337,8 @@ export const DashboardView: React.FC = () => {
                 {stat.trend}
               </span>
             </div>
-            <h3 className="text-[#5A5A40]/60 text-xs font-bold uppercase tracking-wider">{stat.label}</h3>
-            <p className="text-2xl font-black text-[#5A5A40] mt-1">{stat.value}</p>
+            <h3 className="text-[#5A5A40]/60 text-[10px] font-bold uppercase tracking-wider">{stat.label}</h3>
+            <p className="text-xl font-black text-[#5A5A40] mt-1">{stat.value}</p>
           </div>
         ))}
       </div>
@@ -347,8 +347,8 @@ export const DashboardView: React.FC = () => {
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-[#5A5A40]">{t('Admin Risk & Finance')}</h3>
-              <p className="text-sm text-[#5A5A40]/60">{t('Live operational controls')}</p>
+              <h3 className="text-lg font-bold text-[#5A5A40]">{t('Admin Risk & Finance')}</h3>
+              <p className="text-[11px] text-[#5A5A40]/60">{t('Live operational controls')}</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {adminCards.map((card) => (
@@ -359,7 +359,7 @@ export const DashboardView: React.FC = () => {
                       <card.icon size={16} />
                     </div>
                   </div>
-                  <p className="text-2xl font-bold text-[#5A5A40] mt-3">{card.value}</p>
+                  <p className="text-xl font-bold text-[#5A5A40] mt-3">{card.value}</p>
                 </div>
               ))}
             </div>

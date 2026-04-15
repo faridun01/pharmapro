@@ -85,9 +85,10 @@ export interface Invoice {
   totalAmount: number;
   taxAmount: number;
   discount: number;
-  paymentType: 'CASH' | 'CARD';
+  paymentType: 'CASH' | 'CARD' | 'CREDIT';
   status: 'PAID' | 'PENDING' | 'CANCELLED' | 'RETURNED' | 'PARTIALLY_RETURNED';
   paymentStatus?: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'CANCELLED';
+  customer?: string;
   comment?: string;
   userId: string;
   paidAmountTotal?: number;

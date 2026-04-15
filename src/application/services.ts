@@ -26,7 +26,8 @@ export interface TransactionDTO {
   discountAmount: number;
   taxAmount: number;
   total: number;
-  paymentType: 'CASH' | 'CARD';
+  paymentType: 'CASH' | 'CARD' | 'CREDIT';
+  customerName?: string;
   paidAmount?: number;
   userId: string;
   date: Date;
@@ -184,7 +185,9 @@ export class POSService {
       taxAmount: transaction.taxAmount,
       discount: transaction.discountAmount,
       paymentType: transaction.paymentType,
-      status: 'PAID',
+      status: transaction.paymentType === 'CREDIT' ? 'PENDING' : 'PAID',
+      paymentStatus: transaction.paymentType === 'CREDIT' ? 'UNPAID' : 'PAID',
+      customer: transaction.customerName,
       userId: transaction.userId,
       items: invoiceItems,
       createdAt: new Date()

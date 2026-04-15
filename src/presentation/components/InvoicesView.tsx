@@ -135,6 +135,7 @@ export const InvoicesView: React.FC<{
 
   const filteredInvoices = useMemo(() => {
     const filtered = invoices.filter((inv) => 
+      inv.status !== 'PENDING' &&
       matchesDateFilter(inv.createdAt)
       && (
         (inv.invoiceNo || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
