@@ -127,6 +127,7 @@ export const POSView: React.FC = () => {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [paymentType, setPaymentType] = useState<'CASH' | 'CARD' | 'CREDIT'>('CASH');
   const [customerName, setCustomerName] = useState('');
+  const [paidAmount, setPaidAmount] = useState<number>(0);
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -495,6 +496,7 @@ export const POSView: React.FC = () => {
       setSuccess(true);
       setCart([]);
       setCustomerName('');
+      setPaidAmount(0);
       void loadActiveShift();
       window.setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -695,15 +697,35 @@ export const POSView: React.FC = () => {
             </div>
 
             {paymentType === 'CREDIT' && (
-              <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
-                <label className="text-[10px] font-bold text-amber-700 uppercase tracking-widest px-1">Имя клиента (обязательно)</label>
-                <input 
-                  type="text" 
-                  value={customerName} 
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="ФИО клиента..."
-                  className="w-full px-3 py-2.5 bg-white border border-amber-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-amber-500/20 transition-all placeholder:text-amber-300 font-medium"
-                />
+              <div className="space-y-3 animate-in fade-in duration-300">
+                <div className="space-y-1.5 focus-within:translate-x-1 transition-transform">
+                  <label className="text-[10px] font-bold text-amber-700 uppercase tracking-widest px-1">Клиент (ФИО)</label>
+                  <input 
+                    type="text" 
+                    value={customerName} 
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Имя покупателя..."
+                    className="w-full px-4 py-2.5 bg-white border border-amber-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-amber-500/20 font-medium"
+                  />
+                </div>
+                
+                <div className="space-y-1.5 focus-within:translate-x-1 transition-transform">
+                  <label className="text-[10px] font-bold text-[#5A5A40]/60 uppercase tracking-widest px-1">
+                    Внесено сейчас (предоплата)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={paidAmount || ''} 
+                    onChange={(e) => setPaidAmount(Number(e.target.value))}
+                    placeholder="0.00"
+                    className="w-full px-4 py-3 bg-[#f5f5f0]/30 border border-[#5A5A40]/10 rounded-xl text-base font-black text-[#5A5A40] outline-none focus:bg-white focus:ring-4 focus:ring-[#5A5A40]/5 transition-all tabular-nums"
+                  />
+                  {paidAmount > 0 && paidAmount < total && (
+                    <div className="px-3 py-2 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-lg border border-amber-100 italic">
+                      Долг составит: {(total - paidAmount).toFixed(2)} TJS
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

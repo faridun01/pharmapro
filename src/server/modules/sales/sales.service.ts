@@ -221,15 +221,42 @@ export class SalesService {
       });
 
       if (input.paymentType === 'CREDIT') {
+        const initialPaid = Number(input.paidAmount || 0);
+        const totalAmount = Number(input.total);
+        const remaining = Math.max(0, totalAmount - initialPaid);
+        
         await tx.debt.create({
           data: {
             invoiceId: createdInvoice.id,
             customerName: input.customerName,
-            originalAmount: Number(input.total),
-            remainingAmount: Number(input.total),
-            status: 'OPEN',
+            originalAmount: totalAmount,
+            paidAmount: initialPaid,
+            remainingAmount: remaining,
+            status: initialPaid > 0 ? 'PARTIAL' : 'OPEN',
           },
         });
+
+        if (initialPaid > 0) {
+          await tx.payment.create({
+            data: {
+              direction: 'IN',
+              counterpartyType: 'OTHER',
+              method: 'CASH', // Defaulting to cash for down payment
+              amount: initialPaid,
+              paymentDate: new Date(),
+              status: 'PAID',
+              invoiceId: createdInvoice.id,
+              createdById: input.userId,
+              comment: `Down payment for credit invoice ${createdInvoice.invoiceNo}`,
+            },
+          });
+
+          // Update invoice status to partially paid
+          await tx.invoice.update({
+             where: { id: createdInvoice.id },
+             data: { paymentStatus: 'PARTIALLY_PAID' }
+          });
+        }
       }
 
       await auditService.log({

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Product } from '../../../core/domain';
-import { AlertTriangle, Layers, Barcode, BadgeDollarSign, Trash2 } from 'lucide-react';
+import { AlertTriangle, Layers, Barcode, BadgeDollarSign, Trash2, Plus } from 'lucide-react';
 
 interface ProductTableRowProps {
   index: number;
@@ -10,6 +10,7 @@ interface ProductTableRowProps {
   submitting: boolean;
   onOpenBatchHistory: (product: Product) => void;
   onEditPrices: (product: Product) => void;
+  onRestock: (product: Product) => void;
   onAddBarcode: (product: Product) => void;
   onDelete: (id: string, name: string) => void;
 }
@@ -21,6 +22,7 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = React.memo(({
   submitting,
   onOpenBatchHistory,
   onEditPrices,
+  onRestock,
   onAddBarcode,
   onDelete,
 }) => {
@@ -92,7 +94,15 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = React.memo(({
         )}
       </td>
       <td className="px-6 py-3.5 text-right">
-        <div className="ml-auto grid w-fit grid-cols-2 gap-2">
+        <div className="ml-auto grid w-fit grid-cols-3 gap-2">
+          <button
+            onClick={() => onRestock(product)}
+            disabled={submitting}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#5A5A40] text-white transition-all hover:bg-[#4A4A30] disabled:opacity-50"
+            title="Добавить партию"
+          >
+            <Plus size={14} />
+          </button>
           <button
             onClick={() => onOpenBatchHistory(product)}
             disabled={submitting}
@@ -101,16 +111,6 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = React.memo(({
           >
             <Layers size={14} />
           </button>
-          {!product.barcode && (
-            <button
-              onClick={() => onAddBarcode(product)}
-              disabled={submitting}
-              className="order-4 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
-              title="Добавить штрихкод"
-            >
-              <Barcode size={14} />
-            </button>
-          )}
           <button
             onClick={() => onEditPrices(product)}
             disabled={submitting}
@@ -119,10 +119,20 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = React.memo(({
           >
             <BadgeDollarSign size={14} />
           </button>
+          {!product.barcode && (
+            <button
+              onClick={() => onAddBarcode(product)}
+              disabled={submitting}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
+              title="Добавить штрихкод"
+            >
+              <Barcode size={14} />
+            </button>
+          )}
           <button
             onClick={() => onDelete(product.id, product.name)}
             disabled={submitting}
-            className="order-3 inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#5A5A40]/30 transition-all hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#5A5A40]/30 transition-all hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
             title={t('Delete Product')}
           >
             <Trash2 size={16} />

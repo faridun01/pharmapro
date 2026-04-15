@@ -499,6 +499,7 @@ export class ReportService {
       include: {
         items: true,
         payments: true,
+        debt: true,
       },
       orderBy: { createdAt: 'desc' },
     });

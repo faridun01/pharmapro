@@ -265,6 +265,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                   submitting={submitting}
                   onOpenBatchHistory={setBatchHistoryProduct}
                   onEditPrices={(prod) => setPriceEditModal({ product: prod, costPrice: String(prod.costPrice), sellingPrice: String(prod.sellingPrice) })}
+                  onRestock={openRestockModal}
                   onAddBarcode={(prod) => setBarcodeEditModal({ product: prod, barcode: '' })}
                   onDelete={(id, name) => setDeleteTarget({ id, name })}
                 />

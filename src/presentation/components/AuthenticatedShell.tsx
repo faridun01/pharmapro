@@ -172,7 +172,6 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       { id: 'shifts' as SidebarView, label: 'Смены', icon: Clock },
     ]},
     { group: 'Склад', items: [
-      { id: 'batches' as SidebarView, label: 'Партии товаров', icon: Package },
       { id: 'purchases' as SidebarView, label: 'Приемка (Приход)', icon: CheckCircle2 },
       { id: 'writeoffs' as SidebarView, label: 'Списания', icon: Trash2 },
     ]},
@@ -255,7 +254,6 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       case 'dashboard': return <DashboardView />;
       case 'pos': return <POSView />;
       case 'inventory': return <InventoryView />;
-      case 'batches': return <BatchesView />;
       case 'invoices': return <InvoicesView />;
       case 'debts': return <DebtsView />;
       case 'suppliers': return <SuppliersPage />;

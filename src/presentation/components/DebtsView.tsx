@@ -97,8 +97,8 @@ export const DebtsView: React.FC = () => {
           lastActivity: new Date(debt.createdAt) 
         };
       }
-      const paid = Number(debt.paidAmount || 0);
-      const total = Number(debt.totalAmount);
+      const paid = Number(debt.debt?.paidAmount || 0);
+      const total = Number(debt.debt?.originalAmount || debt.totalAmount);
       
       groups[name].totalDebt += total;
       groups[name].paidAmount += paid;
@@ -242,15 +242,23 @@ export const DebtsView: React.FC = () => {
                         <span className="text-[10px] text-[#5A5A40]/40">{new Date(invoice.createdAt).toLocaleDateString()}</span>
                       </div>
                       <div className="flex items-center gap-8">
-                        <div className="text-right">
-                          <p className="text-[9px] text-[#5A5A40]/30 uppercase font-black tracking-widest mb-0.5">Долг</p>
-                          <p className="text-sm font-black text-[#5A5A40]">{(Number(invoice.totalAmount) - Number(invoice.paidAmount || 0)).toFixed(2)}</p>
+                        <div className="space-y-0.5">
+                          <p className="text-[9px] text-[#5A5A40]/40 font-black uppercase tracking-widest leading-none">Сумма</p>
+                          <p className="text-sm font-black text-[#5A5A40] tabular-nums">{Number(invoice.debt?.originalAmount || invoice.totalAmount).toFixed(2)}</p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-[9px] text-[#5A5A40]/40 font-black uppercase tracking-widest leading-none">Оплачено</p>
+                          <p className="text-sm font-black text-emerald-600 tabular-nums">{Number(invoice.debt?.paidAmount || 0).toFixed(2)}</p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-[9px] text-[#5A5A40]/40 font-black uppercase tracking-widest leading-none">Остаток</p>
+                          <p className="text-lg font-black text-red-500 tabular-nums">{Number(invoice.debt?.remainingAmount || invoice.totalAmount).toFixed(2)}</p>
                         </div>
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
                             setPaymentModal(invoice);
-                            setPayAmount((Number(invoice.totalAmount) - Number(invoice.paidAmount || 0)).toFixed(2));
+                            setPayAmount(Number(invoice.debt?.remainingAmount || invoice.totalAmount).toFixed(2));
                           }}
                           className="bg-[#5A5A40] text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#4A4A30] transition-all"
                         >
