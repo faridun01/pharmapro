@@ -59,13 +59,16 @@ export const DebtsView: React.FC = () => {
           paymentMethod: payMethod
         })
       });
-      if (!response.ok) throw new Error('Payment failed');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Payment failed');
+      }
       setPaymentModal(null);
       setPayAmount('');
       void fetchDebts();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Ошибка при оплате долга');
+      alert(`Ошибка при оплате долга: ${err.message}`);
     } finally {
       setPaying(false);
     }
@@ -113,6 +116,8 @@ export const DebtsView: React.FC = () => {
       return matchesSearch;
     }).sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
   }, [debts, searchTerm, filter]);
+
+  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -195,47 +200,67 @@ export const DebtsView: React.FC = () => {
           </div>
         ) : groupedDebts.length > 0 ? (
           groupedDebts.map((group) => (
-            <div key={group.customer} className="bg-white rounded-[32px] border border-[#5A5A40]/5 shadow-sm overflow-hidden flex flex-col p-8 md:flex-row md:items-center justify-between gap-6 hover:shadow-md transition-all group">
-              <div className="flex items-center gap-6">
-                <div className="w-16 h-16 bg-[#5A5A40]/5 text-[#5A5A40] rounded-[24px] flex items-center justify-center text-xl font-black">
-                  {group.customer.charAt(0)}
+            <div key={group.customer} className="bg-white rounded-[32px] border border-[#5A5A40]/5 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all group">
+              <div 
+                className="p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 cursor-pointer"
+                onClick={() => setExpandedCustomer(expandedCustomer === group.customer ? null : group.customer)}
+              >
+                <div className="flex items-center gap-6">
+                  <div className="w-16 h-16 bg-[#5A5A40]/5 text-[#5A5A40] rounded-[24px] flex items-center justify-center text-xl font-black">
+                    {group.customer.charAt(0)}
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-black text-[#5A5A40]">{group.customer}</h4>
+                    <p className="text-[10px] text-[#5A5A40]/40 font-black uppercase tracking-[0.1em] mt-1">
+                      {group.invoices.length} {group.invoices.length === 1 ? 'чек' : 'чеков'} • Посл. активность: {group.lastActivity.toLocaleDateString()}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xl font-black text-[#5A5A40]">{group.customer}</h4>
-                  <p className="text-[10px] text-[#5A5A40]/40 font-black uppercase tracking-[0.1em] mt-1">
-                    {group.invoices.length} {group.invoices.length === 1 ? 'чек' : 'чеков'} • Посл. активность: {group.lastActivity.toLocaleDateString()}
-                  </p>
+
+                <div className="flex flex-wrap items-center gap-8 md:gap-12">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-[#5A5A40]/40 font-black uppercase tracking-widest">Общий баланс</p>
+                    <p className="text-lg font-black text-[#5A5A40] tabular-nums">{group.totalDebt.toFixed(2)} TJS</p>
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <p className="text-[10px] text-[#5A5A40]/40 font-black uppercase tracking-widest">Остаток</p>
+                    <p className="text-2xl font-black text-red-500 tabular-nums">{group.remaining.toFixed(2)} TJS</p>
+                  </div>
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-[#f5f5f0] text-[#5A5A40]/30 group-hover:text-[#5A5A40] transition-colors">
+                    {expandedCustomer === group.customer ? <X size={20} /> : <ChevronRight size={20} />}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-8 md:gap-12">
-                <div className="space-y-1">
-                  <p className="text-[10px] text-[#5A5A40]/40 font-black uppercase tracking-widest">Общий баланс</p>
-                  <p className="text-lg font-black text-[#5A5A40] tabular-nums">{group.totalDebt.toFixed(2)} TJS</p>
+              {expandedCustomer === group.customer && (
+                <div className="bg-[#f5f5f0]/30 border-t border-[#5A5A40]/5 px-8 py-6 space-y-3 animate-in slide-in-from-top-2 duration-300">
+                  <h5 className="text-[10px] font-black uppercase tracking-widest text-[#5A5A40]/30 mb-4">Список накладных (долгов)</h5>
+                  {group.invoices.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((invoice) => (
+                    <div key={invoice.id} className="bg-white p-5 rounded-2xl border border-[#5A5A40]/5 flex items-center justify-between gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-[#5A5A40]/60 uppercase tracking-widest">Чек: {invoice.invoiceNo}</span>
+                        <span className="text-[10px] text-[#5A5A40]/40">{new Date(invoice.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center gap-8">
+                        <div className="text-right">
+                          <p className="text-[9px] text-[#5A5A40]/30 uppercase font-black tracking-widest mb-0.5">Долг</p>
+                          <p className="text-sm font-black text-[#5A5A40]">{(Number(invoice.totalAmount) - Number(invoice.paidAmount || 0)).toFixed(2)}</p>
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPaymentModal(invoice);
+                            setPayAmount((Number(invoice.totalAmount) - Number(invoice.paidAmount || 0)).toFixed(2));
+                          }}
+                          className="bg-[#5A5A40] text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#4A4A30] transition-all"
+                        >
+                          Оплатить
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] text-[#5A5A40]/40 font-black uppercase tracking-widest">Оплачено</p>
-                  <p className="text-lg font-black text-emerald-600 tabular-nums">{group.paidAmount.toFixed(2)} TJS</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] text-[#5A5A40]/40 font-black uppercase tracking-widest">К оплате</p>
-                  <p className="text-2xl font-black text-red-500 tabular-nums">{group.remaining.toFixed(2)} TJS</p>
-                </div>
-                
-                <div className="flex flex-col gap-2">
-                  <button 
-                    onClick={() => {
-                      // For simplicity, we pay against the oldest invoice in the group first
-                      const oldestUnpaid = group.invoices.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
-                      setPaymentModal(oldestUnpaid);
-                      setPayAmount(group.remaining.toFixed(2));
-                    }}
-                    className="bg-[#5A5A40] text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-[#4A4A30] transition-colors shadow-xl shadow-[#5A5A40]/10"
-                  >
-                    Погасить долг
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
           ))
         ) : (

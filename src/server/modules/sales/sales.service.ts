@@ -370,18 +370,31 @@ export class SalesService {
     const result = await prisma.$transaction(async (tx) => {
       const amount = Number(input.amount);
       
-      if (!invoice.debt) throw new ValidationError('Debt record not found');
+      // Resiliency: if debt record is missing for some reason, create it now
+      let debt = invoice.debt;
+      if (!debt) {
+        debt = await tx.debt.create({
+          data: {
+            invoiceId: invoice.id,
+            customerName: invoice.customer || 'Аноним',
+            originalAmount: Number(invoice.totalAmount),
+            remainingAmount: Number(invoice.totalAmount),
+            status: 'OPEN'
+          }
+        });
+      }
 
       // Update Debt
-      const currentPaid = Number(invoice.debt.paidAmount || 0);
+      const currentPaid = Number(debt.paidAmount || 0);
       const newPaid = currentPaid + amount;
-      const isFullyPaid = newPaid >= Number(invoice.totalAmount);
+      const totalAmount = Number(invoice.totalAmount);
+      const isFullyPaid = newPaid >= totalAmount;
 
       const debtRecord = await tx.debt.update({
-        where: { id: invoice.debt.id },
+        where: { id: debt.id },
         data: {
           paidAmount: newPaid,
-          remainingAmount: Math.max(0, Number(invoice.totalAmount) - newPaid),
+          remainingAmount: Math.max(0, totalAmount - newPaid),
           status: isFullyPaid ? 'PAID' : 'PARTIAL'
         }
       });
