@@ -183,6 +183,70 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
     return count;
   }, [latestClosedShiftNotice, notificationMetrics]);
 
+  // Собираем уведомления из notificationMetrics
+  const notifications = React.useMemo(() => {
+    const arr = [];
+    if (notificationMetrics?.inventoryHighlights?.lowStockItems) {
+      for (const item of notificationMetrics.inventoryHighlights.lowStockItems) {
+        arr.push({
+          id: `lowstock-${item.productId}`,
+          title: 'Низкий остаток',
+          description: `Товар \"${item.name}\": ${item.currentStock} из минимальных ${item.minStock}`,
+          type: 'LOW_STOCK',
+          time: '',
+          read: false,
+        });
+      }
+    }
+    if (notificationMetrics?.inventoryHighlights?.expiringItems) {
+      for (const item of notificationMetrics.inventoryHighlights.expiringItems) {
+        arr.push({
+          id: `expiry-${item.id}`,
+          title: 'Срок годности',
+          description: `Партия \"${item.batchNumber}\" товара \"${item.name}\" истекает через ${item.daysLeft} дн.`,
+          type: 'EXPIRY',
+          time: '',
+          read: false,
+        });
+      }
+    }
+    if (notificationMetrics?.creditReceivables?.overdueItems) {
+      for (const item of notificationMetrics.creditReceivables.overdueItems) {
+        arr.push({
+          id: `overdue-${item.invoiceId}`,
+          title: 'Просроченная оплата',
+          description: `Покупатель: ${item.customerName}, сумма: ${item.remainingAmount}, просрочка: ${item.daysOverdue} дн.`,
+          type: 'OVERDUE_PAYMENT',
+          time: '',
+          read: false,
+        });
+      }
+    }
+    if (notificationMetrics?.creditReceivables?.dueTomorrowItems) {
+      for (const item of notificationMetrics.creditReceivables.dueTomorrowItems) {
+        arr.push({
+          id: `duetomorrow-${item.invoiceId}`,
+          title: 'Оплата завтра',
+          description: `Покупатель: ${item.customerName}, сумма: ${item.remainingAmount}`,
+          type: 'PAYMENT_DUE',
+          time: '',
+          read: false,
+        });
+      }
+    }
+    if (latestClosedShiftNotice) {
+      arr.push({
+        id: `shiftclose-${latestClosedShiftNotice.shiftId}`,
+        title: 'Смена закрыта',
+        description: `Смена №${latestClosedShiftNotice.shiftNo || ''} закрыта. Итог: ${Number(latestClosedShiftNotice.finalAmount).toFixed(2)} TJS, прибыль: ${Number(latestClosedShiftNotice.grossProfit).toFixed(2)} TJS`,
+        type: 'SYSTEM',
+        time: latestClosedShiftNotice.closedAt || '',
+        read: false,
+      });
+    }
+    return arr;
+  }, [notificationMetrics, latestClosedShiftNotice]);
+
   const renderView = () => {
     switch (currentView) {
       case 'dashboard': return <DashboardView onOpenInvoicePayment={() => setCurrentView('debtors')} />;
@@ -197,7 +261,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       case 'writeoffs': return <WriteOffView />;
       case 'shifts': return <ShiftView />;
       case 'settings': return <SettingsView />;
-      case 'notifications': return <NotificationsView notifications={[]} onNotificationClick={() => {}} />;
+      case 'notifications': return <NotificationsView notifications={notifications} onNotificationClick={() => {}} />;
       default: return <DashboardView onOpenInvoicePayment={() => {}} />;
     }
   };
