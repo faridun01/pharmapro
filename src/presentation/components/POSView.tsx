@@ -493,7 +493,6 @@ export const POSView: React.FC = () => {
       });
       
       setSuccess(true);
-      if (res && (res as any).id) handlePrintReceipt(res);
       setCart([]);
       setCustomerName('');
       void loadActiveShift();
