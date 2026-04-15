@@ -488,7 +488,7 @@ export const POSView: React.FC = () => {
         total,
         paymentType,
         customerName: paymentType === 'CREDIT' ? customerName : undefined,
-        paidAmount: paymentType === 'CREDIT' ? 0 : total,
+        paidAmount: paymentType === 'CREDIT' ? Number(paidAmount) : total,
         userId: user?.id || '',
         date: new Date(),
       });

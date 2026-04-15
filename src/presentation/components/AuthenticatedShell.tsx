@@ -111,22 +111,22 @@ const DesktopTitlebar: React.FC<{ controls: any }> = ({ controls }) => (
   <div className="desktop-titlebar shrink-0 flex items-center justify-between pl-3 bg-[#151619] border-b border-white/5 h-10">
     <div className="app-drag min-w-0 flex-1 self-stretch" />
     <div className="flex items-center app-no-drag h-full">
-      <button 
-        onClick={() => controls.minimize()} 
+      <button
+        onClick={() => controls.minimize()}
         className="w-12 h-full flex items-center justify-center hover:bg-white/5 text-white/60 transition-colors"
         title="Minimize"
       >
         <Minus size={14} strokeWidth={2.2} />
       </button>
-      <button 
-        onClick={() => controls.toggleMaximize()} 
+      <button
+        onClick={() => controls.toggleMaximize()}
         className="w-12 h-full flex items-center justify-center hover:bg-white/5 text-white/60 transition-colors"
         title="Maximize"
       >
         <Square size={12} strokeWidth={2.1} />
       </button>
-      <button 
-        onClick={() => controls.close()} 
+      <button
+        onClick={() => controls.close()}
         className="w-12 h-full flex items-center justify-center hover:bg-red-500 hover:text-white text-white/60 transition-colors"
         title="Close"
       >
@@ -158,33 +158,41 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
         const response = await fetch('/api/reports/metrics/dashboard?preset=month', { headers: await buildApiHeaders() });
         const payload = await response.json().catch(() => null);
         if (response.ok) setNotificationMetrics(payload);
-      } catch {}
+      } catch { }
     })();
   }, [user]);
 
   const menuItems = [
-    { group: 'Торговля', items: [
-      { id: 'pos' as SidebarView, label: 'Кассовый терминал', icon: ShoppingCart },
-      { id: 'invoices' as SidebarView, label: 'История продаж', icon: Pill },
-      { id: 'debts' as SidebarView, label: 'Долги (Кредит)', icon: Clock },
-      { id: 'returns' as SidebarView, label: 'Возвраты', icon: RotateCcw },
-      { id: 'inventory' as SidebarView, label: 'Инвентарь', icon: Package },
-      { id: 'shifts' as SidebarView, label: 'Смены', icon: Clock },
-    ]},
-    { group: 'Склад', items: [
-      { id: 'purchases' as SidebarView, label: 'Приемка (Приход)', icon: CheckCircle2 },
-      { id: 'writeoffs' as SidebarView, label: 'Списания', icon: Trash2 },
-    ]},
-    { group: 'Аналитика', items: [
-      { id: 'dashboard' as SidebarView, label: 'Дашборд', icon: LayoutDashboard },
-      { id: 'reports' as SidebarView, label: 'Отчеты', icon: BarChart3 },
-      { id: 'suppliers' as SidebarView, label: 'Поставщики', icon: Truck },
-    ]},
-    { group: 'Система', items: [
-      { id: 'notifications' as SidebarView, label: 'Уведомления', icon: Bell },
-      { id: 'admin' as SidebarView, label: 'Управление и Аудит', icon: ShieldCheck },
-      { id: 'settings' as SidebarView, label: 'Настройки', icon: Settings },
-    ]},
+    {
+      group: 'Торговля', items: [
+        { id: 'pos' as SidebarView, label: 'Кассовый терминал', icon: ShoppingCart },
+        { id: 'invoices' as SidebarView, label: 'История продаж', icon: Pill },
+        { id: 'debts' as SidebarView, label: 'Должники', icon: Clock },
+        { id: 'returns' as SidebarView, label: 'Возвраты', icon: RotateCcw },
+        { id: 'inventory' as SidebarView, label: 'Инвентарь', icon: Package },
+        { id: 'shifts' as SidebarView, label: 'Смены', icon: Clock },
+      ]
+    },
+    {
+      group: 'Склад', items: [
+        { id: 'purchases' as SidebarView, label: 'Приемка (Приход)', icon: CheckCircle2 },
+        { id: 'writeoffs' as SidebarView, label: 'Списания', icon: Trash2 },
+      ]
+    },
+    {
+      group: 'Аналитика', items: [
+        { id: 'dashboard' as SidebarView, label: 'Дашборд', icon: LayoutDashboard },
+        { id: 'reports' as SidebarView, label: 'Отчеты', icon: BarChart3 },
+        { id: 'suppliers' as SidebarView, label: 'Поставщики', icon: Truck },
+      ]
+    },
+    {
+      group: 'Система', items: [
+        { id: 'notifications' as SidebarView, label: 'Уведомления', icon: Bell },
+        { id: 'admin' as SidebarView, label: 'Управление и Аудит', icon: ShieldCheck },
+        { id: 'settings' as SidebarView, label: 'Настройки', icon: Settings },
+      ]
+    },
   ];
 
   const notificationsCount = useMemo(() => {
@@ -273,7 +281,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
 
   return (
     <div className="flex h-screen bg-[#f5f5f0] font-sans text-[#151619] overflow-hidden">
-      <Sidebar 
+      <Sidebar
         user={user}
         currentView={currentView}
         onViewChange={setCurrentView}
@@ -286,7 +294,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
 
       <main className="flex-1 flex flex-col relative overflow-hidden">
         {window.pharmaproDesktop?.controls && <DesktopTitlebar controls={window.pharmaproDesktop.controls} />}
-        
+
         <header className="h-24 bg-white/80 backdrop-blur-md border-b border-[#5A5A40]/5 flex items-center justify-between px-10 shrink-0 z-20">
           <div className="flex flex-col">
             <h2 className="text-2xl font-black text-[#151619] tracking-tight">
