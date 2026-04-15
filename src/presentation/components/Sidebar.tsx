@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { User } from '../../core/domain';
 
-export type SidebarView = 'dashboard' | 'notifications' | 'pos' | 'inventory' | 'batches' | 'invoices' | 'debtors' | 'suppliers' | 'reports' | 'settings' | 'returns' | 'writeoffs' | 'shifts';
+export type SidebarView = 'dashboard' | 'notifications' | 'pos' | 'inventory' | 'batches' | 'invoices' | 'debtors' | 'customers' | 'suppliers' | 'reports' | 'settings' | 'returns' | 'writeoffs' | 'shifts';
 
 interface MenuItem {
   id: SidebarView;

@@ -8,6 +8,7 @@ import {
   Settings,
   Bell,
   User,
+  Users,
   Pill,
   AlertCircle,
   RotateCcw,
@@ -94,6 +95,7 @@ const SettingsView = lazyNamedImport(() => import('./SettingsView'), 'SettingsVi
 const ReturnView = lazyNamedImport(() => import('./ReturnView'), 'ReturnView');
 const WriteOffView = lazyNamedImport(() => import('./WriteOffView'), 'WriteOffView');
 const ShiftView = lazyNamedImport(() => import('./ShiftView'), 'ShiftView');
+const CustomersView = lazyNamedImport(() => import('./CustomersView'), 'CustomersView');
 
 const AppLoader: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Загрузка...', compact = false }) => (
   <div className={`${compact ? 'min-h-60' : 'h-full min-h-0'} flex items-center justify-center bg-[#f5f5f0]`}>
@@ -163,6 +165,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
     { id: 'inventory' as const, label: 'Товары и партии', icon: Package },
     { id: 'invoices' as const, label: t('Sales History'), icon: Pill },
     { id: 'debtors' as const, label: 'Должники', icon: User },
+    { id: 'customers' as const, label: 'Покупатели', icon: Users },
     { id: 'shifts' as const, label: t('Shifts'), icon: Clock },
     { id: 'suppliers' as const, label: t('Suppliers'), icon: Truck },
     { id: 'returns' as const, label: t('Returns'), icon: RotateCcw },
@@ -187,6 +190,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       case 'inventory': return <InventoryView />;
       case 'invoices': return <InvoicesView viewMode="history" />;
       case 'debtors': return <InvoicesView viewMode="debtors" />;
+      case 'customers': return <CustomersView />;
       case 'suppliers': return <SuppliersPage />;
       case 'reports': return <ReportsView />;
       case 'returns': return <ReturnView />;

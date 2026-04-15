@@ -11,6 +11,16 @@ const resources = {
   },
   ru: {
     translation: {
+      reports: {
+        title: 'Отчеты',
+        subtitle: 'Аналитика и финансовые показатели',
+        viewSummary: 'Сводка',
+        viewDetailed: 'Детально',
+        noData: 'Нет данных за выбранный период',
+      },
+      errors: {
+        fetchFailed: 'Не удалось получить данные отчета',
+      },
       Dashboard: 'Панель управления',
       Inventory: 'Инвентарь',
       Invoices: 'Счета',

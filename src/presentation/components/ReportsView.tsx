@@ -81,7 +81,7 @@ export const ReportsView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto p-4 md:p-6 space-y-6 animate-in fade-in duration-500">
+    <div className="max-w-400 mx-auto p-4 md:p-6 space-y-6 animate-in fade-in duration-500">
       {/* Header & Controls */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
