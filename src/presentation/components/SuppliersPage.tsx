@@ -112,8 +112,17 @@ export const SuppliersPage: React.FC = () => {
   const loadSuppliers = async () => {
     setInitialLoadPending(true);
     try {
-      const data = await request('/api/suppliers');
-      setSuppliers(Array.isArray(data) ? data : []);
+      const data = await request('/api/suppliers/full');
+      if (Array.isArray(data)) {
+        setSuppliers(data.map(s => ({ id: s.id, name: s.name, contact: s.contact, email: s.email, address: s.address })));
+        const statsMap: Record<string, any> = {};
+        for (const s of data) {
+          if (s.summary) {
+            statsMap[s.id] = { summary: s.summary };
+          }
+        }
+        setSupplierStats(statsMap);
+      }
       setError('');
     } catch (err: any) {
       setError(err.message || 'Failed to fetch suppliers');
@@ -123,7 +132,7 @@ export const SuppliersPage: React.FC = () => {
   };
 
   const loadSupplierDetails = async (supplierId: string, force = false) => {
-    if (!force && supplierStats[supplierId]) return supplierStats[supplierId];
+    if (!force && supplierStats[supplierId]?.invoices) return supplierStats[supplierId];
     setDetailLoading(supplierId);
     try {
       const overview = await request(`/api/suppliers/${supplierId}/summary`);
@@ -386,8 +395,8 @@ export const SuppliersPage: React.FC = () => {
                   <p className="text-[9px] font-bold text-[#5A5A40]/30 uppercase tracking-widest mb-2">Активно</p>
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col">
-                       <span className="text-sm font-black text-[#5A5A40]">{summary?.batchCount || 0}</span>
-                       <span className="text-[8px] text-[#5A5A40]/40 uppercase font-black">Партии</span>
+                       <span className="text-sm font-black text-[#5A5A40]">{summary?.invoiceCount || 0}</span>
+                       <span className="text-[8px] text-[#5A5A40]/40 uppercase font-black">Закупок</span>
                     </div>
                   </div>
                 </div>
@@ -395,7 +404,7 @@ export const SuppliersPage: React.FC = () => {
                   <p className="text-[9px] font-bold text-[#5A5A40]/30 uppercase tracking-widest mb-2">Баланс</p>
                   <div className="flex flex-col">
                      <span className={`text-sm font-black ${(summary?.totalDebt || 0) > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                       {summary ? formatMoney(summary.totalDebt) : '—'}
+                       {summary ? formatMoney(summary.totalDebt) : '0.00 TJS'}
                      </span>
                      <span className="text-[8px] text-[#5A5A40]/40 uppercase font-black">Долг</span>
                   </div>

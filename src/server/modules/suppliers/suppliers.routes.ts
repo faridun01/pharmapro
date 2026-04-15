@@ -126,6 +126,23 @@ suppliersRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
   res.json(suppliers);
 }));
 
+suppliersRouter.get('/full', authenticate, asyncHandler(async (_req, res) => {
+  const suppliers = await prisma.supplier.findMany({
+    where: { isActive: true },
+    orderBy: [{ name: 'asc' }],
+  });
+
+  const fullData = await Promise.all(suppliers.map(async (supplier) => {
+    const overview = await getSupplierOverview(supplier.id);
+    return {
+      ...supplier,
+      summary: overview.summary,
+    };
+  }));
+
+  res.json(fullData);
+}));
+
 suppliersRouter.get('/:id/batches', authenticate, asyncHandler(async (req, res) => {
   const supplierId = req.params.id;
   const supplier = await prisma.supplier.findUnique({
