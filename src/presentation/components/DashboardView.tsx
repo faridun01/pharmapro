@@ -142,13 +142,13 @@ export const DashboardView: React.FC = () => {
   const totalStock = products.reduce((acc, p) => acc + p.totalStock, 0);
   const lowStockCount = products.filter(p => p.totalStock < (p.minStock || 10)).length;
 
-  const expiredCount = products.reduce((acc, p) => {
-    const expired = p.batches.filter((b) => new Date(b.expiryDate).getTime() < now.getTime());
+  const expiredCount = (products || []).reduce((acc, p) => {
+    const expired = (p.batches || []).filter((b) => new Date(b.expiryDate).getTime() < now.getTime());
     return acc + expired.length;
   }, 0);
 
-  const expiringSoonCount = products.reduce((acc, p) => {
-    const expiring = p.batches.filter(b => {
+  const expiringSoonCount = (products || []).reduce((acc, p) => {
+    const expiring = (p.batches || []).filter(b => {
       const daysLeft = (new Date(b.expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
       return daysLeft > 0 && daysLeft < 30;
     });
@@ -168,9 +168,9 @@ export const DashboardView: React.FC = () => {
     return `${days} дн. ${t('ago')}`;
   };
 
-  const movementActivity = products.flatMap((p) =>
-    p.batches.flatMap((b) =>
-      b.movements.map((m) => ({
+  const movementActivity = (products || []).flatMap((p) =>
+    (p.batches || []).flatMap((b) =>
+      (b.movements || []).map((m) => ({
         id: `mov-${m.id}`,
         productId: p.id,
         type:
@@ -337,8 +337,8 @@ export const DashboardView: React.FC = () => {
                 {stat.trend}
               </span>
             </div>
-            <h3 className="text-[#5A5A40]/60 text-sm font-medium uppercase tracking-wider">{stat.label}</h3>
-            <p className="text-3xl font-bold text-[#5A5A40] mt-1">{stat.value}</p>
+            <h3 className="text-[#5A5A40]/60 text-xs font-bold uppercase tracking-wider">{stat.label}</h3>
+            <p className="text-2xl font-black text-[#5A5A40] mt-1">{stat.value}</p>
           </div>
         ))}
       </div>

@@ -228,8 +228,12 @@ export const AuditLogPanel: React.FC = () => {
   }, [fModule, fUser, fAction, fFrom, fTo, page]);
 
   useEffect(() => {
-    fetch('/api/audit/users', { headers: buildApiHeaders(false) as any })
-      .then(r => r.json()).then(setUsers).catch(() => setUsers([]));
+    buildApiHeaders(false).then(headers => {
+      fetch('/api/audit/users', { headers: headers as any })
+        .then(r => r.json())
+        .then(setUsers)
+        .catch(() => setUsers([]));
+    });
   }, []);
 
   useEffect(() => { void load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps

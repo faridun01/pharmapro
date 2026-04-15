@@ -18,6 +18,7 @@ import {
   X,
   Square,
   CheckCircle2,
+  ShieldCheck,
 } from 'lucide-react';
 import { usePharmacy } from '../context';
 import { useTranslation } from 'react-i18next';
@@ -93,6 +94,8 @@ const ReturnView = lazyNamedImport(() => import('./ReturnView'), 'ReturnView');
 const WriteOffView = lazyNamedImport(() => import('./WriteOffView'), 'WriteOffView');
 const ShiftView = lazyNamedImport(() => import('./ShiftView'), 'ShiftView');
 const PurchasesView = lazyNamedImport(() => import('./PurchasesView'), 'PurchasesView');
+const AdminView = lazyNamedImport(() => import('./AdminView'), 'AdminView');
+const BatchesView = lazyNamedImport(() => import('./BatchesView'), 'BatchesView');
 
 const AppLoader: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Загрузка...', compact = false }) => (
   <div className={`${compact ? 'min-h-60' : 'h-full min-h-0'} flex items-center justify-center bg-[#f5f5f0]`}>
@@ -135,9 +138,10 @@ const DesktopTitlebar: React.FC<{ controls: any }> = ({ controls }) => (
 export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () => void }) {
   const { t } = useTranslation();
   const { user, logout, error } = usePharmacy();
-  const [currentView, setCurrentView] = useState<SidebarView>('dashboard');
+  const [currentView, setCurrentView] = useState<SidebarView>('pos');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [notificationMetrics, setNotificationMetrics] = useState<AppNotificationMetrics | null>(null);
+  const [readNotifications, setReadNotifications] = useState<Set<string>>(new Set());
   const [latestClosedShiftNotice, setLatestClosedShiftNotice] = useState(loadLatestClosedShiftNotice());
 
   useEffect(() => {
@@ -158,50 +162,70 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
   }, [user]);
 
   const menuItems = [
-    { id: 'pos' as const, label: t('POS Terminal'), icon: ShoppingCart },
-    { id: 'inventory' as const, label: 'Товары и партии', icon: Package },
-    { id: 'invoices' as const, label: t('Sales History'), icon: Pill },
-    { id: 'shifts' as const, label: t('Shifts'), icon: Clock },
-    { id: 'purchases' as const, label: 'Приёмка товара', icon: CheckCircle2 },
-    { id: 'suppliers' as const, label: t('Suppliers'), icon: Truck },
-    { id: 'returns' as const, label: t('Returns'), icon: RotateCcw },
-    { id: 'writeoffs' as const, label: t('Write-Offs'), icon: Trash2 },
-    { id: 'reports' as const, label: t('Reports'), icon: BarChart3 },
-    { id: 'dashboard' as const, label: t('Dashboard'), icon: LayoutDashboard },
-    { id: 'notifications' as const, label: t('Notifications'), icon: Bell },
-    { id: 'settings' as const, label: t('Settings'), icon: Settings },
+    { group: 'Торговля', items: [
+      { id: 'pos' as const, label: 'Кассовый терминал', icon: ShoppingCart },
+      { id: 'invoices' as const, label: 'История продаж', icon: Pill },
+      { id: 'returns' as const, label: 'Возвраты', icon: RotateCcw },
+      { id: 'inventory' as const, label: 'Инвентарь', icon: Package },
+      { id: 'shifts' as const, label: 'Смены', icon: Clock },
+    ]},
+    { group: 'Склад', items: [
+      { id: 'batches' as const, label: 'Партии товаров', icon: Package },
+      { id: 'purchases' as const, label: 'Приемка (Приход)', icon: CheckCircle2 },
+      { id: 'writeoffs' as const, label: 'Списания', icon: Trash2 },
+    ]},
+    { group: 'Аналитика', items: [
+      { id: 'dashboard' as const, label: 'Дашборд', icon: LayoutDashboard },
+      { id: 'reports' as const, label: 'Отчеты', icon: BarChart3 },
+      { id: 'suppliers' as const, label: 'Поставщики', icon: Truck },
+    ]},
+    { group: 'Система', items: [
+      { id: 'notifications' as const, label: 'Уведомления', icon: Bell },
+      { id: 'admin' as const, label: 'Управление и Аудит', icon: ShieldCheck },
+      { id: 'settings' as const, label: 'Настройки', icon: Settings },
+    ]},
   ];
 
   const notificationsCount = useMemo(() => {
     let count = 0;
-    if (latestClosedShiftNotice) count++;
+    if (notificationMetrics?.inventoryHighlights?.lowStockItems) {
+      count += notificationMetrics.inventoryHighlights.lowStockItems.filter(it => !readNotifications.has(`lowstock-${it.productId}`)).length;
+    }
+    if (notificationMetrics?.inventoryHighlights?.expiringItems) {
+      count += notificationMetrics.inventoryHighlights.expiringItems.filter(it => !readNotifications.has(`expiry-${it.id}`)).length;
+    }
+    if (latestClosedShiftNotice && !readNotifications.has(`shiftclose-${latestClosedShiftNotice.shiftId}`)) {
+      count++;
+    }
     return count;
-  }, [latestClosedShiftNotice]);
+  }, [notificationMetrics, readNotifications, latestClosedShiftNotice]);
 
   // Собираем уведомления из notificationMetrics
   const notifications = React.useMemo(() => {
     const arr = [];
-    if (notificationMetrics?.inventoryHighlights?.lowStockItems) {
-      for (const item of notificationMetrics.inventoryHighlights.lowStockItems) {
+    const lowStockItems = notificationMetrics?.inventoryHighlights?.lowStockItems;
+    if (Array.isArray(lowStockItems)) {
+      for (const item of lowStockItems) {
         arr.push({
           id: `lowstock-${item.productId}`,
           title: 'Низкий остаток',
-          description: `Товар \"${item.name}\": ${item.currentStock} из минимальных ${item.minStock}`,
-          type: 'LOW_STOCK',
-          time: '',
-          read: false,
+          description: `Товар "${item.name}": ${item.currentStock} из минимальных ${item.minStock}`,
+          type: 'LOW_STOCK' as const,
+          linkTo: 'inventory',
+          read: readNotifications.has(`lowstock-${item.productId}`),
         });
       }
     }
-    if (notificationMetrics?.inventoryHighlights?.expiringItems) {
-      for (const item of notificationMetrics.inventoryHighlights.expiringItems) {
+    const expiringItems = notificationMetrics?.inventoryHighlights?.expiringItems;
+    if (Array.isArray(expiringItems)) {
+      for (const item of expiringItems) {
         arr.push({
           id: `expiry-${item.id}`,
           title: 'Срок годности',
-          description: `Партия \"${item.batchNumber}\" товара \"${item.name}\" истекает через ${item.daysLeft} дн.`,
-          type: 'EXPIRY',
-          time: '',
-          read: false,
+          description: `Партия "${item.batchNumber}" товара "${item.name}" истекает через ${item.daysLeft} дн.`,
+          type: 'EXPIRY' as const,
+          linkTo: 'batches',
+          read: readNotifications.has(`expiry-${item.id}`),
         });
       }
     }
@@ -210,19 +234,26 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
         id: `shiftclose-${latestClosedShiftNotice.shiftId}`,
         title: 'Смена закрыта',
         description: `Смена №${latestClosedShiftNotice.shiftNo || ''} закрыта. Итог: ${Number(latestClosedShiftNotice.finalAmount).toFixed(2)} TJS, прибыль: ${Number(latestClosedShiftNotice.grossProfit).toFixed(2)} TJS`,
-        type: 'SYSTEM',
+        type: 'SYSTEM' as const,
+        linkTo: 'shifts',
         time: latestClosedShiftNotice.closedAt || '',
-        read: false,
+        read: readNotifications.has(`shiftclose-${latestClosedShiftNotice.shiftId}`),
       });
     }
-    return arr;
-  }, [notificationMetrics, latestClosedShiftNotice]);
+    return arr.sort((a, b) => (a.read === b.read ? 0 : a.read ? 1 : -1));
+  }, [notificationMetrics, readNotifications, latestClosedShiftNotice]);
+
+  const handleNotificationAction = (notificationId: string, view?: SidebarView) => {
+    setReadNotifications(prev => new Set([...Array.from(prev), notificationId]));
+    if (view) setCurrentView(view);
+  };
 
   const renderView = () => {
     switch (currentView) {
       case 'dashboard': return <DashboardView />;
       case 'pos': return <POSView />;
       case 'inventory': return <InventoryView />;
+      case 'batches': return <BatchesView />;
       case 'invoices': return <InvoicesView />;
       case 'suppliers': return <SuppliersPage />;
       case 'reports': return <ReportsView />;
@@ -231,7 +262,8 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       case 'shifts': return <ShiftView />;
       case 'purchases': return <PurchasesView />;
       case 'settings': return <SettingsView />;
-      case 'notifications': return <NotificationsView notifications={notifications} onNotificationClick={() => {}} />;
+      case 'notifications': return <NotificationsView notifications={notifications} onNotificationClick={(id, link) => handleNotificationAction(id, link as SidebarView)} />;
+      case 'admin': return <AdminView />;
       default: return <DashboardView />;
     }
   };
@@ -256,7 +288,9 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
         
         <header className="h-24 bg-white/80 backdrop-blur-md border-b border-[#5A5A40]/5 flex items-center justify-between px-10 shrink-0 z-20">
           <div className="flex flex-col">
-            <h2 className="text-2xl font-black text-[#151619] tracking-tight">{menuItems.find(m => m.id === currentView)?.label || 'PharmaPro'}</h2>
+            <h2 className="text-2xl font-black text-[#151619] tracking-tight">
+              {menuItems.flatMap(g => g.items).find(m => m.id === currentView)?.label || 'PharmaPro'}
+            </h2>
             <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-[0.2em] font-black">{new Date().toLocaleDateString('ru-RU', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
           </div>
           <div className="flex items-center gap-6">

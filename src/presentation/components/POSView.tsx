@@ -118,62 +118,6 @@ const ProductCatalog = memo(({
 
 ProductCatalog.displayName = 'ProductCatalog';
 
-const BatchSelectorModal = ({ 
-  product, 
-  onSelect, 
-  onClose 
-}: { 
-  product: Product & { batches: any[] }, 
-  onSelect: (batch: any) => void, 
-  onClose: () => void 
-}) => {
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
-        <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
-          <div>
-            <h3 className="text-xl font-bold text-[#5A5A40]">{product.name}</h3>
-            <p className="text-sm text-[#5A5A40]/60">Выберите конкретную партию для продажи</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-[#f5f5f0] rounded-xl transition-colors">
-            <Plus className="rotate-45" size={24} />
-          </button>
-        </div>
-        <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-          <div className="grid gap-3">
-            {[...product.batches]
-              .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime())
-              .map((batch) => {
-              const isExpired = new Date(batch.expiryDate) < new Date();
-              return (
-                <button
-                  key={batch.id}
-                  disabled={isExpired || batch.quantity <= 0}
-                  onClick={() => onSelect(batch)}
-                  className={`flex items-center justify-between p-4 rounded-2xl border text-left transition-all ${
-                    isExpired ? 'bg-red-50/50 border-red-100 opacity-60 cursor-not-allowed' : 'bg-white border-[#5A5A40]/10 hover:border-[#5A5A40] hover:shadow-md'
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-[#5A5A40]">{batch.batchNumber}</span>
-                      {isExpired && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Истек</span>}
-                    </div>
-                    <p className="text-xs text-[#5A5A40]/60 mt-1">Годен до: {new Date(batch.expiryDate).toLocaleDateString()}</p>
-                    <p className="text-xs text-[#5A5A40]/60">Поставщик: {(batch as any).supplier?.name || (batch as any).supplierName || '—'}</p>
-                  </div>
-                  <div className="text-right shrink-0 ml-4">
-                    <p className="font-bold text-[#5A5A40]">{batch.quantity} ед.</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 
 export const POSView: React.FC = () => {
@@ -196,7 +140,6 @@ export const POSView: React.FC = () => {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [barcodeScanning, setBarcodeScanning] = useState(false);
-  const [showBatchModal, setShowBatchModal] = useState<{ productId: string, cartItemKey: string } | null>(null);
   const [overallDiscountPercent, setOverallDiscountPercent] = useState<number>(0);
 
   const normalizedSearchTerm = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm]);
@@ -226,7 +169,7 @@ export const POSView: React.FC = () => {
     );
   }, [products]);
 
-  const addToCart = useCallback((product: Product, batch?: any) => {
+  const addToCart = useCallback((product: Product) => {
     if (product.totalStock <= 0) {
       setError('Товар закончился на складе');
       window.setTimeout(() => setError(null), 2000);
@@ -234,11 +177,11 @@ export const POSView: React.FC = () => {
     }
 
     setCart((currentCart) => {
-      const existing = currentCart.find((item) => item.id === product.id && (!batch || item.batchId === batch.id));
+      const existing = currentCart.find((item) => item.id === product.id);
       if (existing) {
         return currentCart.map((item) => {
-          if (getCartItemKey(item) !== getCartItemKey({ id: product.id, batchId: batch?.id })) return item;
-          return { ...item, quantity: Math.min(batch ? batch.quantity : item.totalStock, item.quantity + 1) };
+          if (item.id !== product.id) return item;
+          return { ...item, quantity: Math.min(item.totalStock, item.quantity + 1) };
         });
       }
       return [
@@ -246,14 +189,14 @@ export const POSView: React.FC = () => {
         {
           ...product,
           quantity: 1,
-          batchId: batch?.id,
-          batchNumber: batch?.batchNumber,
-          expiryDate: batch?.expiryDate,
-          prescriptionPresented: !product.prescription, // Default to true if not required
+          batchId: undefined, // Let server decide FIFO
+          batchNumber: 'FIFO Авто',
+          expiryDate: new Date().toISOString(),
+          prescriptionPresented: !product.prescription,
         }
       ];
     });
-  }, [getCartItemKey]);
+  }, []);
 
   const subtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.sellingPrice * item.quantity), 0), [cart]);
   const total = subtotal;
@@ -716,13 +659,7 @@ export const POSView: React.FC = () => {
 
           <ProductCatalog 
             filteredProducts={filteredProducts} 
-            onAddToCart={(p) => {
-              if (p.batches && p.batches.length > 1) {
-                setShowBatchModal({ productId: p.id, cartItemKey: '' } as any);
-              } else {
-                addToCart(p, p.batches?.[0]);
-              }
-            }} 
+            onAddToCart={(p) => addToCart(p)} 
           />
         </div>
 
@@ -761,7 +698,10 @@ export const POSView: React.FC = () => {
                              </button>
                           )}
                         </div>
-                        <p className="text-[10px] text-[#5A5A40]/55 mt-1 leading-tight">{item.sellingPrice.toFixed(2)} TJS / ед. • Склад: {formatUnitQuantity(item.totalStock)}</p>
+                        <p className="text-[10px] text-[#5A5A40]/55 mt-1 leading-tight">
+                          <span className="font-black text-[#5A5A40]/30 uppercase tracking-widest mr-2">FIFO</span>
+                          {item.sellingPrice.toFixed(2)} TJS / ед. • Склад: {formatUnitQuantity(item.totalStock)}
+                        </p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <p className="text-[12px] font-bold text-[#5A5A40] tabular-nums min-w-22 text-right">{(item.sellingPrice * item.quantity).toFixed(2)} TJS</p>
@@ -846,16 +786,6 @@ export const POSView: React.FC = () => {
               setClosedShiftSummary(result);
             }
             void loadActiveShift();
-          }}
-        />
-      )}
-      {showBatchModal && (
-        <BatchSelectorModal
-          product={products.find(p => p.id === showBatchModal.productId) as any}
-          onClose={() => setShowBatchModal(null)}
-          onSelect={(batch) => {
-            addToCart(products.find(p => p.id === showBatchModal.productId)!, batch);
-            setShowBatchModal(null);
           }}
         />
       )}

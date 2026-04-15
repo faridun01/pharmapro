@@ -25,9 +25,9 @@ export const ReportKpiSection: React.FC<Props> = ({ data, currencyCode }) => {
       accent: 'text-emerald-600',
     },
     {
-      label: t('reports.receivables'),
-      value: formatMoney(data.debts.receivableTotal, currencyCode),
-      hint: `${t('reports.overdue')}: ${formatMoney(data.debts.receivableOverdue, currencyCode)}`,
+      label: 'Списания (Убытки)',
+      value: formatMoney(kpi.writeOffAmount, currencyCode),
+      hint: `Налогов списано: ${formatMoney(kpi.taxNet, currencyCode)}`,
       accent: 'text-orange-600',
     },
     {
@@ -65,10 +65,10 @@ export const ReportKpiSection: React.FC<Props> = ({ data, currencyCode }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
       {cards.map((card) => (
-        <div key={card.label} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-          <p className="text-sm font-medium text-slate-500 mb-1">{card.label}</p>
-          <h3 className={`text-2xl font-bold ${card.accent}`}>{card.value}</h3>
-          <p className="text-xs text-slate-400 mt-2">{card.hint}</p>
+        <div key={card.label} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+          <p className="text-[10px] font-black text-slate-400 mb-1 uppercase tracking-widest">{card.label}</p>
+          <h3 className={`text-xl font-black ${card.accent}`}>{card.value}</h3>
+          <p className="text-[10px] text-slate-400 mt-2 font-medium">{card.hint}</p>
         </div>
       ))}
     </div>

@@ -8,12 +8,17 @@ import {
 } from 'lucide-react';
 import { User } from '../../core/domain';
 
-export type SidebarView = 'dashboard' | 'notifications' | 'pos' | 'inventory' | 'batches' | 'purchases' | 'invoices' | 'suppliers' | 'reports' | 'settings' | 'returns' | 'writeoffs' | 'shifts';
+export type SidebarView = 'dashboard' | 'notifications' | 'pos' | 'inventory' | 'batches' | 'purchases' | 'invoices' | 'suppliers' | 'reports' | 'settings' | 'returns' | 'writeoffs' | 'shifts' | 'admin';
 
 interface MenuItem {
   id: SidebarView;
   label: string;
   icon: React.ElementType;
+}
+
+interface MenuGroup {
+  group: string;
+  items: MenuItem[];
 }
 
 interface SidebarProps {
@@ -23,7 +28,7 @@ interface SidebarProps {
   onLogout: () => void;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (isOpen: boolean) => void;
-  menuItems: MenuItem[];
+  menuItems: MenuGroup[];
   notificationsCount: number;
 }
 
@@ -56,33 +61,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Navigation Section */}
-      <div className="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar flex flex-col gap-1.5">
-        {menuItems.map((item) => {
-          const isActive = currentView === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onViewChange(item.id)}
-              className={`group relative flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-200 ${
-                isActive 
-                  ? 'bg-[#5A5A40] text-white shadow-lg shadow-[#5A5A40]/20' 
-                  : 'text-white/40 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <item.icon size={22} className={`${isActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
-              {isSidebarOpen && (
-                <span className="font-bold text-sm tracking-tight flex-1 flex items-center gap-2">
-                  {item.label}
-                  {item.id === 'notifications' && notificationsCount > 0 && (
-                    <span className="inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-black shadow-lg">
-                      {notificationsCount}
-                    </span>
-                  )}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar flex flex-col">
+        {menuItems.map((group) => (
+          <div key={group.group} className="mb-6 last:mb-0">
+            {isSidebarOpen && (
+              <h3 className="px-4 mb-3 text-[10px] font-black text-white/20 uppercase tracking-[0.25em] pharma-fade-in">
+                {group.group}
+              </h3>
+            )}
+            <div className="flex flex-col gap-1.5">
+              {group.items.map((item) => {
+                const isActive = currentView === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => onViewChange(item.id)}
+                    className={`group relative flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-200 ${
+                      isActive 
+                        ? 'bg-[#5A5A40] text-white shadow-lg shadow-[#5A5A40]/20' 
+                        : 'text-white/40 hover:text-white hover:bg-white/5'
+                    }`}
+                    title={!isSidebarOpen ? item.label : undefined}
+                  >
+                    <item.icon size={22} className={`${isActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
+                    {isSidebarOpen && (
+                      <span className="font-bold text-sm tracking-tight flex-1 flex items-center gap-2">
+                        {item.label}
+                        {item.id === 'notifications' && notificationsCount > 0 && (
+                          <span className="inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-black shadow-lg">
+                            {notificationsCount}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {isSidebarOpen && <div className="mx-4 mt-6 border-b border-white/5" />}
+          </div>
+        ))}
       </div>
 
       {/* User & Footer Section */}
@@ -104,7 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="w-full flex items-center justify-center sm:justify-start gap-4 px-4 py-4 text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-2xl transition-all group"
         >
           <LogOut size={22} className="shrink-0 group-hover:-translate-x-1 transition-transform" />
-          {isSidebarOpen && <span className="font-bold text-xs uppercase tracking-[0.2em]">{user ? 'Выход' : 'Sign Out'}</span>}
+          {isSidebarOpen && <span className="font-bold text-xs uppercase tracking-[0.2em]">Выход</span>}
         </button>
       </div>
 
