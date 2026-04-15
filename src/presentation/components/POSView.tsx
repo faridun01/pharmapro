@@ -134,6 +134,7 @@ export const POSView: React.FC = () => {
   const [closedShiftSummary, setClosedShiftSummary] = useState<ClosedShiftSummary | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [barcodeScanning, setBarcodeScanning] = useState(false);
 
   const normalizedSearchTerm = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm]);
   const cartProductIds = useMemo(() => new Set(cart.map((item) => item.id)), [cart]);
@@ -250,18 +251,46 @@ export const POSView: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [addToCart, findProductByScannedCode]);
 
-  const handleBarcodeScan = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleBarcodeScan = useCallback(async (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== 'Enter') return;
-    const product = findProductByScannedCode(barcodeInput);
-    if (product) {
-      addToCart(product);
+    const code = barcodeInput.trim();
+    if (!code) return;
+
+    // 1. Fast path: look in already-loaded products list
+    const local = findProductByScannedCode(code);
+    if (local) {
+      addToCart(local);
       setBarcodeInput('');
+      barcodeInputRef.current?.focus();
       return;
     }
-    setError(`Товар по штрихкоду не найден: ${barcodeInput}`);
+
+    // 2. Slow path: ask the server (handles large catalogs)
+    setBarcodeScanning(true);
     setBarcodeInput('');
-    window.setTimeout(() => setError(null), 3000);
-  }, [addToCart, barcodeInput, findProductByScannedCode]);
+    try {
+      const res = await fetch(
+        `/api/products/barcode/${encodeURIComponent(code)}`,
+        { headers: await buildApiHeaders(false) },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(body.error || `Товар «${code}» не найден`);
+        window.setTimeout(() => setError(null), 3000);
+      } else {
+        // Product found via API — add to cart (it may not be in local list yet)
+        addToCart(body as Product);
+        // Refresh the local list so next scan is fast
+        void refreshProducts();
+      }
+    } catch {
+      setError(`Ошибка при поиске товара по штрихкоду`);
+      window.setTimeout(() => setError(null), 3000);
+    } finally {
+      setBarcodeScanning(false);
+      barcodeInputRef.current?.focus();
+    }
+  }, [addToCart, barcodeInput, findProductByScannedCode, refreshProducts]);
 
   const handleSearchKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== 'Enter') return;
@@ -405,7 +434,21 @@ export const POSView: React.FC = () => {
               </div>
               <div className="relative group">
                 <Barcode className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
-                <input ref={barcodeInputRef} type="text" value={barcodeInput} onChange={(event) => setBarcodeInput(event.target.value)} onKeyDown={handleBarcodeScan} placeholder="Сканируйте штрихкод" className="w-full pl-12 pr-4 py-3 bg-[#f5f5f0]/50 border-none rounded-2xl focus:ring-2 focus:ring-[#5A5A40]/20 transition-all text-sm outline-none" />
+                <input
+                  ref={barcodeInputRef}
+                  type="text"
+                  value={barcodeInput}
+                  onChange={(event) => setBarcodeInput(event.target.value)}
+                  onKeyDown={(e) => void handleBarcodeScan(e)}
+                  placeholder={barcodeScanning ? 'Поиск...' : 'Сканируйте штрихкод'}
+                  disabled={barcodeScanning}
+                  className="w-full pl-12 pr-4 py-3 bg-[#f5f5f0]/50 border-none rounded-2xl focus:ring-2 focus:ring-[#5A5A40]/20 transition-all text-sm outline-none disabled:opacity-60"
+                />
+                {barcodeScanning && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    <RefreshCw size={14} className="animate-spin text-[#5A5A40]/50" />
+                  </div>
+                )}
               </div>
             </div>
 

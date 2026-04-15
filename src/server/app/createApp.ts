@@ -15,6 +15,10 @@ import { shiftsRouter } from '../modules/shifts/shifts.routes';
 import { warehousesRouter } from '../modules/warehouses/warehouses.routes';
 import { reportsRouter } from '../modules/reports/reports.routes';
 import { systemRouter } from '../modules/system/system.routes';
+import { usersRouter } from '../modules/system/users.routes';
+import { auditRouter } from '../modules/system/audit.routes';
+import { exportRouter } from '../modules/reports/export.routes';
+import { customersRouter } from '../modules/customers/customers.routes';
 import { devRouter } from '../modules/dev/dev.routes';
 import { errorMiddleware } from '../common/http';
 import { prisma } from '../infrastructure/prisma';
@@ -73,6 +77,10 @@ export const createApp = () => {
   app.use('/api/warehouses', warehousesRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/system', systemRouter);
+  app.use('/api/system/users', usersRouter);
+  app.use('/api/audit', auditRouter);
+  app.use('/api/export', exportRouter);
+  app.use('/api/customers', customersRouter);
   if (process.env.NODE_ENV !== 'production') {
     app.use('/api/dev', devRouter);
   }

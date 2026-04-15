@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { defaultCompanyReportProfile, type CompanyReportProfile } from '../../lib/reportPreferences';
+import { UsersAdminPanel } from './UsersAdminPanel';
+import { AuditLogPanel } from './AuditLogPanel';
+import { ExportPanel } from './ExportPanel';
 import i18n from '../../lib/i18n';
 import {
   defaultUserSettingsPreferences,
@@ -556,6 +559,23 @@ export const SettingsView: React.FC = () => {
         <button onClick={() => { void savePreferences(); }} disabled={savingPreferences} className="px-4 py-2 rounded-xl bg-[#5A5A40] text-white text-sm font-semibold disabled:opacity-50">
           {savingPreferences ? t('Saving...') : t('Save preferences')}
         </button>
+      </div>
+
+      {isAdmin && (
+        <div className="bg-white p-6 rounded-2xl border border-[#5A5A40]/10 space-y-5">
+          <UsersAdminPanel currentUserRole={user?.role ?? ''} />
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="bg-white p-6 rounded-2xl border border-[#5A5A40]/10 space-y-5">
+          <AuditLogPanel />
+        </div>
+      )}
+
+      {/* Export — visible to all roles, internal role filter applied */}
+      <div className="bg-white p-6 rounded-2xl border border-[#5A5A40]/10 space-y-5">
+        <ExportPanel currentUserRole={user?.role ?? ''} />
       </div>
 
       {isAdmin && (

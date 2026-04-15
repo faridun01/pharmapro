@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, type AuthedRequest } from '../../common/auth';
+import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { prisma } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
@@ -162,7 +162,8 @@ suppliersRouter.get('/:id/summary', authenticate, asyncHandler(async (req, res) 
   });
 }));
 
-suppliersRouter.post('/invoices/:id/payments', authenticate, asyncHandler(async (req, res) => {
+// POST /invoices/:id/payments — ADMIN, OWNER
+suppliersRouter.post('/invoices/:id/payments', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const purchaseInvoiceId = req.params.id;
   const amount = Number(req.body?.amount || 0);
@@ -273,7 +274,8 @@ suppliersRouter.post('/invoices/:id/payments', authenticate, asyncHandler(async 
   res.status(201).json(result);
 }));
 
-suppliersRouter.post('/', authenticate, asyncHandler(async (req, res) => {
+// POST / — ADMIN, OWNER
+suppliersRouter.post('/', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const name = String(req.body?.name || '').trim();
 
@@ -308,7 +310,8 @@ suppliersRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   res.status(201).json(created);
 }));
 
-suppliersRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
+// PUT /:id — ADMIN, OWNER
+suppliersRouter.put('/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const { id } = req.params;
 
@@ -356,7 +359,8 @@ suppliersRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
-suppliersRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
+// DELETE /:id — ADMIN, OWNER
+suppliersRouter.delete('/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const { id } = req.params;
 

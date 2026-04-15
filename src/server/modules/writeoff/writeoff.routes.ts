@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, type AuthedRequest } from '../../common/auth';
+import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { prisma } from '../../infrastructure/prisma';
 import { ValidationError } from '../../common/errors';
@@ -22,7 +22,8 @@ writeoffRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
   res.json(writeOffs);
 }));
 
-writeoffRouter.post('/', authenticate, asyncHandler(async (req, res) => {
+// POST / — PHARMACIST, ADMIN, OWNER
+writeoffRouter.post('/', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const { items, ...data } = req.body ?? {};
 
@@ -51,7 +52,8 @@ writeoffRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   res.status(201).json(writeOff);
 }));
 
-writeoffRouter.patch('/:id', authenticate, asyncHandler(async (req, res) => {
+// PATCH /:id — PHARMACIST, ADMIN, OWNER
+writeoffRouter.patch('/:id', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const { items, ...data } = req.body ?? {};
 
@@ -80,7 +82,8 @@ writeoffRouter.patch('/:id', authenticate, asyncHandler(async (req, res) => {
   res.json(writeOff);
 }));
 
-writeoffRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
+// DELETE /:id — ADMIN, OWNER only
+writeoffRouter.delete('/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
 
   await writeOffService.deleteWriteOff(String(req.params.id), authedReq.user.id, authedReq.user.role);

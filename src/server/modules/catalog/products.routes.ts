@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { authenticate, type AuthedRequest } from '../../common/auth';
+import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { prisma } from '../../infrastructure/prisma';
 import { productService } from './product.service';
 import { parseAuditJson } from '../../common/utils';
+import { NotFoundError, ValidationError } from '../../common/errors';
 
 export const productsRouter = Router();
 
@@ -26,19 +27,53 @@ productsRouter.get('/:id/price-history', authenticate, asyncHandler(async (req, 
   res.json(history);
 }));
 
-productsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
+// GET /barcode/:code — exact barcode lookup (for POS scanners)
+// NOTE: must be placed BEFORE /:id to avoid route conflict
+productsRouter.get('/barcode/:code', authenticate, asyncHandler(async (req, res) => {
+  const raw = String(req.params.code || '').trim();
+  if (!raw) throw new ValidationError('Barcode is required');
+
+  // Try exact barcode match first, then SKU
+  const product = await prisma.product.findFirst({
+    where: {
+      isActive: true,
+      OR: [
+        { barcode: raw },
+        { sku: raw },
+      ],
+    },
+    include: {
+      batches: {
+        where: { quantity: { gt: 0 } },
+        orderBy: { expiryDate: 'asc' }, // FEFO order
+      },
+    },
+  });
+
+  if (!product) {
+    throw new NotFoundError(`Товар со штрихкодом «${raw}» не найден`);
+  }
+
+  res.json(product);
+}));
+
+
+// POST / — PHARMACIST, ADMIN, OWNER
+productsRouter.post('/', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const created = await productService.createProduct(req.body, authedReq.user.id, authedReq.user.role);
   res.status(201).json(created);
 }));
 
-productsRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
+// PUT /:id — PHARMACIST, ADMIN, OWNER
+productsRouter.put('/:id', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const updated = await productService.updateProduct(req.params.id, req.body, authedReq.user.id, authedReq.user.role);
   res.json(updated);
 }));
 
-productsRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
+// DELETE /:id — ADMIN, OWNER only
+productsRouter.delete('/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   await productService.deleteProduct(req.params.id, authedReq.user.id, authedReq.user.role);
   res.status(204).send();

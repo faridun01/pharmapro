@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, type AuthedRequest } from '../../common/auth';
+import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { prisma } from '../../infrastructure/prisma';
 import { NotFoundError, ValidationError } from '../../common/errors';
@@ -80,7 +80,8 @@ returnsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   res.status(201).json(created);
 }));
 
-returnsRouter.put('/:id/approve', authenticate, asyncHandler(async (req, res) => {
+// PUT /:id/approve — PHARMACIST, ADMIN, OWNER
+returnsRouter.put('/:id/approve', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
 
   const ret = await prisma.return.findUnique({
@@ -96,7 +97,8 @@ returnsRouter.put('/:id/approve', authenticate, asyncHandler(async (req, res) =>
   res.json(updated);
 }));
 
-returnsRouter.put('/:id/reject', authenticate, asyncHandler(async (req, res) => {
+// PUT /:id/reject — PHARMACIST, ADMIN, OWNER
+returnsRouter.put('/:id/reject', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
 
   const ret = await prisma.return.findUnique({ where: { id: req.params.id }, select: { id: true, status: true } });

@@ -1,6 +1,7 @@
 import { prisma } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
+import { reportCache } from '../../common/cache';
 
 type ReturnTypeValue = 'CUSTOMER' | 'SUPPLIER';
 
@@ -94,6 +95,7 @@ export class ReturnsService {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
+      // ── Step 1: Restore stock for each item ──────────────────────────────────
       for (const item of ret.items) {
         if (!item.batchId) continue;
 
@@ -102,8 +104,10 @@ export class ReturnsService {
 
         let movementQty: number;
         if (ret.type === 'CUSTOMER') {
+          // Customer returns goods → stock goes up
           movementQty = item.quantity;
         } else {
+          // Supplier return → we send goods back → stock goes down
           if (batch.quantity < item.quantity) {
             throw new ValidationError(
               `Insufficient stock in batch ${batch.batchNumber} (available: ${batch.quantity}, requested: ${item.quantity})`,
@@ -163,12 +167,80 @@ export class ReturnsService {
         });
       }
 
+      // ── Step 2: For CUSTOMER returns — create a Payment (refund to buyer) ────
+      // This is the critical fix: money leaves the pharmacy → direction=OUT
+      if (ret.type === 'CUSTOMER' && Number(ret.totalAmount || 0) > 0) {
+        const refundAmount = Number(ret.totalAmount);
+        const refundMethod = (ret.refundMethod || 'CASH') as string;
+
+        // Resolve customerId from the linked sale invoice
+        let customerId: string | null = null;
+        if (ret.invoiceId) {
+          const invoice = await tx.invoice.findUnique({
+            where: { id: ret.invoiceId },
+            select: { customerId: true },
+          });
+          customerId = invoice?.customerId ?? null;
+        }
+
+        // Map refundMethod to PaymentMethod
+        const methodMap: Record<string, 'CASH' | 'CARD' | 'BANK_TRANSFER'> = {
+          CASH: 'CASH',
+          CARD: 'CARD',
+          STORE_BALANCE: 'CASH',  // store credit treated as cash refund
+          BANK_TRANSFER: 'BANK_TRANSFER',
+        };
+        const paymentMethod = methodMap[refundMethod] ?? 'CASH';
+
+        await tx.payment.create({
+          data: {
+            direction: 'OUT',
+            counterpartyType: 'CUSTOMER',
+            ...(customerId ? { customerId } : {}),
+            ...(ret.invoiceId ? { invoiceId: ret.invoiceId } : {}),
+            method: paymentMethod,
+            amount: refundAmount,
+            paymentDate: new Date(),
+            status: 'PAID',
+            createdById: userId,
+            comment: `Возврат покупателю по документу ${ret.returnNo}`,
+          },
+        });
+
+        // If the original invoice had a Receivable (credit sale), also reduce it
+        if (ret.invoiceId && customerId) {
+          const receivable = await tx.receivable.findFirst({
+            where: {
+              invoiceId: ret.invoiceId,
+              customerId,
+              status: { not: 'PAID' },
+            },
+          });
+          if (receivable) {
+            const newRemaining = Math.max(0, Number(receivable.remainingAmount || 0) - refundAmount);
+            const newPaid = Number(receivable.paidAmount || 0) + refundAmount;
+            await tx.receivable.update({
+              where: { id: receivable.id },
+              data: {
+                paidAmount: newPaid,
+                remainingAmount: newRemaining,
+                status: newRemaining <= 0 ? 'PAID' : newPaid > 0 ? 'PARTIAL' : 'OPEN',
+              },
+            });
+          }
+        }
+      }
+
+      // ── Step 3: Mark return as COMPLETED ────────────────────────────────────
       return tx.return.update({
         where: { id: ret.id },
         data: { status: 'COMPLETED', approvedById: userId },
         include: { items: { include: { product: true } } },
       });
     });
+
+    reportCache.invalidatePattern(/^metrics:/);
+    reportCache.invalidatePattern(/^report:/);
 
     await auditService.log({
       userId,
@@ -178,7 +250,12 @@ export class ReturnsService {
       entity: 'RETURN',
       entityId: ret.id,
       oldValue: { status: 'DRAFT' },
-      newValue: { status: 'COMPLETED' },
+      newValue: {
+        status: 'COMPLETED',
+        refundCreated: ret.type === 'CUSTOMER' && Number(ret.totalAmount || 0) > 0,
+        refundAmount: ret.type === 'CUSTOMER' ? Number(ret.totalAmount || 0) : 0,
+        refundMethod: ret.refundMethod || 'CASH',
+      },
     });
 
     return updated;

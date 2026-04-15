@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, type AuthedRequest } from '../../common/auth';
+import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { ValidationError } from '../../common/errors';
 import { inventoryService } from './inventory.service';
@@ -18,7 +18,8 @@ const parseNonNegative = (value: unknown, field: string): number => {
   return n;
 };
 
-inventoryRouter.post('/restock', authenticate, asyncHandler(async (req, res) => {
+// POST /restock — PHARMACIST, ADMIN, OWNER
+inventoryRouter.post('/restock', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const body = req.body ?? {};
 
@@ -36,7 +37,8 @@ inventoryRouter.post('/restock', authenticate, asyncHandler(async (req, res) => 
   res.status(201).json(result);
 }));
 
-inventoryRouter.post('/purchase-invoices', authenticate, asyncHandler(async (req, res) => {
+// POST /purchase-invoices — PHARMACIST, ADMIN, OWNER
+inventoryRouter.post('/purchase-invoices', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const body = req.body ?? {};
 
@@ -64,7 +66,8 @@ inventoryRouter.post('/purchase-invoices', authenticate, asyncHandler(async (req
   res.status(201).json(result);
 }));
 
-inventoryRouter.patch('/batches/:id/quantity', authenticate, asyncHandler(async (req, res) => {
+// PATCH /batches/:id/quantity — ADMIN, OWNER only
+inventoryRouter.patch('/batches/:id/quantity', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const body = req.body ?? {};
 
@@ -78,7 +81,8 @@ inventoryRouter.patch('/batches/:id/quantity', authenticate, asyncHandler(async 
   res.json(result);
 }));
 
-inventoryRouter.patch('/batches/:id', authenticate, asyncHandler(async (req, res) => {
+// PATCH /batches/:id — ADMIN, OWNER only
+inventoryRouter.patch('/batches/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const body = req.body ?? {};
 
@@ -94,7 +98,8 @@ inventoryRouter.patch('/batches/:id', authenticate, asyncHandler(async (req, res
   res.json(result);
 }));
 
-inventoryRouter.delete('/batches/:id', authenticate, asyncHandler(async (req, res) => {
+// DELETE /batches/:id — ADMIN, OWNER only
+inventoryRouter.delete('/batches/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const result = await inventoryService.deleteBatch(String(req.params.id), authedReq.user.id);
   res.json(result);

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, type AuthedRequest } from '../../common/auth';
+import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { prisma } from '../../infrastructure/prisma';
 import { ValidationError } from '../../common/errors';
@@ -56,7 +56,8 @@ reportsRouter.get('/profile', authenticate, asyncHandler(async (_req, res) => {
   res.json(state.companyProfile);
 }));
 
-reportsRouter.put('/profile', authenticate, asyncHandler(async (req, res) => {
+// PUT /profile — ADMIN, OWNER only
+reportsRouter.put('/profile', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   if (!canManageCompanyProfile(authedReq.user.role)) {
     throw new ValidationError('Only ADMIN or OWNER can update company profile');
@@ -178,7 +179,8 @@ const resolveRange = (preset: PeriodPreset, fromRaw: unknown, toRaw: unknown) =>
   return { from: new Date(now.getFullYear(), now.getMonth(), 1), to };
 };
 
-reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
+// GET /finance — ADMIN, OWNER only (contains P&L, COGS, margins)
+reportsRouter.get('/finance', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const parseResult = ReportParamsSchema.safeParse(req.query);
   if (!parseResult.success) {
     throw new ValidationError(`Invalid parameters: ${parseResult.error.issues.map(e => e.message).join(', ')}`);

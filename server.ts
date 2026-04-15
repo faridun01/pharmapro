@@ -28,9 +28,9 @@ if (!isDev) {
 const server = app.listen(config.PORT, '0.0.0.0', async () => {
   logger.info(`PharmaPro ${isDev ? 'API server' : 'server'} running on http://localhost:${config.PORT}`);
   logger.info(`Environment: ${config.NODE_ENV}`);
-  
+
   try {
-    await ensureDatabaseExists(config.DATABASE_URL);
+    await ensureDatabaseExists(config.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/pharmapro');
     await runDatabaseMigrations();
     await pingDatabase();
     await ensureAdminUser();
