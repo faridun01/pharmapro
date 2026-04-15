@@ -213,16 +213,10 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     ? (presetRaw as PeriodPreset)
     : 'month';
   const { from, to } = resolveRange(preset, req.query.from, req.query.to);
-  const cacheKey = CACHE_KEYS.dashboardMetrics(`${preset}:${from.toISOString().slice(0, 10)}:${to.toISOString().slice(0, 10)}`);
 
-  const cachedResult = reportCache.get(cacheKey);
-  if (cachedResult) {
-    res.set('X-Cache', 'HIT');
-    return res.json(cachedResult);
-  }
-
-  res.set('X-Cache', 'MISS');
-
+  // Debug logging
+  console.log(`[DashboardMetrics] Fetching for range: ${from.toISOString()} - ${to.toISOString()}, Preset: ${preset}`);
+  
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
   const chartMode = preset === 'month' ? 'day' : 'month';
@@ -443,17 +437,27 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const monthlyNetRevenue = monthlySalesInvoices
     .filter((invoice) => invoice.status !== 'CANCELLED')
     .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
+
   const monthlyCogs = monthlySalesInvoices
     .filter((invoice) => invoice.status !== 'CANCELLED')
-    .reduce((sum, invoice) => sum + (invoice.items || []).reduce((itemSum, item) => itemSum + (Number(item.quantity || 0) * Number(item.batch?.costBasis || 0)), 0), 0);
+    .reduce((sum, invoice) => {
+      const invoiceCogs = (invoice.items || []).reduce((itemSum, item) => {
+        const itemQty = Number(item.quantity || 0);
+        const itemCost = Number(item.batch?.costBasis || 0);
+        return itemSum + (itemQty * itemCost);
+      }, 0);
+      return sum + invoiceCogs;
+    }, 0);
+
   const grossMarginMonth = monthlyNetRevenue - monthlyCogs;
   const writeOffAmountMonth = writeoffsMonth.reduce((sum, writeoff) => sum + Number(
     writeoff.totalAmount ||
     writeoff.items.reduce((itemSum, item) => itemSum + Number(item.lineTotal || (Number(item.unitCost || 0) * Number(item.quantity || 0))), 0),
   ), 0);
 
-  const overdueItems: any[] = [];
+  console.log(`[DashboardMetrics] Results: InvoicesInRange=${salesInvoicesInRange.length}, RevenueInRange=${revenueInRange}, MonthlyInvoices=${monthlySalesInvoices.length}, NetRevenue=${monthlyNetRevenue}, COGS=${monthlyCogs}, Writeoffs=${writeoffsMonth.length}`);
 
+  const overdueItems: any[] = [];
   const dueTomorrowItems: any[] = [];
 
   const totalReceivableOutstanding = receivables.reduce((sum, receivable) => sum + getReceivableRemainingAmount(receivable), 0);
@@ -474,7 +478,6 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     inventoryHighlights: { totalInventoryUnits: products.reduce((sum, p) => sum + Number(p.totalStock || 0), 0), lowStockItems: lowStockProducts.slice(0, 5), expiringItems }
   };
 
-  reportCache.set(cacheKey, result, CACHE_TTL.dashboardMetrics);
   res.json(result);
 }));
 
