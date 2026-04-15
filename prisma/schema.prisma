@@ -79,7 +79,6 @@ enum ReturnStatus {
 enum RefundMethod {
   CASH
   CARD
-  STORE_BALANCE
 }
 
 enum WriteOffReason {
@@ -133,7 +132,6 @@ enum PriceType {
 }
 
 enum CounterpartyType {
-  CUSTOMER
   SUPPLIER
   OTHER
 }
@@ -147,7 +145,6 @@ enum PaymentMethod {
   CASH
   CARD
   BANK_TRANSFER
-  CREDIT_OFFSET
 }
 
 enum PurchaseInvoiceStatus {
@@ -158,14 +155,6 @@ enum PurchaseInvoiceStatus {
   CANCELLED
 }
 
-enum SalesOrderStatus {
-  DRAFT
-  CONFIRMED
-  RESERVED
-  SHIPPED
-  CANCELLED
-  CLOSED
-}
 
 enum DebtStatus {
   OPEN
@@ -175,12 +164,6 @@ enum DebtStatus {
   WRITTEN_OFF
 }
 
-enum ReservationStatus {
-  ACTIVE
-  RELEASED
-  FULFILLED
-  CANCELLED
-}
 
 model Product {
   id                String              @id @default(uuid())
@@ -219,8 +202,6 @@ model Product {
   priceHistory      PriceHistory[]
   invoiceItems      InvoiceItem[]
   purchaseItems     PurchaseInvoiceItem[]
-  salesOrderItems   SalesOrderItem[]
-  reservations      Reservation[]
   returnItems       ReturnItem[]
   writeOffItems     WriteOffItem[]
   createdAt         DateTime            @default(now())
@@ -259,7 +240,6 @@ model Batch {
   purchaseItem     PurchaseInvoiceItem? @relation(fields: [purchaseItemId], references: [id])
   movements        BatchMovement[]
   invoiceItems     InvoiceItem[]
-  reservations     Reservation[]
   returnItems      ReturnItem[]
   writeOffItems    WriteOffItem[]
   transferItems    StockTransferItem[]
@@ -298,7 +278,6 @@ model User {
   movements         BatchMovement[]
   invoices          Invoice[]
   purchaseInvoices  PurchaseInvoice[] @relation("PurchaseCreatedBy")
-  salesOrders       SalesOrder[]     @relation("SalesOrderCreatedBy")
   payments          Payment[]
   auditLogs         AuditLog[]
   returnsCreated    Return[]         @relation("ReturnCreatedBy")
@@ -346,8 +325,6 @@ model Invoice {
   id          String        @id @default(uuid())
   invoiceNo   String        @unique
   customer    String?
-  customerId  String?
-  customerRef Customer?     @relation(fields: [customerId], references: [id])
   totalAmount Float
   taxAmount   Float         @default(0)
   discount    Float         @default(0)
@@ -359,7 +336,6 @@ model Invoice {
   user        User          @relation(fields: [userId], references: [id])
   items       InvoiceItem[]
   payments    Payment[]
-  receivables Receivable[]
   returns     Return[]
   cashShiftId String?
   cashShift   CashShift?    @relation(fields: [cashShiftId], references: [id])
@@ -368,7 +344,6 @@ model Invoice {
 
   @@index([createdAt])
   @@index([status, createdAt])
-  @@index([customerId, createdAt])
   @@index([paymentStatus, createdAt])
 }
 
@@ -428,8 +403,6 @@ model Warehouse {
   returns     Return[]
   writeOffs   WriteOff[]
   purchaseInvoices PurchaseInvoice[]
-  salesOrders SalesOrder[]
-  reservations Reservation[]
   shifts      CashShift[]
   transferOut StockTransfer[]  @relation("TransferFromWarehouse")
   transferIn  StockTransfer[]  @relation("TransferToWarehouse")
@@ -494,8 +467,6 @@ model Return {
   supplierId   String?
   supplier     Supplier?     @relation(fields: [supplierId], references: [id])
   customerName String?
-  customerId   String?
-  customer     Customer?     @relation(fields: [customerId], references: [id])
   refundMethod RefundMethod?
   reason       String?
   note         String?
@@ -652,45 +623,7 @@ model PackageType {
   updatedAt DateTime  @updatedAt
 }
 
-model Customer {
-  id              String        @id @default(uuid())
-  code            String?       @unique
-  name            String
-  legalName       String?
-  taxId           String?
-  phone           String?
-  email           String?
-  address         String?
-  managerName     String?
-  creditLimit     Float         @default(0)
-  defaultDiscount Float         @default(0)
-  paymentTermDays Int?
-  isActive        Boolean       @default(true)
-  contacts        CustomerContact[]
-  invoices        Invoice[]
-  salesOrders     SalesOrder[]
-  returns         Return[]
-  payments        Payment[]
-  receivables     Receivable[]
-  reservations    Reservation[]
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
 
-  @@index([name])
-}
-
-model CustomerContact {
-  id         String   @id @default(uuid())
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  fullName   String
-  phone      String?
-  email      String?
-  position   String?
-  isPrimary  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
 
 model PurchaseInvoice {
   id            String                @id @default(uuid())
@@ -738,50 +671,11 @@ model PurchaseInvoiceItem {
   @@index([productId])
 }
 
-model SalesOrder {
-  id             String           @id @default(uuid())
-  orderNumber    String           @unique
-  customerId     String
-  customer       Customer         @relation(fields: [customerId], references: [id])
-  warehouseId    String
-  warehouse      Warehouse        @relation(fields: [warehouseId], references: [id])
-  status         SalesOrderStatus @default(DRAFT)
-  paymentStatus  PaymentStatus    @default(UNPAID)
-  totalAmount    Float            @default(0)
-  discountAmount Float            @default(0)
-  comment        String?
-  createdById    String
-  createdBy      User             @relation("SalesOrderCreatedBy", fields: [createdById], references: [id])
-  items          SalesOrderItem[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  @@index([createdAt])
-}
-
-model SalesOrderItem {
-  id           String     @id @default(uuid())
-  salesOrderId String
-  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  productId    String
-  product      Product    @relation(fields: [productId], references: [id])
-  requestedQty Int
-  reservedQty  Int        @default(0)
-  shippedQty   Int        @default(0)
-  unitPrice    Float
-  discount     Float      @default(0)
-  lineTotal    Float      @default(0)
-
-  @@index([salesOrderId])
-  @@index([productId])
-}
 
 model Payment {
   id                String           @id @default(uuid())
   direction         PaymentDirection
   counterpartyType  CounterpartyType
-  customerId        String?
-  customer          Customer?        @relation(fields: [customerId], references: [id])
   supplierId        String?
   supplier          Supplier?        @relation(fields: [supplierId], references: [id])
   method            PaymentMethod
@@ -799,28 +693,9 @@ model Payment {
   createdAt         DateTime         @default(now())
 
   @@index([paymentDate])
-  @@index([customerId, paymentDate])
   @@index([invoiceId, paymentDate])
 }
 
-model Receivable {
-  id             String        @id @default(uuid())
-  customerId     String
-  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  invoiceId      String?
-  invoice        Invoice?      @relation(fields: [invoiceId], references: [id])
-  originalAmount Float
-  paidAmount     Float         @default(0)
-  remainingAmount Float
-  dueDate        DateTime?
-  status         DebtStatus    @default(OPEN)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  @@index([customerId, status])
-  @@index([customerId, dueDate])
-  @@index([status, dueDate])
-}
 
 model Payable {
   id               String           @id @default(uuid())
@@ -837,25 +712,6 @@ model Payable {
   updatedAt        DateTime         @updatedAt
 
   @@index([supplierId, status])
-}
-
-model Reservation {
-  id          String            @id @default(uuid())
-  warehouseId String
-  warehouse   Warehouse         @relation(fields: [warehouseId], references: [id])
-  productId   String
-  product     Product           @relation(fields: [productId], references: [id])
-  batchId     String?
-  batch       Batch?            @relation(fields: [batchId], references: [id])
-  customerId  String?
-  customer    Customer?         @relation(fields: [customerId], references: [id])
-  quantity    Int
-  status      ReservationStatus @default(ACTIVE)
-  reason      String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  @@index([warehouseId, productId, status])
 }
 
 model ProductAlias {
@@ -983,14 +839,3 @@ model SupplierPayable {
   @@index([supplierId, createdAt])
 }
 
-model CustomerReceivable {
-  id           String   @id @default(uuid())
-  customerName String
-  amount       Float
-  type         String
-  referenceNo  String?
-  note         String?
-  createdAt    DateTime @default(now())
-
-  @@index([customerName, createdAt])
-}

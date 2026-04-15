@@ -11,10 +11,6 @@ export const reportsRouter = Router();
 
 type PeriodPreset = 'month' | 'q1' | 'q2' | 'q3' | 'q4' | 'year' | 'all';
 
-const getDebtorCustomerKey = (invoice: { id: string; customerId?: string | null; customer?: string | null }) => {
-  const normalizedName = String(invoice.customer || '').trim().toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ');
-  return invoice.customerId || (normalizedName ? `name:${normalizedName}` : invoice.id);
-};
 
 const getPaymentsTotal = (payments?: Array<{ amount?: number | null }>) => (
   payments || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
@@ -222,7 +218,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
   const chartMode = preset === 'month' ? 'day' : 'month';
 
-  const [products, salesInvoicesInRange, ordinaryOpenInvoices, creditInvoices, batches, writeoffsMonth, monthlySalesInvoices, receivables, purchasePayables] = await Promise.all([
+  const [products, salesInvoicesInRange, ordinaryOpenInvoices, batches, writeoffsMonth, monthlySalesInvoices, receivables, purchasePayables] = await Promise.all([
     prisma.product.findMany({
       where: { isActive: true },
       select: {
@@ -245,15 +241,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         status: true,
         paymentStatus: true,
         totalAmount: true,
-        customer: true,
-        customerId: true,
         createdAt: true,
-        receivables: {
-          select: {
-            remainingAmount: true,
-            dueDate: true,
-          },
-        },
         payments: {
           select: {
             amount: true,
@@ -263,48 +251,14 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     }),
     prisma.invoice.findMany({
       where: {
-        paymentType: { not: 'CREDIT' },
         status: { in: ['PENDING', 'PAID'] },
         paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] },
       },
       select: {
         id: true,
         invoiceNo: true,
-        customer: true,
-        customerId: true,
         createdAt: true,
         totalAmount: true,
-        paymentStatus: true,
-        receivables: {
-          select: {
-            remainingAmount: true,
-            dueDate: true,
-          },
-        },
-        payments: {
-          select: {
-            amount: true,
-          },
-        },
-      },
-    }),
-    prisma.invoice.findMany({
-      where: {
-        paymentType: 'CREDIT',
-        status: { in: ['PENDING', 'PAID'] },
-      },
-      select: {
-        id: true,
-        invoiceNo: true,
-        customer: true,
-        customerId: true,
-        totalAmount: true,
-        receivables: {
-          select: {
-            remainingAmount: true,
-            dueDate: true,
-          },
-        },
         payments: {
           select: {
             amount: true,
@@ -346,7 +300,6 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     prisma.invoice.findMany({
       where: {
         createdAt: { gte: monthStart, lte: monthEnd },
-        paymentType: { not: 'CREDIT' },
         status: { notIn: ['CANCELLED'] },
       },
       select: {
@@ -376,15 +329,9 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         paidAmount: true,
         remainingAmount: true,
         dueDate: true,
-        customer: {
-          select: {
-            name: true,
-          },
-        },
         invoice: {
           select: {
             invoiceNo: true,
-            customer: true,
           },
         },
       },
@@ -446,11 +393,8 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const unpaidInvoices = ordinaryOpenInvoices.filter(inv => getInvoiceOutstanding(inv) > 0);
   const unpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + getInvoiceOutstanding(inv), 0);
 
-  const debtorOpenInvoices = [...creditInvoices, ...ordinaryOpenInvoices]
-    .filter((invoice) => getInvoiceOutstanding(invoice) > 0);
-
-  const totalDebtorOutstanding = debtorOpenInvoices.reduce((sum, invoice) => sum + getInvoiceOutstanding(invoice), 0);
-  const totalDebtorCustomersCount = new Set(debtorOpenInvoices.map((invoice) => getDebtorCustomerKey(invoice))).size;
+  const totalDebtorOutstanding = 0;
+  const totalDebtorCustomersCount = 0;
   const revenueGrossInRange = salesInvoicesInRange
     .filter((invoice) => invoice.status !== 'RETURNED')
     .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
@@ -507,41 +451,9 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     writeoff.items.reduce((itemSum, item) => itemSum + Number(item.lineTotal || (Number(item.unitCost || 0) * Number(item.quantity || 0))), 0),
   ), 0);
 
-  const overdueItems = receivables
-    .map((receivable) => {
-      const remainingAmount = getReceivableRemainingAmount(receivable);
-      if (!receivable.dueDate || remainingAmount <= 0) return null;
-      const dueDate = new Date(receivable.dueDate);
-      const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysOverdue <= 0) return null;
+  const overdueItems: any[] = [];
 
-      return {
-        invoiceId: receivable.invoiceId || receivable.id,
-        invoiceNo: receivable.invoice?.invoiceNo || '—',
-        customerName: receivable.customer?.name || receivable.invoice?.customer || 'Покупатель',
-        remainingAmount,
-        daysOverdue,
-      };
-    })
-    .filter(Boolean)
-    .sort((left, right) => Number(right?.daysOverdue || 0) - Number(left?.daysOverdue || 0));
-
-  const dueTomorrowItems = receivables
-    .map((receivable) => {
-      const remainingAmount = getReceivableRemainingAmount(receivable);
-      if (!receivable.dueDate || remainingAmount <= 0) return null;
-      const dueDate = new Date(receivable.dueDate);
-      if (dueDate < tomorrowStart || dueDate >= tomorrowEnd) return null;
-
-      return {
-        invoiceId: receivable.invoiceId || receivable.id,
-        invoiceNo: receivable.invoice?.invoiceNo || '—',
-        customerName: receivable.customer?.name || receivable.invoice?.customer || 'Покупатель',
-        remainingAmount,
-      };
-    })
-    .filter(Boolean)
-    .sort((left, right) => Number(right?.remainingAmount || 0) - Number(left?.remainingAmount || 0));
+  const dueTomorrowItems: any[] = [];
 
   const totalReceivableOutstanding = receivables.reduce((sum, receivable) => sum + getReceivableRemainingAmount(receivable), 0);
   const overdueAmountTotal = overdueItems.reduce((sum, item) => sum + Number(item?.remainingAmount || 0), 0);
@@ -557,18 +469,6 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     revenue: { total: revenueInRange, averageDaily: avgDailyRevenue, recognizedInvoiceCount: salesInvoicesInRange.length },
     revenueTrend: { mode: chartMode, items: revenueTrend },
     finance: { outstandingOrdinarySales: unpaidAmount, totalDebtorOutstanding, writeOffAmountMonth, grossMarginMonth, payableTotal },
-    creditReceivables: {
-      totalOutstandingAmount: totalReceivableOutstanding,
-      totalCustomersCount: totalDebtorCustomersCount,
-      openCount: receivables.filter((entry) => getReceivableRemainingAmount(entry) > 0).length,
-      overdueAmountTotal,
-      overdueCount: overdueItems.length,
-      overdueCustomersCount,
-      overdueItems: overdueItems.slice(0, 5),
-      dueTomorrowAmountTotal,
-      dueTomorrowCount: dueTomorrowItems.length,
-      dueTomorrowItems: dueTomorrowItems.slice(0, 5),
-    },
     summary: { totalProducts: products.length, totalBatches: batches.length, alertCount: lowStockProducts.length + expiredBatchesCount + expiringBatchesCount + overdueItems.length },
     inventoryHighlights: { totalInventoryUnits: products.reduce((sum, p) => sum + Number(p.totalStock || 0), 0), lowStockItems: lowStockProducts.slice(0, 5), expiringItems }
   };

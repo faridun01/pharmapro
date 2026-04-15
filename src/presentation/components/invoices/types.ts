@@ -28,15 +28,3 @@ export type InvoiceDisplayItem = {
   totalPrice: number;
 };
 
-export type DebtorGroup = {
-  key: string;
-  customer: string;
-  customerIds: string[];
-  invoices: Invoice[];
-  invoiceCount: number;
-  totalAmount: number;
-  totalPaid: number;
-  totalOutstanding: number;
-  totalUnits: number;
-  latestActivityAt: Date | null;
-};

@@ -3,7 +3,6 @@ import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { computeProductStatus } from '../../common/productStatus';
 import { reportCache } from '../../common/cache';
-import { resolveCustomerDueDate } from '../../common/customerTerms';
 import { computeBatchStatus } from '../../common/batchStatus';
 
 export type SaleItemInput = {
@@ -20,13 +19,10 @@ export type CompleteSaleInput = {
   discountAmount?: number; // Overall invoice discount
   taxAmount?: number;
   total: number;
-  paymentType: 'CASH' | 'CARD' | 'CREDIT' | 'STORE_BALANCE';
-  customer?: string;
-  customerPhone?: string;
-  customerId?: string;
+  paymentType: 'CASH' | 'CARD';
   paidAmount?: number;
   userId: string;
-};
+}
 
 const buildInvoiceNumber = () => {
   const now = new Date();
@@ -51,64 +47,7 @@ export class SalesService {
       throw new ValidationError('paidAmount cannot be negative');
     }
 
-    const hasOutstandingBalance = paidAmount < Number(input.total);
-    const requestedCustomerName = String(input.customer || '').trim();
-    const requestedCustomerPhone = String(input.customerPhone || '').trim();
-    let resolvedCustomerId = input.customerId;
-    let resolvedCustomerName: string | null = requestedCustomerName || null;
-
     const invoice = await prisma.$transaction(async (tx) => {
-      if (resolvedCustomerId) {
-        const customer = await tx.customer.findUnique({
-          where: { id: resolvedCustomerId },
-          select: { id: true, name: true },
-        });
-
-        if (!customer) {
-          throw new NotFoundError(`Customer ${resolvedCustomerId} not found`);
-        }
-
-        resolvedCustomerName = customer.name;
-      } else if (hasOutstandingBalance) {
-        if (!requestedCustomerName) {
-          throw new ValidationError('Customer name is required for credit sale');
-        }
-
-        const existingCustomer = await tx.customer.findFirst({
-          where: {
-            isActive: true,
-            OR: [
-              {
-                name: {
-                  equals: requestedCustomerName,
-                  mode: 'insensitive',
-                },
-              },
-              ...(requestedCustomerPhone
-                ? [{ phone: requestedCustomerPhone }]
-                : []),
-            ],
-          },
-          select: { id: true, name: true },
-        });
-
-        if (existingCustomer) {
-          resolvedCustomerId = existingCustomer.id;
-          resolvedCustomerName = existingCustomer.name;
-        } else {
-          const createdCustomer = await tx.customer.create({
-            data: {
-              name: requestedCustomerName,
-              phone: requestedCustomerPhone || null,
-              isActive: true,
-            },
-            select: { id: true, name: true },
-          });
-
-          resolvedCustomerId = createdCustomer.id;
-          resolvedCustomerName = createdCustomer.name;
-        }
-      }
 
       const activeShift = await tx.cashShift.findFirst({
         where: {
@@ -133,17 +72,18 @@ export class SalesService {
         totalPrice: number;
       }> = [];
 
-      // Single batch load — eliminates N+1 queries inside transaction
       const productIds = [...new Set(input.items.map((i) => i.productId))];
+
+      // FIFO: Sort batches by received date
       const allProducts = await tx.product.findMany({
         where: { id: { in: productIds } },
         include: {
           batches: {
             where: { quantity: { gt: 0 } },
             orderBy: [
-              { expiryDate: 'asc' },
-              { receivedAt: 'asc' },
+              { receivedAt: 'asc' }, // FIFO: prioritize oldest arrival
               { createdAt: 'asc' },
+              { expiryDate: 'asc' },
             ],
           },
         },
@@ -164,15 +104,12 @@ export class SalesService {
         if (product.totalStock < quantity) throw new ValidationError(`Insufficient stock for ${product.name}`);
 
         if (product.prescription && !item.prescriptionPresented) {
-          throw new ValidationError(`Prescription is required for ${product.name}`);
+            throw new ValidationError(`Prescription is required for ${product.name}`);
         }
 
         let remainingToDeduct = quantity;
         const validBatches = product.batches.filter((batch) => batch.expiryDate > new Date());
 
-        // If batchId is specified, we try that batch first.
-        // If it's not enough, we error out (manual choice must be exact or we fall back to auto)
-        // For simplicity: if batchId is provided, we ONLY use that batch.
         const targetBatches = item.batchId 
           ? validBatches.filter(b => b.id === item.batchId)
           : validBatches;
@@ -190,7 +127,6 @@ export class SalesService {
           );
         }
 
-        // Deduct from batches
         for (const batch of targetBatches) {
           if (remainingToDeduct <= 0) break;
 
@@ -233,7 +169,7 @@ export class SalesService {
               batchId: batch.id,
               type: 'DISPATCH',
               quantity: deduct,
-              description: `POS sale${resolvedCustomerName ? ` for ${resolvedCustomerName}` : ''}${item.batchId ? ' (Manual selection)' : ''}`,
+              description: `POS sale${item.batchId ? ' (Manual selection)' : ''}`,
               userId: input.userId,
             },
           });
@@ -265,18 +201,16 @@ export class SalesService {
       const createdInvoice = await tx.invoice.create({
         data: {
           invoiceNo: buildInvoiceNumber(),
-          customer: resolvedCustomerName,
-          customerId: resolvedCustomerId,
           totalAmount: Number(input.total),
           taxAmount: Number(input.taxAmount ?? 0),
           discount: Number(input.discountAmount ?? 0),
           paymentType: input.paymentType,
-          status: paidAmount >= Number(input.total) ? 'PAID' : 'PENDING',
-          paymentStatus: paidAmount >= Number(input.total) ? 'PAID' : paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+          status: 'PAID',
+          paymentStatus: 'PAID',
           userId: input.userId,
           cashShiftId: activeShift.id,
           items: {
-            create: invoiceItems,
+            create: invoiceItems as any,
           },
         },
         include: {
@@ -295,39 +229,18 @@ export class SalesService {
           totalAmount: createdInvoice.totalAmount,
           items: invoiceItems.length,
           paymentType: createdInvoice.paymentType,
-          customer: resolvedCustomerName || undefined,
         },
       }, tx);
-
-      if (resolvedCustomerId && hasOutstandingBalance) {
-        const receivableDueDate = await resolveCustomerDueDate(tx, resolvedCustomerId, createdInvoice.createdAt);
-        await tx.receivable.create({
-          data: {
-            customerId: resolvedCustomerId,
-            invoiceId: createdInvoice.id,
-            originalAmount: Number(input.total),
-            paidAmount,
-            remainingAmount: Number(input.total) - paidAmount,
-            dueDate: receivableDueDate,
-            status: paidAmount > 0 ? 'PARTIAL' : 'OPEN',
-          },
-        });
-      }
 
       if (paidAmount > 0) {
         await tx.payment.create({
           data: {
             direction: 'IN',
-            counterpartyType: resolvedCustomerId ? 'CUSTOMER' : 'OTHER',
-            customerId: resolvedCustomerId,
+            counterpartyType: 'OTHER',
             method:
               input.paymentType === 'CARD'
                 ? 'CARD'
-                : input.paymentType === 'STORE_BALANCE'
-                  ? 'CREDIT_OFFSET'
-                  : input.paymentType === 'CREDIT'
-                    ? 'BANK_TRANSFER'
-                    : 'CASH',
+                : 'CASH',
             amount: Math.min(paidAmount, Number(input.total)),
             paymentDate: new Date(),
             status: 'PAID',

@@ -96,7 +96,7 @@ exportRouter.get(
     const invoices = await prisma.invoice.findMany({
       where: {
         ...(from || to ? {
-          date: {
+          createdAt: {
             ...(from ? { gte: from } : {}),
             ...(to   ? { lte: to }   : {}),
           },
@@ -106,14 +106,13 @@ exportRouter.get(
         items: { include: { product: { select: { name: true, sku: true } } } },
         payments: { select: { method: true, amount: true } },
       },
-      orderBy: { date: 'desc' },
+      orderBy: { createdAt: 'desc' },
     });
 
     // Sheet 1: Summary per invoice
     const summaryRows = invoices.map((inv) => ({
       invoiceNo: inv.invoiceNo,
-      date: fmt.datetime(inv.date),
-      customer: inv.customer ?? '—',
+      date: fmt.datetime(inv.createdAt),
       totalAmount: fmt.money(inv.totalAmount),
       discountAmount: fmt.money(inv.discountAmount),
       taxAmount: fmt.money(inv.taxAmount),
@@ -127,7 +126,6 @@ exportRouter.get(
     const summaryColumns = [
       { key: 'invoiceNo',     header: '№ Чека',            width: 20 },
       { key: 'date',          header: 'Дата и время',      width: 20 },
-      { key: 'customer',      header: 'Покупатель',        width: 25 },
       { key: 'totalAmount',   header: 'Сумма',             width: 14 },
       { key: 'discountAmount',header: 'Скидка',            width: 12 },
       { key: 'taxAmount',     header: 'Налог',             width: 12 },
@@ -144,7 +142,7 @@ exportRouter.get(
       for (const item of inv.items) {
         itemRows.push({
           invoiceNo: inv.invoiceNo,
-          date: fmt.date(inv.date),
+          date: fmt.date(inv.createdAt),
           productName: item.product?.name ?? '—',
           sku: item.product?.sku ?? '—',
           quantity: fmt.qty(item.quantity),
@@ -281,7 +279,6 @@ exportRouter.get(
           date: fmt.datetime(ret.createdAt),
           type: ret.type === 'CUSTOMER' ? 'Покупатель' : 'Поставщик',
           status: ret.status,
-          customerName: ret.customerName ?? '—',
           refundMethod: ret.refundMethod ?? '—',
           productName: item.product?.name ?? '—',
           sku: item.product?.sku ?? '—',
@@ -299,7 +296,6 @@ exportRouter.get(
       { key: 'date',        header: 'Дата',           width: 20 },
       { key: 'type',        header: 'Тип',            width: 14 },
       { key: 'status',      header: 'Статус',         width: 14 },
-      { key: 'customerName',header: 'Покупатель',     width: 24 },
       { key: 'refundMethod',header: 'Метод возврата', width: 16 },
       { key: 'productName', header: 'Товар',          width: 35 },
       { key: 'sku',         header: 'Артикул',        width: 15 },

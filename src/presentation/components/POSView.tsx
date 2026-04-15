@@ -141,7 +141,9 @@ const BatchSelectorModal = ({
         </div>
         <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
           <div className="grid gap-3">
-            {product.batches.map((batch) => {
+            {[...product.batches]
+              .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime())
+              .map((batch) => {
               const isExpired = new Date(batch.expiryDate) < new Date();
               return (
                 <button
@@ -173,73 +175,13 @@ const BatchSelectorModal = ({
   );
 };
 
-const CustomerSearch = ({ onSelect }: { onSelect: (customer: any) => void }) => {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (query.length < 2) {
-      setResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/customers?search=${encodeURIComponent(query)}`, { headers: await buildApiHeaders() });
-        const data = await res.json();
-        setResults(data.items || []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  return (
-    <div className="relative">
-      <div className="relative group">
-        <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={16} />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Найти клиента (ФИО / Телефон)"
-          className="w-full pl-10 pr-4 py-2 bg-white border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/15"
-        />
-      </div>
-      {results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-[#5A5A40]/10 z-50 overflow-hidden max-h-60 overflow-y-auto">
-          {results.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => { onSelect(c); setQuery(''); setResults([]); }}
-              className="w-full p-3 text-left hover:bg-[#f5f5f0] transition-colors border-b border-[#5A5A40]/5 last:border-0"
-            >
-              <p className="text-sm font-bold text-[#5A5A40]">{c.name}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-               {c.phone && <p className="text-[10px] text-[#5A5A40]/60">{c.phone}</p>}
-               {c.defaultDiscount > 0 && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-bold">Скидка {c.defaultDiscount}%</span>}
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 export const POSView: React.FC = () => {
   const { products, refreshProducts, processTransaction, user } = usePharmacy();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
-  const [paymentType, setPaymentType] = useState<'CASH' | 'CARD' | 'CREDIT'>('CASH');
-  const [paidAmountInput, setPaidAmountInput] = useState('');
-  const [creditCustomerName, setCreditCustomerName] = useState('');
-  const [creditCustomerPhone, setCreditCustomerPhone] = useState('');
+  const [paymentType, setPaymentType] = useState<'CASH' | 'CARD'>('CASH');
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -254,7 +196,6 @@ export const POSView: React.FC = () => {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [barcodeScanning, setBarcodeScanning] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [showBatchModal, setShowBatchModal] = useState<{ productId: string, cartItemKey: string } | null>(null);
   const [overallDiscountPercent, setOverallDiscountPercent] = useState<number>(0);
 
@@ -315,15 +256,7 @@ export const POSView: React.FC = () => {
   }, [getCartItemKey]);
 
   const subtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.sellingPrice * item.quantity), 0), [cart]);
-  const discountFromCustomer = useMemo(() => (selectedCustomer?.defaultDiscount || 0) / 100 * subtotal, [selectedCustomer, subtotal]);
-  const total = Math.max(0, subtotal - discountFromCustomer);
-  
-  const isCreditSale = paymentType === 'CREDIT';
-  const enteredPaidAmountPreview = paidAmountInput.trim() === '' ? (isCreditSale ? 0 : total) : Number(paidAmountInput);
-  const outstandingAmount = Number.isFinite(enteredPaidAmountPreview)
-    ? Math.max(0, total - Math.min(enteredPaidAmountPreview, total))
-    : total;
-  const needsDebtorDetails = isCreditSale || outstandingAmount > 0.009;
+  const total = subtotal;
 
   useEffect(() => {
     barcodeInputRef.current?.focus();
@@ -467,18 +400,6 @@ export const POSView: React.FC = () => {
     }));
   }, [getCartItemKey]);
 
-  useLayoutEffect(() => {
-    if (cart.length === 0) {
-      setPaidAmountInput('');
-      setCreditCustomerName('');
-      setCreditCustomerPhone('');
-    }
-  }, [cart.length]);
-
-  useLayoutEffect(() => {
-    if (paymentType === 'CREDIT') return;
-    setPaidAmountInput(total > 0 ? total.toFixed(2) : '');
-  }, [paymentType, total]);
 
   const togglePrescription = (cartItemKey: string) => {
     setCart(curr => curr.map(item => getCartItemKey(item) === cartItemKey ? { ...item, prescriptionPresented: !item.prescriptionPresented } : item));
@@ -493,35 +414,70 @@ export const POSView: React.FC = () => {
         <head>
           <title>Чек - ${invoice.invoiceNo}</title>
           <style>
-            body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: 80mm; padding: 5mm; }
+            body { 
+              background: #6b7280; 
+              display: flex; 
+              justify-content: center; 
+              align-items: flex-start; 
+              margin: 0; 
+              padding: 40px 0;
+              font-family: 'Courier New', Courier, monospace;
+            }
+            .paper { 
+              background: #fff; 
+              width: 80mm; 
+              padding: 5mm; 
+              box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            }
             .h { text-align: center; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
             .sep { border-bottom: 1px dashed #000; margin: 5px 0; }
             .item { display: flex; justify-content: space-between; margin-bottom: 2px; }
             .total { font-weight: bold; font-size: 14px; display: flex; justify-content: space-between; margin-top: 5px; }
             .footer { text-align: center; font-size: 10px; margin-top: 15px; }
+            @media print {
+              body { background: none; padding: 0; display: block; }
+              .paper { box-shadow: none; width: 100%; border: none; }
+              .print-btn { display: none; }
+            }
+            .print-btn {
+              position: fixed;
+              top: 20px;
+              right: 20px;
+              padding: 10px 20px;
+              background: #5A5A40;
+              color: white;
+              border: none;
+              border-radius: 8px;
+              cursor: pointer;
+              font-family: sans-serif;
+              font-weight: bold;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
           </style>
         </head>
-        <body onload="window.print(); window.close();">
-          <div class="h">АПТЕКА PHARMAPRO</div>
-          <div class="h">ТОВАРНЫЙ ЧЕК</div>
-          <div>№: ${invoice.invoiceNo}</div>
-          <div>Дата: ${new Date(invoice.createdAt).toLocaleString()}</div>
-          <div>Кассир: ${user?.name || 'Система'}</div>
-          ${invoice.customer ? `<div>Клиент: ${invoice.customer}</div>` : ''}
-          <div class="sep"></div>
-          ${invoice.items.map((it: any) => `
-            <div class="item">
-              <span>${it.productName} x${it.quantity}</span>
-              <span>${it.totalPrice.toFixed(2)}</span>
-            </div>
-          `).join('')}
-          <div class="sep"></div>
-          <div class="item"><span>Итого:</span><span>${invoice.totalAmount.toFixed(2)}</span></div>
-          ${invoice.discount > 0 ? `<div class="item"><span>Скидка:</span><span>-${invoice.discount.toFixed(2)}</span></div>` : ''}
-          <div class="total"><span>К ОПЛАТЕ:</span><span>${(invoice.totalAmount).toFixed(2)}</span></div>
-          <div class="sep"></div>
-          <div>Тип оплаты: ${invoice.paymentType}</div>
-          <div class="footer">Спасибо за покупку!<br>Желаем здоровья!</div>
+        <body>
+          <button class="print-btn" onclick="window.print()">ПЕЧАТАТЬ</button>
+          <div class="paper">
+            <div class="h">АПТЕКА PHARMAPRO</div>
+            <div class="h">ТОВАРНЫЙ ЧЕК</div>
+            <div>№: ${invoice.invoiceNo}</div>
+            <div>Дата: ${new Date(invoice.createdAt).toLocaleString()}</div>
+            <div>Кассир: ${user?.name || 'Система'}</div>
+            <div class="sep"></div>
+            ${invoice.items.map((it: any) => `
+              <div class="item">
+                <span>${it.productName} x${it.quantity}</span>
+                <span>${it.totalPrice.toFixed(2)}</span>
+              </div>
+            `).join('')}
+            <div class="sep"></div>
+            <div class="item"><span>Итого:</span><span>${invoice.totalAmount.toFixed(2)}</span></div>
+            ${invoice.discount > 0 ? `<div class="item"><span>Скидка:</span><span>-${invoice.discount.toFixed(2)}</span></div>` : ''}
+            <div class="total"><span>К ОПЛАТЕ:</span><span>${invoice.totalAmount.toFixed(2)}</span></div>
+            <div class="sep"></div>
+            <div>Тип оплаты: ${invoice.paymentType}</div>
+            <div class="footer">Спасибо за покупку!<br>Желаем здоровья!</div>
+          </div>
         </body>
       </html>
     `;
@@ -561,19 +517,59 @@ export const POSView: React.FC = () => {
 
       const html = `
         <html>
-          <head><title>Z-Отчет - ${activeShift.shiftNo}</title><style>body { font-family: monospace; font-size: 12px; width: 80mm; padding: 5mm; }</style></head>
-          <body onload="window.print(); window.close();">
-            <h2 style="text-align:center">Z-ОТЧЕТ</h2>
-            <div>Смена: ${activeShift.shiftNo}</div>
-            <div>Открыта: ${new Date(activeShift.openAt).toLocaleString()}</div>
-            <div>Кассир: ${user?.name}</div>
-            <hr/>
-            <div style="display:flex; justify-content:space-between"><span>ПРОДАЖИ (ИТОГО):</span> <span>${data.totalSales?.toFixed(2) || '0.00'}</span></div>
-            <div style="display:flex; justify-content:space-between"><span>НАЛИЧНЫЕ:</span> <span>${data.cashSales?.toFixed(2) || '0.00'}</span></div>
-            <div style="display:flex; justify-content:space-between"><span>КАРТА:</span> <span>${data.cardSales?.toFixed(2) || '0.00'}</span></div>
-            <div style="display:flex; justify-content:space-between"><span>В ДОЛГ:</span> <span>${data.creditSales?.toFixed(2) || '0.00'}</span></div>
-            <hr/>
-            <div style="text-align:center">PHARMAPRO POS</div>
+          <head>
+            <title>Z-Отчет - ${activeShift.shiftNo}</title>
+            <style>
+              body { 
+                background: #6b7280; 
+                display: flex; 
+                justify-content: center; 
+                align-items: flex-start; 
+                margin: 0; 
+                padding: 40px 0;
+                font-family: monospace;
+              }
+              .paper { 
+                background: #fff; 
+                width: 80mm; 
+                padding: 5mm; 
+                box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+              }
+              @media print {
+                body { background: none; padding: 0; display: block; }
+                .paper { box-shadow: none; width: 100%; border: none; }
+                .print-btn { display: none; }
+              }
+              .print-btn {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 10px 20px;
+                background: #5A5A40;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-family: sans-serif;
+                font-weight: bold;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+              }
+            </style>
+          </head>
+          <body>
+            <button class="print-btn" onclick="window.print()">ПЕЧАТАТЬ</button>
+            <div class="paper">
+              <h2 style="text-align:center">Z-ОТЧЕТ</h2>
+              <div>Смена: ${activeShift.shiftNo}</div>
+              <div>Открыта: ${new Date(activeShift.openAt).toLocaleString()}</div>
+              <div>Кассир: ${user?.name}</div>
+              <hr/>
+              <div style="display:flex; justify-content:space-between"><span>ПРОДАЖИ (ИТОГО):</span> <span>${data.totalSales?.toFixed(2) || '0.00'}</span></div>
+              <div style="display:flex; justify-content:space-between"><span>НАЛИЧНЫЕ:</span> <span>${data.cashSales?.toFixed(2) || '0.00'}</span></div>
+              <div style="display:flex; justify-content:space-between"><span>КАРТА:</span> <span>${data.cardSales?.toFixed(2) || '0.00'}</span></div>
+              <hr/>
+              <div style="text-align:center">PHARMAPRO POS</div>
+            </div>
           </body>
         </html>
       `;
@@ -588,7 +584,6 @@ export const POSView: React.FC = () => {
   const handleComplete = async () => {
     if (cart.length === 0) return;
     
-    // Check if any prescription required items are not checked
     const missingPrescription = cart.find(it => it.prescription && !it.prescriptionPresented);
     if (missingPrescription) {
       setError(`Для товара "${missingPrescription.name}" требуется рецепт`);
@@ -599,16 +594,8 @@ export const POSView: React.FC = () => {
       setError('Сначала откройте смену, затем оформляйте продажу');
       return;
     }
-    const enteredPaidAmount = paidAmountInput.trim() === '' ? (isCreditSale ? 0 : total) : Number(paidAmountInput);
-    if (!Number.isFinite(enteredPaidAmount) || enteredPaidAmount < 0) {
-      setError('Введите корректную сумму внесенных денег');
-      return;
-    }
-    if (enteredPaidAmount < total && !creditCustomerName.trim()) {
-      setError('Для продажи в долг укажите имя покупателя');
-      return;
-    }
-    const paidAmount = Math.min(enteredPaidAmount, total);
+
+
     setProcessing(true);
     setError(null);
     try {
@@ -620,24 +607,18 @@ export const POSView: React.FC = () => {
           sellingPrice: item.sellingPrice,
           prescriptionPresented: item.prescriptionPresented,
         })),
-        discountAmount: discountFromCustomer,
+        discountAmount: 0,
         taxAmount: 0,
         total,
         paymentType,
-        customer: selectedCustomer?.name || (enteredPaidAmount < total ? creditCustomerName.trim() : undefined),
-        customerId: selectedCustomer?.id,
-        customerPhone: selectedCustomer?.phone || (enteredPaidAmount < total ? creditCustomerPhone.trim() : undefined),
-        paidAmount,
+        paidAmount: total,
         userId: user?.id || '',
         date: new Date(),
       });
+      
       setSuccess(true);
       if (res && (res as any).id) handlePrintReceipt(res);
       setCart([]);
-      setCreditCustomerName('');
-      setCreditCustomerPhone('');
-      setSelectedCustomer(null);
-      setPaidAmountInput('');
       void loadActiveShift();
       window.setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -817,55 +798,14 @@ export const POSView: React.FC = () => {
                 <span>Промежуточный итог</span>
                 <span className="tabular-nums">{subtotal.toFixed(2)} TJS</span>
               </div>
-              {discountFromCustomer > 0 && (
-                <div className="flex justify-between items-center text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
-                  <div className="flex items-center gap-1.5">
-                    <UserIcon size={12} />
-                    <span>Скидка клиента ({selectedCustomer.defaultDiscount}%)</span>
-                  </div>
-                  <span className="tabular-nums">-{discountFromCustomer.toFixed(2)} TJS</span>
-                </div>
-              )}
               <div className="flex justify-between text-[18px] font-bold text-[#5A5A40] pt-2 border-t border-[#5A5A40]/10">
                 <span>Итого</span>
                 <span className="tabular-nums min-w-30 text-right">{total.toFixed(2)} TJS</span>
               </div>
             </div>
 
-            <div className="bg-white p-2.5 rounded-xl border border-[#5A5A40]/10 space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60">Идентификация клиента</label>
-              {selectedCustomer ? (
-                <div className="flex items-center justify-between bg-[#f5f5f0] p-2 rounded-xl border border-[#5A5A40]/10">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-bold text-[#5A5A40] truncate">{selectedCustomer.name}</p>
-                    <p className="text-[10px] text-[#5A5A40]/60">{selectedCustomer.phone || 'Нет телефона'}</p>
-                  </div>
-                  <button onClick={() => setSelectedCustomer(null)} className="p-1 text-[#5A5A40]/40 hover:text-red-500 transition-colors">
-                    <Plus className="rotate-45" size={18} />
-                  </button>
-                </div>
-              ) : (
-                <CustomerSearch onSelect={setSelectedCustomer} />
-              )}
-            </div>
 
-            <div className="bg-white p-2.5 rounded-xl border border-[#5A5A40]/10 space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60">Внесено</label>
-              <div className="flex items-center gap-2">
-                <input type="number" min={0} step="0.01" value={paidAmountInput} onChange={(event) => setPaidAmountInput(event.target.value)} className="w-full px-3 py-1.5 border border-[#5A5A40]/15 rounded-lg text-[13px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20 tabular-nums" placeholder="0.00" />
-                <button type="button" onClick={() => setPaidAmountInput(total > 0 ? total.toFixed(2) : '')} className="shrink-0 px-3 py-1.5 rounded-lg border border-[#5A5A40]/15 text-[12px] font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors">Все</button>
-              </div>
-              <p className="text-[11px] text-[#5A5A40]/60 min-h-4">
-                {(() => {
-                  const entered = Number(paidAmountInput || 0);
-                  if (!Number.isFinite(entered) || entered <= 0) return '';
-                  if (entered < total) return `Частичная оплата: остаток ${(total - entered).toFixed(2)} TJS`;
-                  return 'Оплачено полностью';
-                })()}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setPaymentType('CASH')} className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[12px] transition-all ${paymentType === 'CASH' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
                 <Wallet size={14} />
                 Наличные
@@ -874,23 +814,8 @@ export const POSView: React.FC = () => {
                 <CreditCard size={14} />
                 Карта
               </button>
-              <button onClick={() => { setPaymentType('CREDIT'); setPaidAmountInput(''); }} className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[12px] transition-all ${paymentType === 'CREDIT' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
-                <Wallet size={14} />
-                В долг
-              </button>
             </div>
 
-            {needsDebtorDetails && (
-              <div className="bg-white p-2.5 rounded-xl border border-[#5A5A40]/10 space-y-2">
-                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#5A5A40]/55">
-                  <UserIcon size={14} />
-                  Покупатель для долга
-                </div>
-                <input type="text" value={creditCustomerName} onChange={(event) => setCreditCustomerName(event.target.value)} className="w-full px-3 py-2 border border-[#5A5A40]/15 rounded-lg text-[13px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20" placeholder="Имя покупателя" />
-                <input type="text" value={creditCustomerPhone} onChange={(event) => setCreditCustomerPhone(event.target.value)} className="w-full px-3 py-2 border border-[#5A5A40]/15 rounded-lg text-[13px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20" placeholder="Номер телефона (необязательно)" />
-                <p className="text-[11px] text-[#5A5A40]/55">Продажа в долг спишет остаток со склада и создаст запись в разделе должников.</p>
-              </div>
-            )}
 
             {error && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100 flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
             {success && <div className="p-3 bg-emerald-50 text-emerald-600 text-xs rounded-lg border border-emerald-100 flex items-center gap-2"><CheckCircle2 size={14} />Продажа успешно завершена</div>}

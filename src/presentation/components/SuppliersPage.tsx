@@ -242,14 +242,36 @@ export const SuppliersPage: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="rounded-[30px] border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-md">
+          <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-2">Всего поставщиков</p>
+          <p className="text-3xl font-black text-[#5A5A40]">{suppliers.length}</p>
+        </div>
+        <div className="rounded-[30px] border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-md">
+          <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-2">Общий оборот</p>
+          <p className="text-3xl font-black text-[#5A5A40]">
+            {formatMoney(Object.values(supplierStats).reduce((sum, s) => sum + (s.summary?.totalAmount || 0), 0))}
+          </p>
+        </div>
+        <div className="rounded-[30px] border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-md">
+          <p className="text-[10px] font-bold text-red-400/60 uppercase tracking-widest mb-2">Общий долг</p>
+          <p className="text-3xl font-black text-red-600">
+            {formatMoney(Object.values(supplierStats).reduce((sum, s) => sum + (s.summary?.totalDebt || 0), 0))}
+          </p>
+        </div>
+        <div className="rounded-[30px] border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-md">
+          <p className="text-[10px] font-bold text-amber-400/60 uppercase tracking-widest mb-2">Просрочено</p>
+          <p className="text-3xl font-black text-amber-600">
+            {formatMoney(Object.values(supplierStats).reduce((sum, s) => sum + (s.summary?.overdueDebt || 0), 0))}
+          </p>
+        </div>
+      </div>
+
       <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
-              Поставщиков: {filteredSuppliers.length}
-            </span>
-            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
-              Закупки, партии и долги
+              Найдено: {filteredSuppliers.length}
             </span>
           </div>
 
@@ -266,7 +288,7 @@ export const SuppliersPage: React.FC = () => {
             </div>
             <button onClick={openAdd} className="bg-[#5A5A40] text-white px-6 py-3 rounded-2xl font-medium shadow-lg hover:bg-[#4A4A30] transition-all flex items-center gap-2">
               <Plus size={20} />
-              {t('Add Supplier')}
+              Бизнес-партнер
             </button>
           </div>
         </div>
@@ -312,74 +334,70 @@ export const SuppliersPage: React.FC = () => {
                 <div className="w-14 h-14 bg-[#f5f5f0] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
                   <Truck size={28} />
                 </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openEdit(supplier);
-                    }}
-                    disabled={submitting}
-                    className="p-2 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-xl transition-all disabled:opacity-50"
-                    title={t('Edit Supplier')}
-                  >
-                    <Edit3 size={18} />
-                  </button>
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setDeleteTarget({ id: supplier.id, name: supplier.name });
-                    }}
-                    disabled={submitting}
-                    className="p-2 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
-                    title={t('Delete Supplier')}
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEdit(supplier);
+                      }}
+                      disabled={submitting}
+                      className="p-2 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-xl transition-all disabled:opacity-50"
+                      title={t('Edit Supplier')}
+                    >
+                      <Edit3 size={18} />
+                    </button>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeleteTarget({ id: supplier.id, name: supplier.name });
+                      }}
+                      disabled={submitting}
+                      className="p-2 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
+                      title={t('Delete Supplier')}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                  {summary?.lastInvoiceDate && (
+                    <span className="text-[9px] uppercase font-bold text-[#5A5A40]/30 tracking-widest">
+                      Last: {new Date(summary.lastInvoiceDate).toLocaleDateString()}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <h3 className="text-lg font-bold text-[#5A5A40] mb-4">{supplier.name}</h3>
+              <h3 className="text-lg font-bold text-[#5A5A40] mb-2">{supplier.name}</h3>
+              <p className="text-xs text-[#5A5A40]/40 mb-4 truncate">{supplier.address || t('No address provided')}</p>
 
-              <div className="space-y-3 mb-6">
+              <div className="space-y-2 mb-6">
                 <div className="flex items-center gap-3 text-sm text-[#5A5A40]/60">
-                  <Phone size={16} className="text-[#5A5A40]/30" />
-                  <span>{supplier.contact || '—'}</span>
+                  <Phone size={14} className="text-[#5A5A40]/20" />
+                  <span className="text-xs">{supplier.contact || '—'}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-[#5A5A40]/60">
-                  <Mail size={16} className="text-[#5A5A40]/30" />
-                  <span className="truncate">{supplier.email || '—'}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-[#5A5A40]/60">
-                  <MapPin size={16} className="text-[#5A5A40]/30" />
-                  <span className="truncate">{supplier.address || '—'}</span>
+                  <Mail size={14} className="text-[#5A5A40]/20" />
+                  <span className="text-xs truncate">{supplier.email || '—'}</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 pt-6 border-t border-[#5A5A40]/5">
-                <div className="bg-[#f5f5f0]/50 p-3 rounded-2xl">
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-1">Партии</p>
-                  {nearestBatch ? (
-                    <>
-                      <div className="flex items-center gap-2 text-[#5A5A40]">
-                        <Package size={14} />
-                        <span className="text-sm font-bold">{nearestBatch.batchNumber}</span>
-                      </div>
-                      <div className="text-xs text-[#5A5A40]/50 mt-1">
-                        Срок: {nearestBatch.expiryDate ? new Date(nearestBatch.expiryDate).toLocaleDateString() : '—'}
-                      </div>
-                    </>
-                  ) : detailLoading === supplier.id ? (
-                    <div className="text-sm text-[#5A5A40]/40">Загрузка…</div>
-                  ) : (
-                    <div className="text-sm text-[#5A5A40]/40">Нет активных партий</div>
-                  )}
+                <div className="bg-[#f5f5f0]/50 p-4 rounded-2xl">
+                  <p className="text-[9px] font-bold text-[#5A5A40]/30 uppercase tracking-widest mb-2">Активно</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col">
+                       <span className="text-sm font-black text-[#5A5A40]">{summary?.batchCount || 0}</span>
+                       <span className="text-[8px] text-[#5A5A40]/40 uppercase font-black">Партии</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-[#f5f5f0]/50 p-3 rounded-2xl">
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-1">Финансы</p>
-                  <div className="flex flex-col gap-1 text-[#5A5A40] text-xs">
-                    <span>Сумма: <b>{summary ? formatMoney(summary.totalAmount) : '—'}</b></span>
-                    <span>Долг: <b>{summary ? formatMoney(summary.totalDebt) : '—'}</b></span>
-                    <span>Просрочка: <b>{summary ? formatMoney(summary.overdueDebt) : '—'}</b></span>
+                <div className="bg-[#5A5A40]/5 p-4 rounded-2xl">
+                  <p className="text-[9px] font-bold text-[#5A5A40]/30 uppercase tracking-widest mb-2">Баланс</p>
+                  <div className="flex flex-col">
+                     <span className={`text-sm font-black ${(summary?.totalDebt || 0) > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                       {summary ? formatMoney(summary.totalDebt) : '—'}
+                     </span>
+                     <span className="text-[8px] text-[#5A5A40]/40 uppercase font-black">Долг</span>
                   </div>
                 </div>
               </div>

@@ -19,7 +19,7 @@ export const ProductBatchHistoryModal: React.FC<ProductBatchHistoryModalProps> =
   if (!product) return null;
 
   const batches = [...(product.batches || [])].sort(
-    (left, right) => new Date(left.expiryDate).getTime() - new Date(right.expiryDate).getTime()
+    (left, right) => new Date(left.receivedAt).getTime() - new Date(right.receivedAt).getTime()
   );
 
   return (

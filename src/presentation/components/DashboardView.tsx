@@ -26,18 +26,6 @@ type DashboardMetricsResponse = {
   revenue?: { total: number; averageDaily: number; recognizedInvoiceCount: number };
   revenueTrend?: { mode: 'day' | 'month'; items: Array<{ key: string; name: string; sales: number }> };
   finance?: { outstandingOrdinarySales: number; totalDebtorOutstanding: number; writeOffAmountMonth: number; grossMarginMonth: number };
-  creditReceivables?: {
-    totalOutstandingAmount: number;
-    totalCustomersCount: number;
-    openCount: number;
-    overdueAmountTotal: number;
-    overdueCount: number;
-    overdueCustomersCount: number;
-    overdueItems: Array<{ invoiceId: string; invoiceNo: string; customerName: string; remainingAmount: number; daysOverdue: number }>;
-    dueTomorrowAmountTotal: number;
-    dueTomorrowCount: number;
-    dueTomorrowItems: Array<{ invoiceId: string; invoiceNo: string; customerName: string; remainingAmount: number }>;
-  };
   inventoryHighlights?: {
     totalInventoryUnits: number;
     lowStockItems: Array<{ productId: string; name: string; currentStock: number; minStock: number }>;
@@ -52,7 +40,7 @@ type DashboardMetricsResponse = {
 
 const DashboardSalesChart = lazyNamedImport(() => import('./DashboardSalesChart'), 'DashboardSalesChart');
 
-export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: string) => void }> = ({ onOpenInvoicePayment }) => {
+export const DashboardView: React.FC = () => {
   const { t } = useTranslation();
   const { products, invoices, user } = usePharmacy();
   const [selectedPeriodPreset, setSelectedPeriodPreset] = useState<DashboardPeriodPreset>('month');
@@ -205,23 +193,8 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
     )
   );
 
-  const getInvoiceOutstandingAmount = (invoice: { totalAmount?: number; receivables?: Array<{ remainingAmount?: number }>; paymentStatus?: string }) => {
-    const remaining = Number(invoice.receivables?.[0]?.remainingAmount ?? NaN);
-    if (Number.isFinite(remaining)) {
-      return Math.max(0, remaining);
-    }
-
-    if (invoice.paymentStatus === 'PAID') {
-      return 0;
-    }
-
-    return Math.max(0, Number(invoice.totalAmount || 0));
-  };
-
   const invoiceActivity = invoices.map((invoice) => {
-    const outstandingAmount = getInvoiceOutstandingAmount(invoice);
     const isReturned = invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED';
-    const isDebtSale = outstandingAmount > 0.009 && Boolean(invoice.customer);
     const soldUnits = (invoice.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
     if (isReturned) {
@@ -236,17 +209,6 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
       };
     }
 
-    if (isDebtSale) {
-      return {
-        id: `inv-${invoice.id}`,
-        type: 'debt' as const,
-        title: invoice.customer ? `Продажа в долг: ${invoice.customer}` : 'Продажа в долг',
-        subtitle: `Остаток долга ${outstandingAmount.toFixed(2)} TJS`,
-        amount: outstandingAmount,
-        time: toRelativeTime(invoice.createdAt),
-        date: new Date(invoice.createdAt as any),
-      };
-    }
 
     return {
       id: `inv-${invoice.id}`,
@@ -314,18 +276,8 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
   const statExpiringSoonCount = serverMetrics?.expiry?.expiringSoon ?? expiringSoonCount;
   const statSalesInPeriod = serverMetrics?.revenue?.total ?? 0;
   const statSalesCountInPeriod = serverMetrics?.revenue?.recognizedInvoiceCount ?? 0;
-  const adminOutstandingOrdinarySales = serverMetrics?.finance?.outstandingOrdinarySales ?? 0;
-  const adminTotalDebtorOutstanding = serverMetrics?.creditReceivables?.totalOutstandingAmount ?? serverMetrics?.finance?.totalDebtorOutstanding ?? adminOutstandingOrdinarySales;
-  const adminTotalDebtorCustomers = serverMetrics?.creditReceivables?.totalCustomersCount ?? 0;
   const adminWriteOffAmount = serverMetrics?.finance?.writeOffAmountMonth ?? 0;
   const adminGrossMargin = serverMetrics?.finance?.grossMarginMonth ?? 0;
-  const overdueWidgetItems = serverMetrics?.creditReceivables?.overdueItems ?? [];
-  const overdueWidgetAmount = serverMetrics?.creditReceivables?.overdueAmountTotal ?? 0;
-  const overdueWidgetCount = serverMetrics?.creditReceivables?.overdueCount ?? 0;
-  const overdueWidgetCustomers = serverMetrics?.creditReceivables?.overdueCustomersCount ?? 0;
-  const dueTomorrowWidgetItems = serverMetrics?.creditReceivables?.dueTomorrowItems ?? [];
-  const dueTomorrowWidgetAmount = serverMetrics?.creditReceivables?.dueTomorrowAmountTotal ?? 0;
-  const dueTomorrowWidgetCount = serverMetrics?.creditReceivables?.dueTomorrowCount ?? 0;
   const lowStockWidgetItems = serverMetrics?.inventoryHighlights?.lowStockItems ?? lowStockProducts.map((product) => ({ productId: product.id, name: product.name, currentStock: product.totalStock, minStock: product.minStock || 10 }));
   const expiringWidgetItems = serverMetrics?.inventoryHighlights?.expiringItems ?? expiringProducts;
   const chartData = serverMetrics?.revenueTrend?.items ?? [];
@@ -345,12 +297,6 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
   ];
 
   const adminCards = [
-    {
-      label: adminTotalDebtorCustomers > 0 ? `Общая сумма должников (${adminTotalDebtorCustomers})` : 'Общая сумма должников',
-      value: formatMoney(adminTotalDebtorOutstanding),
-      icon: Receipt,
-      tone: 'bg-amber-100 text-amber-700',
-    },
     {
       label: t('Expired Batches'),
       value: String(expiredCount),
@@ -404,7 +350,7 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
               <h3 className="text-xl font-bold text-[#5A5A40]">{t('Admin Risk & Finance')}</h3>
               <p className="text-sm text-[#5A5A40]/60">{t('Live operational controls')}</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {adminCards.map((card) => (
                 <div key={card.label} className="rounded-2xl border border-[#5A5A40]/10 p-4">
                   <div className="flex items-center justify-between">
@@ -416,128 +362,6 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
                   <p className="text-2xl font-bold text-[#5A5A40] mt-3">{card.value}</p>
                 </div>
               ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div className="rounded-3xl border border-red-200 bg-[linear-gradient(135deg,#fff4f4_0%,#ffe0e0_100%)] p-8 shadow-sm">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-6">
-                <div>
-                  <div className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-red-700">
-                    <AlertTriangle size={14} />
-                    Просроченные оплаты
-                  </div>
-                  <h3 className="mt-3 text-2xl font-bold text-[#5A5A40]">Просроченные долги покупателей</h3>
-                  <p className="mt-1 text-sm text-[#5A5A40]/70">Здесь показываются только долги, по которым срок оплаты уже прошел.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenInvoicePayment?.(overdueWidgetItems[0]?.invoiceId)}
-                  disabled={overdueWidgetItems.length === 0}
-                  className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-                >
-                  {overdueWidgetItems.length > 0 ? 'Открыть оплату' : 'Просрочек нет'}
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div className="rounded-2xl border border-red-100 bg-white/80 p-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Сумма просрочки</p>
-                  <p className="mt-2 text-3xl font-bold text-red-700">{formatMoney(overdueWidgetAmount)}</p>
-                </div>
-                <div className="rounded-2xl border border-red-100 bg-white/80 p-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Просроченных счетов</p>
-                  <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{overdueWidgetCount}</p>
-                </div>
-                <div className="rounded-2xl border border-red-100 bg-white/80 p-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Покупателей с просрочкой</p>
-                  <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{overdueWidgetCustomers}</p>
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                {overdueWidgetItems.length === 0 && (
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
-                    Сейчас нет покупателей с просроченными долгами.
-                  </div>
-                )}
-
-                {overdueWidgetItems.map((item) => (
-                  <button
-                    key={item.invoiceId}
-                    type="button"
-                    onClick={() => onOpenInvoicePayment?.(item.invoiceId)}
-                    className="flex w-full items-center justify-between gap-4 rounded-2xl border border-red-100 bg-white/85 px-4 py-4 text-left transition-colors hover:bg-white"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-[#5A5A40]">{item.customerName}</p>
-                      <p className="mt-1 text-xs text-[#5A5A40]/65">Счет {item.invoiceNo} • {item.daysOverdue} дн. просрочки</p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-base font-bold text-red-700">{formatMoney(item.remainingAmount)}</p>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-red-500">Открыть оплату</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-amber-200 bg-[linear-gradient(135deg,#fff8ef_0%,#ffeacd_100%)] p-8 shadow-sm">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-6">
-                <div>
-                  <div className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
-                    <Clock size={14} />
-                    К оплате завтра
-                  </div>
-                  <h3 className="mt-3 text-2xl font-bold text-[#5A5A40]">Счета на завтра</h3>
-                  <p className="mt-1 text-sm text-[#5A5A40]/70">Список покупателей, по которым оплата должна поступить завтра.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenInvoicePayment?.(dueTomorrowWidgetItems[0]?.invoiceId)}
-                  disabled={dueTomorrowWidgetItems.length === 0}
-                  className="inline-flex items-center justify-center rounded-2xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-amber-300"
-                >
-                  {dueTomorrowWidgetItems.length > 0 ? 'Открыть счет' : 'Счетов нет'}
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-amber-100 bg-white/80 p-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Сумма к оплате</p>
-                  <p className="mt-2 text-3xl font-bold text-amber-700">{formatMoney(dueTomorrowWidgetAmount)}</p>
-                </div>
-                <div className="rounded-2xl border border-amber-100 bg-white/80 p-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-[#5A5A40]/55">Счетов на завтра</p>
-                  <p className="mt-2 text-3xl font-bold text-[#5A5A40]">{dueTomorrowWidgetCount}</p>
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                {dueTomorrowWidgetItems.length === 0 && (
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
-                    На завтра счетов к оплате нет.
-                  </div>
-                )}
-
-                {dueTomorrowWidgetItems.map((item) => (
-                  <button
-                    key={item.invoiceId}
-                    type="button"
-                    onClick={() => onOpenInvoicePayment?.(item.invoiceId)}
-                    className="flex w-full items-center justify-between gap-4 rounded-2xl border border-amber-100 bg-white/85 px-4 py-4 text-left transition-colors hover:bg-white"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-[#5A5A40]">{item.customerName}</p>
-                      <p className="mt-1 text-xs text-[#5A5A40]/65">Счет {item.invoiceNo} • оплата завтра</p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-base font-bold text-amber-700">{formatMoney(item.remainingAmount)}</p>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-amber-600">Открыть счет</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -581,13 +405,11 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
               <div key={activity.id} className="flex gap-4">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                   activity.type === 'sale' ? 'bg-emerald-100 text-emerald-700' :
-                  activity.type === 'debt' ? 'bg-amber-100 text-amber-700' :
                   activity.type === 'return' ? 'bg-orange-100 text-orange-700' :
                   activity.type === 'restock' ? 'bg-blue-100 text-blue-600' :
                   'bg-stone-100 text-stone-700'
                 }`}>
                   {activity.type === 'sale' ? <TrendingUp size={20} /> :
-                   activity.type === 'debt' ? <Receipt size={20} /> :
                    activity.type === 'return' ? <ArrowUpRight size={20} /> :
                    activity.type === 'restock' ? <ArrowDownLeft size={20} /> :
                    <AlertTriangle size={20} />}

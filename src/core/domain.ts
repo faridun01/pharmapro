@@ -27,6 +27,7 @@ export interface Batch {
   supplierName?: string;
   manufacturedDate: Date;
   expiryDate: Date;
+  receivedAt: Date;
   status: BatchStatus;
   movements: BatchMovement[];
 }
@@ -66,58 +67,6 @@ export interface Supplier {
   address?: string;
 }
 
-export interface Customer {
-  id: string;
-  code?: string;
-  name: string;
-  legalName?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  managerName?: string;
-  creditLimit: number;
-  defaultDiscount: number;
-  paymentTermDays?: number;
-  isActive: boolean;
-  summary?: {
-    totalPurchased: number;
-    totalPaid: number;
-    totalDebt: number;
-    overdueDebt?: number;
-    invoiceCount: number;
-    lastInvoiceAt?: string | null;
-    lastPaymentAt?: string | null;
-    nextDueDate?: string | null;
-  };
-  history?: {
-    recentInvoices: Array<{
-      id: string;
-      invoiceNo: string;
-      createdAt: string;
-      totalAmount: number;
-      paymentStatus?: string | null;
-      status: string;
-      outstandingAmount: number;
-      itemCount: number;
-    }>;
-    recentPayments: Array<{
-      id: string;
-      amount: number;
-      paymentDate: string;
-      method: string;
-      invoiceNo?: string | null;
-      comment?: string | null;
-    }>;
-    openReceivables: Array<{
-      id: string;
-      invoiceNo?: string | null;
-      remainingAmount: number;
-      dueDate?: string | null;
-      status: string;
-      createdAt: string;
-    }>;
-  };
-}
 
 export interface InvoiceItem {
   id: string;
@@ -133,26 +82,16 @@ export interface InvoiceItem {
 export interface Invoice {
   id: string;
   invoiceNo: string;
-  customer?: string;
-  customerId?: string;
   totalAmount: number;
   taxAmount: number;
   discount: number;
-  paymentType: 'CASH' | 'CARD' | 'CREDIT';
+  paymentType: 'CASH' | 'CARD';
   status: 'PAID' | 'PENDING' | 'CANCELLED' | 'RETURNED' | 'PARTIALLY_RETURNED';
-  paymentStatus?: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'OVERDUE' | 'CANCELLED';
+  paymentStatus?: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'CANCELLED';
   comment?: string;
   userId: string;
   paidAmountTotal?: number;
   items: InvoiceItem[];
-  receivables?: Array<{
-    id: string;
-    originalAmount: number;
-    paidAmount: number;
-    remainingAmount: number;
-    status: 'OPEN' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'WRITTEN_OFF';
-    dueDate?: string | Date | null;
-  }>;
   createdAt: Date;
 }
 

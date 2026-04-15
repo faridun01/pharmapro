@@ -36,21 +36,11 @@ export const buildInvoiceDisplayItems = (items: any[] = []): InvoiceDisplayItem[
   return [...grouped.values()];
 };
 
-export const getInvoiceOutstandingAmount = (invoice: any) => Number(
-  invoice?.outstandingAmount
-    ?? invoice?.receivables?.[0]?.remainingAmount
-    ?? invoice?.totalAmount
-    ?? 0
-);
+export const getInvoiceOutstandingAmount = (invoice: any) => 0;
 
 export const getPaymentStatusLabel = (paymentState: string, outstandingAmount: number, paidAmount = 0) => {
-  if (outstandingAmount <= 0 || paymentState === 'PAID') {
-    return { label: 'Оплачено', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  if (paymentState === 'CANCELLED' || paymentState === 'VOIDED') {
+    return { label: 'Отменен', className: 'bg-red-50 text-red-700 border-red-200' };
   }
-
-  if (paymentState === 'PARTIALLY_PAID' || paidAmount > 0) {
-    return { label: 'Частично оплачено', className: 'bg-amber-50 text-amber-700 border-amber-200' };
-  }
-
-  return { label: 'Долг', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+  return { label: 'Оплачено', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
 };

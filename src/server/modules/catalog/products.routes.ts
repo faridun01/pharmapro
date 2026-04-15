@@ -45,7 +45,7 @@ productsRouter.get('/barcode/:code', authenticate, asyncHandler(async (req, res)
     include: {
       batches: {
         where: { quantity: { gt: 0 } },
-        orderBy: { expiryDate: 'asc' }, // FEFO order
+        orderBy: { receivedAt: 'asc' }, // FIFO order
       },
     },
   });

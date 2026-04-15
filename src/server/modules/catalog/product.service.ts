@@ -90,7 +90,7 @@ export class ProductService {
           ...batch,
           status: computeBatchStatus(batch.expiryDate),
         }))
-        .sort((left, right) => new Date(left.expiryDate).getTime() - new Date(right.expiryDate).getTime()),
+        .sort((left, right) => new Date(left.receivedAt).getTime() - new Date(right.receivedAt).getTime()),
     }));
 
     return {
@@ -114,7 +114,7 @@ export class ProductService {
             supplier: { select: { name: true, contact: true } },
             warehouse: { select: { name: true } },
           },
-          orderBy: { expiryDate: 'asc' },
+          orderBy: { receivedAt: 'asc' },
         },
       },
     });
@@ -126,7 +126,7 @@ export class ProductService {
           ...batch,
           status: computeBatchStatus(batch.expiryDate),
         }))
-        .sort((left, right) => new Date(left.expiryDate).getTime() - new Date(right.expiryDate).getTime()),
+        .sort((left, right) => new Date(left.receivedAt).getTime() - new Date(right.receivedAt).getTime()),
     };
   }
 

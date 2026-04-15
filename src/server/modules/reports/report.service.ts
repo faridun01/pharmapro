@@ -117,7 +117,6 @@ export class ReportService {
       invoices,
       returns,
       writeOffs,
-      receivables,
       payables,
       batches,
       purchaseInvoices,
@@ -139,7 +138,6 @@ export class ReportService {
             },
           },
           payments: true,
-          receivables: true,
         },
       }),
       prisma.return.findMany({
@@ -159,11 +157,6 @@ export class ReportService {
         },
         include: {
           items: true,
-        },
-      }),
-      prisma.receivable.findMany({
-        where: {
-          status: { not: 'PAID' },
         },
       }),
       prisma.payable.findMany({
@@ -225,10 +218,10 @@ export class ReportService {
 
     const activeInvoices = invoices.filter((invoice) => invoice.status !== 'RETURNED');
     const revenueGross = activeInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
-    const customerReturnsAmount = returns
+    const salesReturnsAmount = returns
       .filter((entry) => entry.type === 'CUSTOMER')
       .reduce((sum, entry) => sum + Number(entry.totalAmount || 0), 0);
-    const netRevenue = Math.max(0, revenueGross - customerReturnsAmount);
+    const netRevenue = Math.max(0, revenueGross - salesReturnsAmount);
     const cogs = activeInvoices.reduce((sum, invoice) => sum + invoice.items.reduce((itemSum, item) => {
       const unitCost = Number(item.batch?.costBasis || 0);
       return itemSum + (Number(item.quantity || 0) * unitCost);
@@ -243,18 +236,8 @@ export class ReportService {
     const taxSales = activeInvoices.reduce((sum, invoice) => sum + Number(invoice.taxAmount || 0), 0);
     const taxPurchases = purchaseInvoices.reduce((sum, invoice) => sum + Number(invoice.taxAmount || 0), 0);
 
-    const arAging = emptyAging();
     const apAging = emptyAging();
-    let receivableOverdue = 0;
     let payableOverdue = 0;
-
-    for (const receivable of receivables) {
-      const remaining = Number(receivable.remainingAmount || 0);
-      addToAging(arAging, receivable.dueDate, remaining, now);
-      if (receivable.dueDate && receivable.dueDate.getTime() < now.getTime()) {
-        receivableOverdue += remaining;
-      }
-    }
 
     for (const payable of payables) {
       const remaining = Number(payable.remainingAmount || 0);
@@ -372,9 +355,7 @@ export class ReportService {
 
     const saleDetails = activeInvoices.map((invoice) => {
       const invoicePaidAmount = invoice.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-      const outstandingAmount = invoice.receivables.length > 0
-        ? Math.max(0, Number(invoice.receivables[0].remainingAmount || 0))
-        : Math.max(0, Number(invoice.totalAmount || 0) - invoicePaidAmount);
+      const outstandingAmount = Math.max(0, Number(invoice.totalAmount || 0) - invoicePaidAmount);
 
       return {
         invoiceId: invoice.id,
@@ -436,7 +417,7 @@ export class ReportService {
       range: { preset: params.preset, from: fromDate.toISOString(), to: toDate.toISOString() },
       kpi: {
         revenueGross,
-        customerReturnsAmount,
+        salesReturnsAmount,
         netRevenue,
         cogs,
         grossProfit,
@@ -464,12 +445,8 @@ export class ReportService {
         byMethod,
       },
       debts: {
-        receivableTotal: arAging.total,
-        receivableOverdue,
         payableTotal: apAging.total,
         payableOverdue,
-        netWorkingCapitalExposure: arAging.total - apAging.total,
-        arAging,
         apAging,
       },
       purchases: {
@@ -486,11 +463,10 @@ export class ReportService {
       balanceLike: {
         cashLike: cashflowIn - cashflowOut,
         inventoryCostValue,
-        receivableTotal: arAging.total,
         payableTotal: apAging.total,
-        totalAssetsLike: (cashflowIn - cashflowOut) + inventoryCostValue + arAging.total,
+        totalAssetsLike: (cashflowIn - cashflowOut) + inventoryCostValue,
         totalLiabilitiesLike: apAging.total,
-        equityLike: ((cashflowIn - cashflowOut) + inventoryCostValue + arAging.total) - apAging.total,
+        equityLike: ((cashflowIn - cashflowOut) + inventoryCostValue) - apAging.total,
       },
       expenseByCategory,
       trend: Array.from(trendMap.values()),

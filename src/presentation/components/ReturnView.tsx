@@ -22,10 +22,9 @@ interface ReturnItem {
 interface Return {
   id: string;
   returnNo: string;
-  type: 'CUSTOMER' | 'SUPPLIER';
+  type: 'RETAIL' | 'SUPPLIER';
   status: 'DRAFT' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
   totalAmount?: number | null;
-  customerName?: string;
   refundMethod?: string;
   reason?: string;
   note?: string;
@@ -85,8 +84,7 @@ function CreateReturnModal({
       countryOfOrigin: product?.countryOfOrigin,
     }, { includeCountry: true });
   }, [products]);
-  const [type, setType] = useState<'CUSTOMER' | 'SUPPLIER'>('CUSTOMER');
-  const [customerName, setCustomerName] = useState('');
+  const [type, setType] = useState<'RETAIL' | 'SUPPLIER'>('RETAIL');
   const [supplierId, setSupplierId] = useState('');
   const [refundMethod, setRefundMethod] = useState('CASH');
   const [reason, setReason] = useState('');
@@ -99,8 +97,7 @@ function CreateReturnModal({
 
   useEffect(() => {
     if (!open) {
-      setType('CUSTOMER');
-      setCustomerName('');
+      setType('RETAIL');
       setSupplierId('');
       setRefundMethod('CASH');
       setReason('');
@@ -185,9 +182,7 @@ function CreateReturnModal({
         headers: await buildApiHeaders(),
         body: JSON.stringify({
           type,
-          customerName: type === 'CUSTOMER' ? customerName : undefined,
-          supplierId: type === 'SUPPLIER' ? supplierId : undefined,
-          refundMethod: type === 'CUSTOMER' ? refundMethod : undefined,
+          refundMethod: type === 'RETAIL' ? refundMethod : undefined,
           reason,
           note,
           items: formItems.map((it) => ({
@@ -241,7 +236,7 @@ function CreateReturnModal({
       <div className="space-y-5">
           {/* Type */}
           <div className="flex gap-3">
-            {(['CUSTOMER', 'SUPPLIER'] as const).map((t_) => (
+            {(['RETAIL', 'SUPPLIER'] as const).map((t_) => (
               <button
                 key={t_}
                 onClick={() => setType(t_)}
@@ -249,22 +244,13 @@ function CreateReturnModal({
                   type === t_ ? 'bg-[#5A5A40] text-white border-[#5A5A40]' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/20 hover:bg-[#f5f5f0]'
                 }`}
               >
-                {t_ === 'CUSTOMER' ? t('Customer Return') : t('Supplier Return')}
+                {t_ === 'RETAIL' ? 'Розничный возврат' : 'Возврат поставщику'}
               </button>
             ))}
           </div>
 
-          {type === 'CUSTOMER' && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">{t('Customer Name')}</label>
-                <input
-                  className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder={t('Optional')}
-                />
-              </div>
+          {type === 'RETAIL' && (
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="text-xs font-semibold text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">{t('Refund Method')}</label>
                 <select
@@ -381,7 +367,7 @@ function CreateReturnModal({
           <div className="rounded-2xl bg-[#f5f5f0] px-4 py-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-[#5A5A40]">
             <div>
               <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Тип операции</p>
-              <p className="font-bold mt-1">{type === 'CUSTOMER' ? 'Возврат покупателя' : 'Возврат поставщику'}</p>
+              <p className="font-bold mt-1">{type === 'RETAIL' ? 'Розничный возврат' : 'Возврат поставщику'}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Позиции</p>
@@ -419,7 +405,7 @@ export const ReturnView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'CUSTOMER' | 'SUPPLIER'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'RETAIL' | 'SUPPLIER'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'COMPLETED' | 'REJECTED'>('ALL');
 
   const load = useCallback(async () => {
@@ -482,44 +468,68 @@ export const ReturnView: React.FC = () => {
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>${ret.type === 'SUPPLIER' ? 'Возврат поставщику' : 'Возврат покупателя'} ${ret.returnNo}</title>
+  <title>${ret.type === 'SUPPLIER' ? 'Возврат поставщику' : 'Розничный возврат'} ${ret.returnNo}</title>
   <style>
-    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #1f2937; }
-    h1 { margin: 0 0 6px; font-size: 22px; }
-    .muted { color: #6b7280; font-size: 12px; margin-bottom: 16px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-    th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; font-size: 12px; }
-    th { color: #6b7280; text-transform: uppercase; font-size: 10px; letter-spacing: .08em; }
+    body { font-family: Segoe UI, sans-serif; margin: 0; background: #6b7280; display: flex; justify-content: center; padding: 40px 20px; color: #1f2937; }
+    .sheet { width: 100%; max-width: 800px; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+    h1 { margin: 0 0 6px; font-size: 24px; color: #111827; }
+    .muted { color: #6b7280; font-size: 14px; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 12px 10px; text-align: left; font-size: 14px; }
+    th { color: #6b7280; text-transform: uppercase; font-size: 11px; letter-spacing: .08em; font-weight: 600; }
     .right { text-align: right; }
-    .total { margin-top: 16px; text-align: right; font-weight: 700; font-size: 18px; }
+    .total { margin-top: 30px; text-align: right; font-weight: 700; font-size: 20px; color: #111827; }
+    @media print { 
+      .print-btn { display: none; } 
+      body { background: none; padding: 0; display: block; }
+      .sheet { box-shadow: none; border-radius: 0; max-width: none; padding: 0; } 
+    }
+    .print-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 24px;
+      background: #5A5A40;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: sans-serif;
+      font-weight: 700;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      z-index: 100;
+    }
   </style>
 </head>
 <body>
-  <h1>${ret.type === 'SUPPLIER' ? 'Возврат поставщику' : 'Возврат покупателя'}</h1>
-  <div class="muted">Номер: ${ret.returnNo} · Дата: ${new Date(ret.createdAt).toLocaleString('ru-RU')} · ${ret.supplier?.name || ret.customerName || '-'}</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Товар</th>
-        <th>Партия</th>
-        <th class="right">Кол-во</th>
-        <th class="right">${moneyLabel('Цена')}</th>
-        <th class="right">${moneyLabel('Сумма')}</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${ret.items.map((item) => `
+  <button class="print-btn" onclick="window.print()">ПЕЧАТАТЬ</button>
+  <div class="sheet">
+    <h1>${ret.type === 'SUPPLIER' ? 'Возврат поставщику' : 'Розничный возврат'} ${ret.returnNo}</h1>
+    <div class="muted">Номер: ${ret.returnNo} · Дата: ${new Date(ret.createdAt).toLocaleString('ru-RU')} · ${ret.supplier?.name || 'Розничная операция'}</div>
+    <table>
+      <thead>
         <tr>
-          <td>${getProductDisplayLabel(item.productId, item.product?.name ?? '-')}</td>
-          <td>${item.batch?.batchNumber ?? '—'}</td>
-          <td class="right">${formatPackQuantity(item.quantity)}</td>
-          <td class="right">${Number(item.unitPrice || 0).toFixed(2)}</td>
-          <td class="right">${getReturnItemTotal(item).toFixed(2)}</td>
+          <th>Товар</th>
+          <th>Партия</th>
+          <th class="right">Кол-во</th>
+          <th class="right">${moneyLabel('Цена')}</th>
+          <th class="right">${moneyLabel('Сумма')}</th>
         </tr>
-      `).join('')}
-    </tbody>
-  </table>
-  <div class="total">${moneyLabel('Итого')}: ${getReturnTotal(ret).toFixed(2)} ${currencyCode}</div>
+      </thead>
+      <tbody>
+        ${ret.items.map((item) => `
+          <tr>
+            <td>${getProductDisplayLabel(item.productId, item.product?.name ?? '-')}</td>
+            <td>${item.batch?.batchNumber ?? '—'}</td>
+            <td class="right">${formatPackQuantity(item.quantity)}</td>
+            <td class="right">${Number(item.unitPrice || 0).toFixed(2)}</td>
+            <td class="right">${getReturnItemTotal(item).toFixed(2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <div class="total">${moneyLabel('Итого')}: ${getReturnTotal(ret).toFixed(2)} ${currencyCode}</div>
+  </div>
 </body>
 </html>`;
 
@@ -585,7 +595,7 @@ export const ReturnView: React.FC = () => {
           <div className="flex gap-2 flex-wrap">
             {[
               { value: 'ALL', label: 'Все' },
-              { value: 'CUSTOMER', label: 'От покупателя' },
+              { value: 'RETAIL', label: 'Розничный' },
               { value: 'SUPPLIER', label: 'Поставщику' },
             ].map((option) => (
               <button
@@ -653,8 +663,7 @@ export const ReturnView: React.FC = () => {
                   <div>
                     <p className="font-semibold text-[#151619]">{ret.returnNo}</p>
                       <p className="text-xs text-[#5A5A40]/50 mt-0.5">
-                      {ret.type === 'CUSTOMER' ? 'Возврат покупателя' : t('Supplier Return')}
-                      {ret.customerName && ` · ${ret.customerName}`}
+                      {ret.type === 'RETAIL' ? 'Розничный возврат' : t('Supplier Return')}
                       {ret.supplier?.name && ` · ${ret.supplier.name}`}
                     </p>
                   </div>

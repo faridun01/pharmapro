@@ -30,18 +30,6 @@ export const ReportDetailedView: React.FC<Props> = ({ data, currencyCode }) => {
             {formatMoney(sales.saleDetails.reduce((sum, s) => sum + s.totalAmount, 0), currencyCode)}
           </p>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-          <p className="text-xs uppercase font-semibold text-slate-400 mb-1">{t('reports.paid')}</p>
-          <p className="text-xl font-bold text-emerald-600">
-            {formatMoney(sales.saleDetails.reduce((sum, s) => sum + s.paidAmount, 0), currencyCode)}
-          </p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-          <p className="text-xs uppercase font-semibold text-slate-400 mb-1">{t('reports.outstanding')}</p>
-          <p className="text-xl font-bold text-orange-600">
-            {formatMoney(sales.saleDetails.reduce((sum, s) => sum + s.outstandingAmount, 0), currencyCode)}
-          </p>
-        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
@@ -89,9 +77,7 @@ export const ReportDetailedView: React.FC<Props> = ({ data, currencyCode }) => {
             <div key={sale.invoiceId} className="p-4 hover:bg-slate-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <span className="font-bold text-slate-900">{sale.invoiceNo}</span>
-                  <span className="mx-2 text-slate-300">|</span>
-                  <span className="text-sm text-slate-500">{sale.customer}</span>
+                   <span className="font-bold text-slate-900">{sale.invoiceNo}</span>
                 </div>
                 <div className="text-xs font-medium text-slate-400">
                   {new Date(sale.createdAt).toLocaleString('ru-RU')}
@@ -101,16 +87,6 @@ export const ReportDetailedView: React.FC<Props> = ({ data, currencyCode }) => {
                 <div>
                   <p className="text-slate-400 text-xs">{t('reports.total')}</p>
                   <p className="font-medium">{formatMoney(sale.totalAmount, currencyCode)}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-xs">{t('reports.paid')}</p>
-                  <p className="font-medium text-emerald-600">{formatMoney(sale.paidAmount, currencyCode)}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-xs">{t('reports.outstanding')}</p>
-                  <p className={`font-medium ${sale.outstandingAmount > 0 ? 'text-orange-600' : 'text-slate-900'}`}>
-                    {formatMoney(sale.outstandingAmount, currencyCode)}
-                  </p>
                 </div>
                 <div>
                   <p className="text-slate-400 text-xs">{t('reports.paymentType')}</p>

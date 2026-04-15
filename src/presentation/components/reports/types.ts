@@ -15,7 +15,7 @@ export type FinanceReport = {
   range: { preset: ReportRangePreset; from: string; to: string };
   kpi: {
     revenueGross: number;
-    customerReturnsAmount: number;
+    retailReturnsAmount: number;
     netRevenue: number;
     cogs: number;
     grossProfit: number;
@@ -43,12 +43,8 @@ export type FinanceReport = {
     byMethod: Record<string, number>;
   };
   debts: {
-    receivableTotal: number;
-    receivableOverdue: number;
     payableTotal: number;
     payableOverdue: number;
-    netWorkingCapitalExposure: number;
-    arAging: AgingBuckets;
     apAging: AgingBuckets;
   };
   purchases: { total: number; count: number; unpaidCount: number };
@@ -71,7 +67,6 @@ export type FinanceReport = {
   balanceLike: {
     cashLike: number;
     inventoryCostValue: number;
-    receivableTotal: number;
     payableTotal: number;
     totalAssetsLike: number;
     totalLiabilitiesLike: number;
@@ -86,11 +81,8 @@ export type FinanceReport = {
       invoiceId: string;
       invoiceNo: string;
       createdAt: string;
-      customer: string;
       paymentType: string;
       totalAmount: number;
-      paidAmount: number;
-      outstandingAmount: number;
       itemCount: number;
       soldUnits: number;
       items: Array<{

@@ -14,7 +14,6 @@ interface InvoiceEditModalProps {
   currencyCode: string;
   busyId: string | null;
   setBusyId: (id: string | null) => void;
-  isDebtorsView?: boolean;
 }
 
 export const InvoiceEditModal: React.FC<InvoiceEditModalProps> = ({
@@ -24,11 +23,9 @@ export const InvoiceEditModal: React.FC<InvoiceEditModalProps> = ({
   currencyCode,
   busyId,
   setBusyId,
-  isDebtorsView = false,
 }) => {
   const { t } = useTranslation();
   const { refreshInvoices, refreshProducts, products } = usePharmacy();
-  const [customer, setCustomer] = useState('');
   const [items, setItems] = useState<EditableInvoiceItem[]>([]);
   const [taxAmount, setTaxAmount] = useState(0);
   const [discount, setDiscount] = useState(0);
@@ -39,7 +36,6 @@ export const InvoiceEditModal: React.FC<InvoiceEditModalProps> = ({
 
   useEffect(() => {
     if (isOpen && invoice) {
-      setCustomer(invoice.customer || '');
       setItems((invoice.items || []).map((item: any) => ({
         id: item.id,
         productId: item.productId,
@@ -74,7 +70,6 @@ export const InvoiceEditModal: React.FC<InvoiceEditModalProps> = ({
 
     try {
       await invoiceRepository.update(invoice.id, {
-        customer: isDebtorsView ? customer : undefined,
         totalAmount: Number(totalAmount),
         items: items as any, // backend endpoint expected format
       });
@@ -115,17 +110,6 @@ export const InvoiceEditModal: React.FC<InvoiceEditModalProps> = ({
           </button>
         </div>
         <div className="p-6 space-y-4">
-          {isDebtorsView && (
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60 mb-1">Покупатель</label>
-              <input
-                type="text"
-                value={customer}
-                onChange={(e) => setCustomer(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-[#5A5A40]/15 text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-              />
-            </div>
-          )}
           <div className="rounded-2xl border border-[#5A5A40]/10 overflow-hidden">
             <div className="px-4 py-3 bg-[#f5f5f0]/60 text-xs font-bold uppercase tracking-widest text-[#5A5A40]/50">
               Позиции накладной

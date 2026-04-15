@@ -35,10 +35,12 @@ returnsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     throw new ValidationError('Не выбраны позиции для возврата (items array is required)');
   }
 
-  const typeVal = (data.type || '').toUpperCase();
+  let typeVal = (data.type || '').toUpperCase();
+  if (typeVal === 'RETAIL') typeVal = 'CUSTOMER';
+  
   if (typeVal !== 'CUSTOMER' && typeVal !== 'SUPPLIER') {
-    console.error('Validation error: type must be CUSTOMER or SUPPLIER');
-    throw new ValidationError('Тип возврата должен быть CUSTOMER или SUPPLIER');
+    console.error('Validation error: type must be RETAIL/CUSTOMER or SUPPLIER');
+    throw new ValidationError('Тип возврата должен быть RETAIL или SUPPLIER');
   }
 
   // Validate each item

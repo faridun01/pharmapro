@@ -13,3 +13,7 @@ data/report-settings.json
 data/system-settings.json
 prisma/dev.db.corrupted-backup-20260402-015619
 prisma_output.txt
+build_log*.txt
+tmp_*
+logs/
+tmp_test_assets/

@@ -20,11 +20,9 @@ interface InvoiceTableRowProps {
   busyId: string | null;
   onDetails: (invoice: any) => void;
   onPrint: (invoice: any) => void;
-  onPayment: (invoice: any) => void;
   onEdit: (invoice: any) => void;
   onReturn: (invoice: any) => void;
   onDelete: (invoice: any) => void;
-  isDebtorsView?: boolean;
 }
 
 export const InvoiceTableRow: React.FC<InvoiceTableRowProps> = React.memo(({
@@ -34,11 +32,9 @@ export const InvoiceTableRow: React.FC<InvoiceTableRowProps> = React.memo(({
   busyId,
   onDetails,
   onPrint,
-  onPayment,
   onEdit,
   onReturn,
   onDelete,
-  isDebtorsView = false,
 }) => {
   const { t } = useTranslation();
 
@@ -46,18 +42,13 @@ export const InvoiceTableRow: React.FC<InvoiceTableRowProps> = React.memo(({
   const returnedAmount = Number(invoice.returnedAmountTotal || 0);
   const netAmount = totalAmount - returnedAmount;
   const taxAmount = Number(invoice.taxAmount || 0);
-  const paidAmount = Number(invoice.paidAmountTotal ?? 0);
-  const outstandingAmount = Number(invoice.outstandingAmount ?? Math.max(0, netAmount - paidAmount));
-  const paymentState = String(invoice.paymentStatus || 'UNPAID');
-  const shouldShowDebt = ['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'].includes(paymentState) && outstandingAmount > 0;
+  const paymentState = String(invoice.paymentStatus || 'PAID');
   
-  const paymentBadge = getPaymentStatusLabel(paymentState, outstandingAmount, paidAmount);
+  const paymentBadge = getPaymentStatusLabel(paymentState, 0, netAmount);
   
   const paymentMethodBadge = invoice.paymentType === 'CASH'
     ? { label: 'Наличные', className: 'bg-blue-50 text-blue-700 border-blue-200' }
-    : invoice.paymentType === 'CARD'
-      ? { label: 'Карта', className: 'bg-violet-50 text-violet-700 border-violet-200' }
-      : { label: 'В долг', className: 'bg-stone-50 text-stone-700 border-stone-200' };
+    : { label: 'Карта', className: 'bg-violet-50 text-violet-700 border-violet-200' };
 
   const isReturnLocked = invoice.status === 'RETURNED';
   const isEditLocked = invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED';
@@ -76,9 +67,6 @@ export const InvoiceTableRow: React.FC<InvoiceTableRowProps> = React.memo(({
       </td>
       <td className="px-6 py-3.5">
         <div className="flex flex-col gap-0.5">
-          {isDebtorsView && (
-            <span className="text-xs text-[#5A5A40]/60 font-semibold leading-none mb-0.5">{invoice.customer || '—'}</span>
-          )}
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 bg-[#f5f5f0] rounded-lg flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
               <FileText size={14} />
@@ -101,21 +89,14 @@ export const InvoiceTableRow: React.FC<InvoiceTableRowProps> = React.memo(({
       </td>
       <td className="px-6 py-3.5">
         <div className="inline-flex flex-col gap-1.5">
-          {!isDebtorsView && (
-            <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border ${paymentMethodBadge.className}`}>
-              {paymentMethodBadge.label}
-            </span>
-          )}
+          <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border ${paymentMethodBadge.className}`}>
+            {paymentMethodBadge.label}
+          </span>
           <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${paymentBadge.className}`}>
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
             {paymentBadge.label}
           </span>
         </div>
-        {!isDebtorsView && shouldShowDebt && (
-          <p className="text-[9px] font-semibold text-rose-700 leading-none mt-1.5 bg-rose-50 border border-rose-100 rounded-full px-2 py-1 inline-flex items-center">
-            Остаток: {outstandingAmount.toFixed(2)} {currencyCode}
-          </p>
-        )}
       </td>
       <td className="px-4 py-3.5 text-right">
         <p className="text-[12px] font-semibold text-[#5A5A40] leading-none">{formatInvoiceQuantitySummary(invoice.items || [])}</p>
@@ -127,12 +108,6 @@ export const InvoiceTableRow: React.FC<InvoiceTableRowProps> = React.memo(({
           <p className="text-[9px] text-red-600 mt-1">Возврат {returnedAmount.toFixed(2)}</p>
         )}
         {taxAmount > 0 && <p className="text-[9px] text-[#5A5A40]/45 mt-1">Налог {taxAmount.toFixed(2)}</p>}
-      </td>
-      <td className="px-4 py-3.5 text-right">
-        <p className="text-[13px] font-semibold text-emerald-700 leading-none">{paidAmount.toFixed(2)}</p>
-      </td>
-      <td className="px-4 py-3.5 text-right">
-        <p className={`text-[13px] font-semibold leading-none ${outstandingAmount > 0 ? 'text-rose-700' : 'text-[#5A5A40]/60'}`}>{outstandingAmount.toFixed(2)}</p>
       </td>
       <td className="px-6 py-3.5 text-right">
         <div className="ml-auto grid grid-cols-3 gap-1.5 w-fit justify-items-center">
@@ -150,16 +125,6 @@ export const InvoiceTableRow: React.FC<InvoiceTableRowProps> = React.memo(({
           >
             <Printer size={14} />
           </button>
-          {['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'].includes(paymentState) && (
-            <button
-              onClick={() => onPayment(invoice)}
-              disabled={busyId === invoice.id || isReturnLocked}
-              className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-all disabled:opacity-40"
-              title={t('Add payment')}
-            >
-              <DollarSign size={14} />
-            </button>
-          )}
           <button
             onClick={() => onEdit(invoice)}
             disabled={busyId === invoice.id || isEditLocked}

@@ -3,18 +3,17 @@ import { prisma } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { computeProductStatus } from '../../common/productStatus';
-import { resolveCustomerDueDate } from '../../common/customerTerms';
 import { z } from 'zod';
 
 const PaymentPayloadSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
-  method: z.enum(['CASH', 'CARD', 'BANK_TRANSFER', 'CREDIT_OFFSET']).optional().default('CASH'),
+  method: z.enum(['CASH', 'CARD', 'BANK_TRANSFER']).optional().default('CASH'),
   comment: z.string().optional(),
 });
 
 const ReturnPayloadSchema = z.object({
   reason: z.string().optional().default('Customer return'),
-  refundMethod: z.enum(['CASH', 'CARD', 'STORE_BALANCE']).optional().default('CASH'),
+  refundMethod: z.enum(['CASH', 'CARD']).optional().default('CASH'),
   items: z.array(z.object({
     id: z.string(),
     quantity: z.number().positive(),
@@ -40,25 +39,25 @@ const generateReturnNo = () => {
   return `RET-${ts}-${rand}`;
 };
 
-const mapPaymentType = (value: string | undefined): 'CASH' | 'CARD' | 'CREDIT' | 'STORE_BALANCE' => {
-  const normalized = (value || 'CASH').toUpperCase().replace(/\s+/g, '_');
-  if (normalized === 'CASH' || normalized === 'CARD' || normalized === 'CREDIT' || normalized === 'STORE_BALANCE') {
+const mapPaymentType = (value: string | undefined): 'CASH' | 'CARD' => {
+  const normalized = (value || 'CASH').toUpperCase();
+  if (normalized === 'CASH' || normalized === 'CARD') {
     return normalized as any;
   }
   return 'CASH';
 };
 
-const mapRefundMethod = (value: string | undefined): 'CASH' | 'CARD' | 'STORE_BALANCE' => {
-  const normalized = (value || 'CASH').toUpperCase().replace(/\s+/g, '_');
-  if (normalized === 'CASH' || normalized === 'CARD' || normalized === 'STORE_BALANCE') {
+const mapRefundMethod = (value: string | undefined): 'CASH' | 'CARD' => {
+  const normalized = (value || 'CASH').toUpperCase();
+  if (normalized === 'CASH' || normalized === 'CARD') {
     return normalized as any;
   }
   return 'CASH';
 };
 
-const mapPaymentMethod = (value: string | undefined): 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'CREDIT_OFFSET' => {
-  const normalized = (value || 'CASH').toUpperCase().replace(/\s+/g, '_');
-  if (normalized === 'CASH' || normalized === 'CARD' || normalized === 'BANK_TRANSFER' || normalized === 'CREDIT_OFFSET') {
+const mapPaymentMethod = (value: string | undefined): 'CASH' | 'CARD' | 'BANK_TRANSFER' => {
+  const normalized = (value || 'CASH').toUpperCase();
+  if (normalized === 'CASH' || normalized === 'CARD' || normalized === 'BANK_TRANSFER') {
     return normalized as any;
   }
   return 'CASH';
@@ -86,7 +85,6 @@ export class InvoiceService {
           id: true,
           invoiceNo: true,
           customer: true,
-          customerId: true,
           totalAmount: true,
           taxAmount: true,
           discount: true,
@@ -108,16 +106,6 @@ export class InvoiceService {
               quantity: true,
               unitPrice: true,
               totalPrice: true,
-            },
-          },
-          receivables: {
-            select: {
-              id: true,
-              originalAmount: true,
-              paidAmount: true,
-              remainingAmount: true,
-              status: true,
-              dueDate: true,
             },
           },
           payments: {
@@ -196,7 +184,6 @@ export class InvoiceService {
         items: true,
         payments: true,
         returns: { include: { items: true } },
-        receivables: true,
       },
     });
     if (!invoice) throw new NotFoundError('Invoice not found');
@@ -214,7 +201,6 @@ export class InvoiceService {
     return prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
-        include: { receivables: true },
       });
 
       if (!invoice) throw new NotFoundError('Invoice not found');
@@ -238,8 +224,7 @@ export class InvoiceService {
       await tx.payment.create({
         data: {
           direction: 'IN',
-          counterpartyType: invoice.customerId ? 'CUSTOMER' : 'OTHER',
-          customerId: invoice.customerId || null,
+          counterpartyType: 'OTHER',
           method: mapPaymentMethod(payload.method),
           amount: appliedAmount,
           paymentDate: new Date(),
@@ -258,18 +243,9 @@ export class InvoiceService {
           paymentStatus: nextPaymentStatus,
           status: nextOutstanding <= 0 ? 'PAID' : 'PENDING',
         },
-        include: { items: true, receivables: true },
+        include: { items: true },
       });
 
-      if (invoice.customerId) {
-        const existingReceivable = invoice.receivables[0];
-        if (existingReceivable) {
-          await tx.receivable.update({
-            where: { id: existingReceivable.id },
-            data: { paidAmount: nextPaid, remainingAmount: nextOutstanding, status: nextOutstanding <= 0 ? 'PAID' : nextPaid > 0 ? 'PARTIAL' : 'OPEN' },
-          });
-        }
-      }
 
       await auditService.log({
         userId,
@@ -295,7 +271,7 @@ export class InvoiceService {
     return prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
-        include: { items: true, receivables: true },
+        include: { items: true },
       });
 
       if (!invoice) throw new NotFoundError('Invoice not found');
@@ -382,18 +358,6 @@ export class InvoiceService {
         data: { status: isFullReturn ? 'RETURNED' : 'PARTIALLY_RETURNED' }
       });
 
-      // If credit, reduce receivable
-      if (invoice.paymentType === 'CREDIT' && invoice.receivables[0]) {
-         const rec = invoice.receivables[0];
-         const newRemaining = Math.max(0, Number(rec.remainingAmount) - returnTotal);
-         await tx.receivable.update({
-           where: { id: rec.id },
-           data: { 
-             remainingAmount: newRemaining,
-             status: newRemaining <= 0 ? 'PAID' : 'PARTIAL'
-           }
-         });
-      }
 
       await auditService.log({
         userId,

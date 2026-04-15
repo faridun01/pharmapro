@@ -32,17 +32,13 @@ type AppNotification = {
   id: string;
   title: string;
   description: string;
-  type: 'EXPIRY' | 'LOW_STOCK' | 'SYSTEM' | 'PAYMENT_DUE' | 'OVERDUE_PAYMENT';
+  type: 'EXPIRY' | 'LOW_STOCK' | 'SYSTEM';
   time: string;
   read: boolean;
   invoiceNo?: string;
 };
 
 type AppNotificationMetrics = {
-  creditReceivables?: {
-    overdueItems: Array<{ invoiceId: string; invoiceNo: string; customerName: string; remainingAmount: number; daysOverdue: number }>;
-    dueTomorrowItems: Array<{ invoiceId: string; invoiceNo: string; customerName: string; remainingAmount: number }>;
-  };
   inventoryHighlights?: {
     lowStockItems: Array<{ productId: string; name: string; currentStock: number; minStock: number }>;
     expiringItems: Array<{ id: string; name: string; batchNumber: string; daysLeft: number; severityRank: number; severityLabel: string }>;
@@ -96,7 +92,6 @@ const SettingsView = lazyNamedImport(() => import('./SettingsView'), 'SettingsVi
 const ReturnView = lazyNamedImport(() => import('./ReturnView'), 'ReturnView');
 const WriteOffView = lazyNamedImport(() => import('./WriteOffView'), 'WriteOffView');
 const ShiftView = lazyNamedImport(() => import('./ShiftView'), 'ShiftView');
-const CustomersView = lazyNamedImport(() => import('./CustomersView'), 'CustomersView');
 const PurchasesView = lazyNamedImport(() => import('./PurchasesView'), 'PurchasesView');
 
 const AppLoader: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Загрузка...', compact = false }) => (
@@ -166,7 +161,6 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
     { id: 'pos' as const, label: t('POS Terminal'), icon: ShoppingCart },
     { id: 'inventory' as const, label: 'Товары и партии', icon: Package },
     { id: 'invoices' as const, label: t('Sales History'), icon: Pill },
-    { id: 'debtors' as const, label: 'Должники', icon: User },
     { id: 'shifts' as const, label: t('Shifts'), icon: Clock },
     { id: 'purchases' as const, label: 'Приёмка товара', icon: CheckCircle2 },
     { id: 'suppliers' as const, label: t('Suppliers'), icon: Truck },
@@ -181,9 +175,8 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
   const notificationsCount = useMemo(() => {
     let count = 0;
     if (latestClosedShiftNotice) count++;
-    if (notificationMetrics?.creditReceivables?.overdueItems) count += notificationMetrics.creditReceivables.overdueItems.length;
     return count;
-  }, [latestClosedShiftNotice, notificationMetrics]);
+  }, [latestClosedShiftNotice]);
 
   // Собираем уведомления из notificationMetrics
   const notifications = React.useMemo(() => {
@@ -212,30 +205,6 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
         });
       }
     }
-    if (notificationMetrics?.creditReceivables?.overdueItems) {
-      for (const item of notificationMetrics.creditReceivables.overdueItems) {
-        arr.push({
-          id: `overdue-${item.invoiceId}`,
-          title: 'Просроченная оплата',
-          description: `Покупатель: ${item.customerName}, сумма: ${item.remainingAmount}, просрочка: ${item.daysOverdue} дн.`,
-          type: 'OVERDUE_PAYMENT',
-          time: '',
-          read: false,
-        });
-      }
-    }
-    if (notificationMetrics?.creditReceivables?.dueTomorrowItems) {
-      for (const item of notificationMetrics.creditReceivables.dueTomorrowItems) {
-        arr.push({
-          id: `duetomorrow-${item.invoiceId}`,
-          title: 'Оплата завтра',
-          description: `Покупатель: ${item.customerName}, сумма: ${item.remainingAmount}`,
-          type: 'PAYMENT_DUE',
-          time: '',
-          read: false,
-        });
-      }
-    }
     if (latestClosedShiftNotice) {
       arr.push({
         id: `shiftclose-${latestClosedShiftNotice.shiftId}`,
@@ -251,12 +220,10 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
 
   const renderView = () => {
     switch (currentView) {
-      case 'dashboard': return <DashboardView onOpenInvoicePayment={() => setCurrentView('debtors')} />;
+      case 'dashboard': return <DashboardView />;
       case 'pos': return <POSView />;
       case 'inventory': return <InventoryView />;
-      case 'invoices': return <InvoicesView viewMode="history" />;
-      case 'debtors': return <InvoicesView viewMode="debtors" />;
-      // Покупатели убраны
+      case 'invoices': return <InvoicesView />;
       case 'suppliers': return <SuppliersPage />;
       case 'reports': return <ReportsView />;
       case 'returns': return <ReturnView />;
@@ -265,7 +232,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       case 'purchases': return <PurchasesView />;
       case 'settings': return <SettingsView />;
       case 'notifications': return <NotificationsView notifications={notifications} onNotificationClick={() => {}} />;
-      default: return <DashboardView onOpenInvoicePayment={() => {}} />;
+      default: return <DashboardView />;
     }
   };
 

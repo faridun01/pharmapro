@@ -6,17 +6,17 @@ import { salesService } from './sales.service';
 
 export const salesRouter = Router();
 
-const mapPaymentType = (value: string | undefined): 'CASH' | 'CARD' | 'CREDIT' | 'STORE_BALANCE' => {
-  const normalized = (value || 'CASH').toUpperCase().replace(/\s+/g, '_');
-  if (normalized === 'CASH' || normalized === 'CARD' || normalized === 'CREDIT' || normalized === 'STORE_BALANCE') {
+const mapPaymentType = (value: string | undefined): 'CASH' | 'CARD' => {
+  const normalized = (value || 'CASH').toUpperCase();
+  if (normalized === 'CASH' || normalized === 'CARD') {
     return normalized;
   }
-  throw new ValidationError('paymentType must be CASH, CARD, CREDIT, or STORE_BALANCE');
+  throw new ValidationError('paymentType must be CASH or CARD');
 };
 
 salesRouter.post('/complete', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
-  const { items, discountAmount, taxAmount, total, paymentType, customer, customerPhone, customerId, paidAmount } = req.body ?? {};
+  const { items, discountAmount, taxAmount, total, paymentType, paidAmount } = req.body ?? {};
 
   if (!Array.isArray(items) || items.length === 0) {
     throw new ValidationError('items array is required');
@@ -35,9 +35,6 @@ salesRouter.post('/complete', authenticate, asyncHandler(async (req, res) => {
     taxAmount: Number(taxAmount ?? 0),
     total: Number(total ?? 0),
     paymentType: mapPaymentType(paymentType),
-    customer: typeof customer === 'string' ? customer : undefined,
-    customerPhone: typeof customerPhone === 'string' ? customerPhone : undefined,
-    customerId: typeof customerId === 'string' ? customerId : undefined,
     paidAmount: paidAmount == null ? undefined : Number(paidAmount),
     userId: authedReq.user.id,
   });

@@ -648,40 +648,46 @@ export class InventoryService {
     const product = await tx.product.findUnique({ where: { id: item.productId } });
     if (!product) throw new NotFoundError(`Product ${item.productId} not found`);
 
+    // Normalize price: might be costBasis (from manual input) or purchasePrice (from DB record)
+    const rawPrice = item.costBasis ?? item.purchasePrice ?? 0;
+    const price = Number.isFinite(Number(rawPrice)) ? Number(rawPrice) : 0;
+    const qty = Number(item.quantity) || 0;
+    const batchNo = String(item.batchNumber || 'MISSING');
+
     const purchaseItem = await tx.purchaseInvoiceItem.findFirst({
-        where: { purchaseInvoiceId: invoice.id, productId: product.id, batchNumber: item.batchNumber }
+        where: { purchaseInvoiceId: invoice.id, productId: product.id, batchNumber: batchNo }
     }) || await tx.purchaseInvoiceItem.create({
       data: {
         purchaseInvoiceId: invoice.id,
         productId: product.id,
-        batchNumber: item.batchNumber,
-        manufacturedDate: item.manufacturedDate,
-        expiryDate: item.expiryDate,
-        quantity: item.quantity,
-        purchasePrice: item.costBasis,
-        wholesalePrice: item.wholesalePrice ?? null,
-        lineTotal: Number(item.costBasis) * Number(item.quantity),
+        batchNumber: batchNo,
+        manufacturedDate: item.manufacturedDate || new Date(),
+        expiryDate: item.expiryDate || new Date(),
+        quantity: qty,
+        purchasePrice: price,
+        wholesalePrice: Number(item.wholesalePrice) || null,
+        lineTotal: price * qty,
       },
     });
 
     const batch = await tx.batch.create({
       data: {
-        batchNumber: item.batchNumber,
-        quantity: item.quantity,
-        initialQty: item.quantity,
-        currentQty: item.quantity,
+        batchNumber: batchNo,
+        quantity: qty,
+        initialQty: qty,
+        currentQty: qty,
         reservedQty: 0,
-        availableQty: item.quantity,
-        unit: item.unit || 'units',
-        costBasis: item.costBasis,
-        purchasePrice: item.costBasis,
-        wholesalePrice: item.wholesalePrice ?? null,
+        availableQty: qty,
+        unit: String(item.unit || 'units'),
+        costBasis: price,
+        purchasePrice: price,
+        wholesalePrice: Number(item.wholesalePrice) || null,
         retailPrice: null,
         supplierId,
         warehouseId,
-        manufacturedDate: item.manufacturedDate,
-        receivedAt: invoice.invoiceDate,
-        expiryDate: item.expiryDate,
+        manufacturedDate: item.manufacturedDate || new Date(),
+        receivedAt: invoice.invoiceDate || new Date(),
+        expiryDate: item.expiryDate || new Date(),
         status: computeBatchStatus(item.expiryDate),
         productId: product.id,
         purchaseItemId: purchaseItem.id,
@@ -692,7 +698,7 @@ export class InventoryService {
       data: {
         batchId: batch.id,
         type: 'RESTOCK',
-        quantity: item.quantity,
+        quantity: qty,
         description: `Purchase invoice ${invoice.invoiceNumber}`,
         userId,
       },
@@ -709,7 +715,7 @@ export class InventoryService {
       where: { id: product.id },
       data: {
         totalStock: newTotalStock,
-        costPrice: item.costBasis,
+        costPrice: price,
         status: mapProductStatus(newTotalStock, product.minStock),
       },
     });
@@ -732,6 +738,21 @@ export class InventoryService {
         where: { id: invoiceId },
         data: { status: 'POSTED' },
       });
+
+      // Create Payable entry for supplier debt tracking
+      if (invoice.totalAmount > 0) {
+        await tx.payable.create({
+          data: {
+            supplierId: invoice.supplierId,
+            purchaseInvoiceId: invoice.id,
+            originalAmount: invoice.totalAmount,
+            paidAmount: 0,
+            remainingAmount: invoice.totalAmount,
+            status: 'OPEN',
+            dueDate: null, // Could be calculated based on supplier terms
+          },
+        });
+      }
 
       await auditService.log({
         userId,

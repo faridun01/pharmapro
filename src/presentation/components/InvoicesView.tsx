@@ -18,12 +18,10 @@ import {
 } from 'lucide-react';
 
 // Decomposed components
-import { InvoicePaymentModal } from './invoices/InvoicePaymentModal';
 import { InvoiceDetailsModal } from './invoices/InvoiceDetailsModal';
 import { InvoiceEditModal } from './invoices/InvoiceEditModal';
 import { InvoiceReturnModal } from './invoices/InvoiceReturnModal';
 import { InvoiceDeleteModal } from './invoices/InvoiceDeleteModal';
-import { InvoiceDebtorDetailsModal } from './invoices/InvoiceDebtorDetailsModal';
 import { InvoiceTableRow } from './invoices/InvoiceTableRow';
 import { 
   getInvoiceOutstandingAmount, 
@@ -33,7 +31,6 @@ import {
 } from './invoices/utils';
 import { 
   DateFilterMode, 
-  DebtorGroup, 
   EditableInvoiceItem, 
   ReturnInvoiceItem 
 } from './invoices/types';
@@ -50,23 +47,16 @@ const startOfYearValue = (date: Date) => formatDateInputValue(new Date(date.getF
 const toLocalDayKey = (value: string | Date) => formatDateInputValue(new Date(value));
 
 export const InvoicesView: React.FC<{
-  viewMode?: 'history' | 'debtors';
   initialSearchTerm?: string;
-  initialPaymentInvoiceId?: string;
   initialDetailsInvoiceId?: string;
-  onInitialPaymentInvoiceHandled?: () => void;
   onInitialDetailsInvoiceHandled?: () => void;
 }> = ({ 
-  viewMode = 'history', 
   initialSearchTerm = '', 
-  initialPaymentInvoiceId = '', 
   initialDetailsInvoiceId = '', 
-  onInitialPaymentInvoiceHandled, 
   onInitialDetailsInvoiceHandled 
 }) => {
   const { t } = useTranslation();
   const { invoices, products, isLoading, refreshInvoices, refreshProducts } = usePharmacy();
-  const isDebtorsView = viewMode === 'debtors';
   const currentDate = new Date();
   const todayIso = formatDateInputValue(currentDate);
   const monthStartIso = startOfMonthValue(currentDate);
@@ -75,7 +65,7 @@ export const InvoicesView: React.FC<{
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'id'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>(isDebtorsView ? 'all' : 'today');
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('today');
   const [dateFrom, setDateFrom] = useState(todayIso);
   const [dateTo, setDateTo] = useState(todayIso);
   const currencyCode = useCurrencyCode();
@@ -85,8 +75,6 @@ export const InvoicesView: React.FC<{
   
   // Modals state
   const [detailsInvoice, setDetailsInvoice] = useState<any | null>(null);
-  const [detailsDebtor, setDetailsDebtor] = useState<DebtorGroup | null>(null);
-  const [paymentModalInvoice, setPaymentModalInvoice] = useState<any | null>(null);
   const [editModalInvoice, setEditModalInvoice] = useState<any | null>(null);
   const [returnModalInvoice, setReturnModalInvoice] = useState<any | null>(null);
   const [deleteModalInvoice, setDeleteModalInvoice] = useState<any | null>(null);
@@ -134,7 +122,6 @@ export const InvoicesView: React.FC<{
     return invoiceDay >= from && invoiceDay <= to;
   }, [dateFilterMode, dateFrom, dateTo, monthStartIso, todayIso, yearStartIso]);
 
-  const isDebtorInvoice = useCallback((invoice: any) => getInvoiceOutstandingAmount(invoice) > 0.009, []);
 
   const getProductDisplayLabel = useCallback((productId?: string, fallbackName?: string) => {
     const baseName = String(fallbackName || '-').trim() || '-';
@@ -149,11 +136,9 @@ export const InvoicesView: React.FC<{
   const filteredInvoices = useMemo(() => {
     const filtered = invoices.filter((inv) => 
       matchesDateFilter(inv.createdAt)
-      && (isDebtorsView ? isDebtorInvoice(inv) : (!isDebtorInvoice(inv) && String(inv.paymentStatus || '').toUpperCase() === 'PAID'))
       && (
         (inv.invoiceNo || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        inv.id.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        (isDebtorsView && (inv.customer || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()))
+        inv.id.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
       )
     );
 
@@ -164,52 +149,14 @@ export const InvoicesView: React.FC<{
       else if (sortBy === 'id') compareValue = (a.id || '').localeCompare(b.id || '');
       return sortOrder === 'asc' ? compareValue : -compareValue;
     });
-  }, [invoices, debouncedSearchTerm, sortBy, sortOrder, matchesDateFilter, isDebtorsView, isDebtorInvoice]);
+  }, [invoices, debouncedSearchTerm, sortBy, sortOrder, matchesDateFilter]);
 
-  const debtorGroups = useMemo<DebtorGroup[]>(() => {
-    if (!isDebtorsView) return [];
-    const groups = new Map<string, DebtorGroup>();
-    for (const invoice of filteredInvoices) {
-      const customer = String(invoice.customer || 'Без имени').trim() || 'Без имени';
-      const key = customer.toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ');
-      const paidAmount = Number(invoice.paidAmountTotal ?? 0);
-      const outstandingAmount = getInvoiceOutstandingAmount(invoice);
-      const totalAmount = Number(invoice.totalAmount || 0);
-      const totalUnits = (invoice.items || []).reduce((sum: number, item: any) => sum + Math.max(0, Math.floor(Number(item?.quantity || 0))), 0);
-      const createdAt = new Date(invoice.createdAt);
 
-      const existing = groups.get(key);
-      if (existing) {
-        existing.invoices.push(invoice);
-        existing.invoiceCount += 1;
-        existing.totalAmount += totalAmount;
-        existing.totalPaid += paidAmount;
-        existing.totalOutstanding += outstandingAmount;
-        existing.totalUnits += totalUnits;
-        if (invoice.customerId && !existing.customerIds.includes(invoice.customerId)) existing.customerIds.push(invoice.customerId);
-        if (!existing.latestActivityAt || createdAt > existing.latestActivityAt) existing.latestActivityAt = createdAt;
-      } else {
-        groups.set(key, {
-          key, customer, customerIds: invoice.customerId ? [invoice.customerId] : [],
-          invoices: [invoice], invoiceCount: 1, totalAmount, totalPaid: paidAmount,
-          totalOutstanding: outstandingAmount, totalUnits, latestActivityAt: createdAt,
-        });
-      }
-    }
-    return [...groups.values()].sort((left, right) => {
-      if (sortBy === 'amount') return sortOrder === 'asc' ? left.totalOutstanding - right.totalOutstanding : right.totalOutstanding - left.totalOutstanding;
-      if (sortBy === 'id') return sortOrder === 'asc' ? left.customer.localeCompare(right.customer, 'ru-RU') : right.customer.localeCompare(left.customer, 'ru-RU');
-      const leftTime = left.latestActivityAt?.getTime() || 0;
-      const rightTime = right.latestActivityAt?.getTime() || 0;
-      return sortOrder === 'asc' ? leftTime - rightTime : rightTime - leftTime;
-    });
-  }, [filteredInvoices, isDebtorsView, sortBy, sortOrder]);
-
-  const totalItems = isDebtorsView ? debtorGroups.length : filteredInvoices.length;
+  const totalItems = filteredInvoices.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * itemsPerPage;
-  const visibleRowsCount = isDebtorsView ? debtorGroups.slice(pageStartIndex, pageStartIndex + itemsPerPage).length : filteredInvoices.slice(pageStartIndex, pageStartIndex + itemsPerPage).length;
+  const visibleRowsCount = filteredInvoices.slice(pageStartIndex, pageStartIndex + itemsPerPage).length;
   const fillerRowsCount = !isInitialInvoicesLoading && totalItems <= itemsPerPage ? Math.max(0, itemsPerPage - visibleRowsCount) : 0;
 
   const moneyLabel = (label: string) => `${label} (${currencyCode})`;
@@ -224,19 +171,40 @@ export const InvoicesView: React.FC<{
         <head>
           <title>Накладная ${displayInvoiceNo}</title>
           <style>
-            body { font-family: Segoe UI, sans-serif; padding: 20px; background: #f3f4f6; }
-            .sheet { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; font-size: 13px; }
+            body { font-family: Segoe UI, sans-serif; padding: 40px 20px; background: #6b7280; display: flex; justify-content: center; }
+            .sheet { width: 100%; max-width: 800px; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border-bottom: 1px solid #eee; padding: 12px 8px; text-align: left; font-size: 14px; }
+            th { color: #6b7280; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
             .right { text-align: right; }
-            .total { margin-top: 20px; font-weight: bold; text-align: right; font-size: 16px; }
-            @media print { .toolbar { display: none; } .sheet { box-shadow: none; border-radius: 0; padding: 0; } }
+            .total { margin-top: 30px; font-weight: bold; text-align: right; font-size: 20px; color: #111827; }
+            @media print { 
+              .print-btn { display: none; } 
+              body { background: none; padding: 0; display: block; }
+              .sheet { box-shadow: none; border-radius: 0; max-width: none; padding: 0; } 
+            }
+            .print-btn {
+              position: fixed;
+              top: 20px;
+              right: 20px;
+              padding: 10px 24px;
+              background: #5A5A40;
+              color: white;
+              border: none;
+              border-radius: 12px;
+              cursor: pointer;
+              font-family: sans-serif;
+              font-weight: 700;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+              z-index: 100;
+            }
           </style>
         </head>
         <body>
+          <button class="print-btn" onclick="window.print()">ПЕЧАТАТЬ</button>
           <div class="sheet">
-            <h1>Накладная ${displayInvoiceNo}</h1>
-            <p>Дата: ${createdAt.toLocaleString('ru-RU')} | Статус: ${invoice.status}</p>
+            <h1 style="margin:0; font-size:24px; color:#111827;">Накладная ${displayInvoiceNo}</h1>
+            <p style="color:#6b7280; font-size:14px; margin-top:8px;">Дата: ${createdAt.toLocaleString('ru-RU')} | Статус: ${invoice.status}</p>
             <table>
               <thead><tr><th>№</th><th>Товар</th><th class="right">Кол-во</th><th class="right">Цена</th><th class="right">Сумма</th></tr></thead>
               <tbody>
@@ -259,29 +227,21 @@ export const InvoicesView: React.FC<{
     if (win) {
       win.document.write(receiptHtml);
       win.document.close();
-      win.print();
     }
   };
 
   const exportCsv = () => {
-    const header = isDebtorsView 
-      ? ['Накладная', 'Покупатель', 'Дата', 'Тип оплаты', 'Статус', 'Долг']
-      : ['Накладная', 'Дата', 'Тип оплаты', 'Статус', 'Сумма'];
-    
-    const rows = filteredInvoices.map(inv => isDebtorsView 
-      ? [inv.invoiceNo || inv.id, inv.customer || '', new Date(inv.createdAt).toLocaleString(), inv.paymentType, inv.status, getInvoiceOutstandingAmount(inv).toFixed(2)]
-      : [inv.invoiceNo || inv.id, new Date(inv.createdAt).toLocaleString(), inv.paymentType, inv.status, inv.totalAmount.toFixed(2)]
-    );
-
-    downloadExcelFriendlyCsv(`${isDebtorsView ? 'debtors' : 'invoices'}.csv`, [header, ...rows]);
+    const header = ['Накладная', 'Дата', 'Тип оплаты', 'Статус', 'Сумма'];
+    const rows = filteredInvoices.map(inv => [inv.invoiceNo || inv.id, new Date(inv.createdAt).toLocaleString(), inv.paymentType, inv.status, inv.totalAmount.toFixed(2)]);
+    downloadExcelFriendlyCsv(`invoices.csv`, [header, ...rows]);
   };
 
   return (
     <div className="flex-1 space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-[#5A5A40]">{isDebtorsView ? 'Сверка с должниками' : 'История продаж'}</h2>
-          <p className="text-sm text-[#5A5A40]/60 mt-1">{isDebtorsView ? 'Управление дебиторской задолженностью' : 'Полный список оформленных чеков и накладных'}</p>
+          <h2 className="text-2xl font-bold tracking-tight text-[#5A5A40]">История продаж</h2>
+          <p className="text-sm text-[#5A5A40]/60 mt-1">Полный список оформленных чеков и накладных</p>
         </div>
         <button onClick={exportCsv} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-white px-5 py-2 text-sm font-bold text-[#5A5A40] shadow-sm border border-[#5A5A40]/10 hover:bg-[#f5f5f0] transition-all">
           <Download size={18} /> Экспорт CSV
@@ -289,9 +249,7 @@ export const InvoicesView: React.FC<{
       </div>
 
       <div className="flex flex-col gap-4 bg-white/50 backdrop-blur-md rounded-3xl p-6 border border-[#5A5A40]/5 shadow-sm">
-        {/* Quick date filter presets for sales history */}
-        {!isDebtorsView && (
-          <div className="flex flex-wrap items-center gap-2 mb-2">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
             <button
               className={`px-3 py-2 rounded-xl text-sm font-medium border transition-all ${dateFilterMode === 'today' ? 'bg-[#5A5A40] text-white' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10'}`}
               onClick={() => {
@@ -346,7 +304,6 @@ export const InvoicesView: React.FC<{
               </span>
             )}
           </div>
-        )}
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative group w-full xl:max-w-85">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
@@ -379,58 +336,19 @@ export const InvoicesView: React.FC<{
               <thead>
                 <tr className="bg-[#f5f5f0]/95 text-[9px] uppercase tracking-[0.2em] text-[#5A5A40]/45 font-bold">
                   <th className="px-4 py-3.5 text-center">№</th>
-                  <th className="px-6 py-3.5">{isDebtorsView ? 'Клиент' : 'Накладная'}</th>
+                  <th className="px-6 py-3.5">Накладная</th>
                   <th className="px-6 py-3.5">Дата</th>
                   <th className="px-6 py-3.5">Статус</th>
                   <th className="px-4 py-3.5 text-right">Кол-во</th>
                   <th className="px-4 py-3.5 text-right">Сумма</th>
-                  <th className="px-4 py-3.5 text-right">Оплачено</th>
-                  <th className="px-4 py-3.5 text-right">Остаток</th>
                   <th className="px-6 py-3.5 text-right">Действия</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#5A5A40]/5">
                 {isInitialInvoicesLoading ? (
-                  <tr><td colSpan={9} className="p-8 text-center text-sm text-[#5A5A40]/40">Загрузка...</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center text-sm text-[#5A5A40]/40">Загрузка...</td></tr>
                 ) : (
-                  isDebtorsView
-                    ? debtorGroups
-                        .slice(pageStartIndex, pageStartIndex + itemsPerPage)
-                        .map((group, groupIdx) => (
-                          <tr key={group.key} className="hover:bg-[#f5f5f0]/30 transition-colors group align-top cursor-pointer" onClick={() => setDetailsDebtor(group)}>
-                            <td className="px-4 py-3.5 text-center">
-                              <span className="inline-flex min-w-7 h-7 items-center justify-center rounded-lg bg-[#f5f5f0] text-[#5A5A40] text-[12px] font-bold">{pageStartIndex + groupIdx + 1}</span>
-                            </td>
-                            <td className="px-6 py-3.5">
-                              <span className="font-bold text-[#5A5A40]">{group.customer}</span>
-                            </td>
-                            <td className="px-6 py-3.5">
-                              <span className="text-[12px] text-[#5A5A40]/60">{group.latestActivityAt ? new Date(group.latestActivityAt).toLocaleDateString() : ''}</span>
-                            </td>
-                            <td className="px-6 py-3.5">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
-                                ● Долг
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-right">
-                              <span className="text-[12px] font-semibold text-[#5A5A40]">{group.totalUnits} ед.</span>
-                              <span className="text-[9px] text-[#5A5A40]/40 ml-2">{group.invoiceCount} накл.</span>
-                            </td>
-                            <td className="px-4 py-3.5 text-right">
-                              <span className="text-[13px] font-bold text-[#5A5A40]">{group.totalAmount.toFixed(2)}</span>
-                            </td>
-                            <td className="px-4 py-3.5 text-right">
-                              <span className="text-[13px] font-semibold text-emerald-700">{group.totalPaid.toFixed(2)}</span>
-                            </td>
-                            <td className="px-4 py-3.5 text-right">
-                              <span className="text-[13px] font-semibold text-rose-700">{group.totalOutstanding.toFixed(2)}</span>
-                            </td>
-                            <td className="px-6 py-3.5 text-right">
-                              <span className="text-xs text-[#5A5A40]/30">Открыть детали</span>
-                            </td>
-                          </tr>
-                        ))
-                    : filteredInvoices
+                  filteredInvoices
                         .slice(pageStartIndex, pageStartIndex + itemsPerPage)
                         .map((item, idx) => (
                           <InvoiceTableRow
@@ -439,10 +357,8 @@ export const InvoicesView: React.FC<{
                             index={pageStartIndex + idx + 1}
                             currencyCode={currencyCode}
                             busyId={busyId}
-                            isDebtorsView={isDebtorsView}
                             onDetails={setDetailsInvoice}
                             onPrint={printInvoice}
-                            onPayment={setPaymentModalInvoice}
                             onEdit={setEditModalInvoice}
                             onReturn={setReturnModalInvoice}
                             onDelete={setDeleteModalInvoice}
@@ -467,23 +383,14 @@ export const InvoicesView: React.FC<{
       </div>
 
       {/* Modals */}
-      <InvoicePaymentModal 
-        isOpen={!!paymentModalInvoice} 
-        onClose={() => {
-          setPaymentModalInvoice(null);
-          refreshInvoices();
-        }}
-        invoice={paymentModalInvoice} currencyCode={currencyCode} 
-        busyId={busyId} setBusyId={setBusyId} getInvoiceOutstandingAmount={getInvoiceOutstandingAmount}
-      />
       <InvoiceDetailsModal 
         isOpen={!!detailsInvoice} onClose={() => setDetailsInvoice(null)} 
-        invoice={detailsInvoice} currencyCode={currencyCode} isDebtorsView={isDebtorsView} 
+        invoice={detailsInvoice} currencyCode={currencyCode} 
       />
       <InvoiceEditModal 
         isOpen={!!editModalInvoice} onClose={() => setEditModalInvoice(null)} 
         invoice={editModalInvoice} currencyCode={currencyCode} 
-        busyId={busyId} setBusyId={setBusyId} isDebtorsView={isDebtorsView}
+        busyId={busyId} setBusyId={setBusyId}
       />
       <InvoiceReturnModal 
         isOpen={!!returnModalInvoice} onClose={() => setReturnModalInvoice(null)} 
@@ -492,11 +399,6 @@ export const InvoicesView: React.FC<{
       <InvoiceDeleteModal 
         isOpen={!!deleteModalInvoice} onClose={() => setDeleteModalInvoice(null)} 
         invoice={deleteModalInvoice} busyId={busyId} setBusyId={setBusyId}
-      />
-      <InvoiceDebtorDetailsModal 
-        isOpen={!!detailsDebtor} onClose={() => setDetailsDebtor(null)} 
-        debtor={detailsDebtor} currencyCode={currencyCode} 
-        onViewInvoice={setDetailsInvoice} onPayInvoice={setPaymentModalInvoice}
       />
     </div>
   );

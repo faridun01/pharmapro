@@ -173,15 +173,7 @@ export class ReturnsService {
         const refundAmount = Number(ret.totalAmount);
         const refundMethod = (ret.refundMethod || 'CASH') as string;
 
-        // Resolve customerId from the linked sale invoice
-        let customerId: string | null = null;
-        if (ret.invoiceId) {
-          const invoice = await tx.invoice.findUnique({
-            where: { id: ret.invoiceId },
-            select: { customerId: true },
-          });
-          customerId = invoice?.customerId ?? null;
-        }
+        // No customerId needed for retail refunds
 
         // Map refundMethod to PaymentMethod
         const methodMap: Record<string, 'CASH' | 'CARD' | 'BANK_TRANSFER'> = {
@@ -195,8 +187,7 @@ export class ReturnsService {
         await tx.payment.create({
           data: {
             direction: 'OUT',
-            counterpartyType: 'CUSTOMER',
-            ...(customerId ? { customerId } : {}),
+            counterpartyType: 'OTHER',
             ...(ret.invoiceId ? { invoiceId: ret.invoiceId } : {}),
             method: paymentMethod,
             amount: refundAmount,
@@ -207,28 +198,6 @@ export class ReturnsService {
           },
         });
 
-        // If the original invoice had a Receivable (credit sale), also reduce it
-        if (ret.invoiceId && customerId) {
-          const receivable = await tx.receivable.findFirst({
-            where: {
-              invoiceId: ret.invoiceId,
-              customerId,
-              status: { not: 'PAID' },
-            },
-          });
-          if (receivable) {
-            const newRemaining = Math.max(0, Number(receivable.remainingAmount || 0) - refundAmount);
-            const newPaid = Number(receivable.paidAmount || 0) + refundAmount;
-            await tx.receivable.update({
-              where: { id: receivable.id },
-              data: {
-                paidAmount: newPaid,
-                remainingAmount: newRemaining,
-                status: newRemaining <= 0 ? 'PAID' : newPaid > 0 ? 'PARTIAL' : 'OPEN',
-              },
-            });
-          }
-        }
       }
 
       // ── Step 3: Mark return as COMPLETED ────────────────────────────────────

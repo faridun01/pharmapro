@@ -11,7 +11,7 @@ export const exportReportToXlsx = async (report: FinanceReport, viewMode: Report
       ['Детализированный отчет по продажам'],
       [`Период: ${new Date(report.currentMonthSales.from).toLocaleDateString('ru-RU')} - ${new Date(report.currentMonthSales.to).toLocaleDateString('ru-RU')}`],
       [],
-      ['Время', 'Накладная', 'Покупатель', 'Товар', 'SKU', 'Кол-во', 'Цена', 'Сумма', 'Прибыль']
+      ['Время', 'Накладная', 'Товар', 'SKU', 'Кол-во', 'Цена', 'Сумма', 'Прибыль']
     ];
 
     for (const sale of report.currentMonthSales.saleDetails) {
@@ -19,7 +19,6 @@ export const exportReportToXlsx = async (report: FinanceReport, viewMode: Report
         detailRows.push([
           new Date(sale.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
           sale.invoiceNo,
-          sale.customer,
           item.productName,
           item.sku,
           toNumber(item.quantity),
@@ -37,12 +36,11 @@ export const exportReportToXlsx = async (report: FinanceReport, viewMode: Report
     const summaryData = [
       ['Показатель', 'Значение'],
       ['Выручка (гросс)', report.kpi.revenueGross],
-      ['Возвраты', report.kpi.customerReturnsAmount],
+      ['Возвраты', report.kpi.retailReturnsAmount],
       ['Чистая выручка', report.kpi.netRevenue],
       ['Себестоимость', report.kpi.cogs],
       ['Валовая прибыль', report.kpi.grossProfit],
       ['Маржа %', report.kpi.grossMarginPct],
-      ['Дебиторская задолженность', report.debts.receivableTotal],
       ['Кредиторская задолженность', report.debts.payableTotal],
     ];
     const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);

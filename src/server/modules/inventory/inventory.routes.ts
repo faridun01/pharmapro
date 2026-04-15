@@ -63,6 +63,7 @@ inventoryRouter.post('/purchase-invoices', authenticate, requireRole(['PHARMACIS
     invoiceDate: new Date(body.invoiceDate),
     discountAmount: parseNonNegative(body.discountAmount ?? 0, 'discountAmount'),
     taxAmount: parseNonNegative(body.taxAmount ?? 0, 'taxAmount'),
+    status: body.status === 'POSTED' ? 'POSTED' : 'DRAFT',
     comment: typeof body.comment === 'string' ? body.comment : undefined,
     items: Array.isArray(body.items)
       ? body.items.map((item: any, idx: number) => ({

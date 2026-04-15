@@ -485,20 +485,25 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
   const [isCloseModal, setIsCloseModal] = useState(false);
   const [isCashMovModal, setIsCashMovModal] = useState(false);
   const [reportShiftId, setReportShiftId] = useState<string | null>(null);
+  const [totalShifts, setTotalShifts] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [shiftsRes, activeRes] = await Promise.all([
-        fetch('/api/shifts', { headers: authHeaders() }),
+        fetch(`/api/shifts?page=${currentPage}&limit=${itemsPerPage}`, { headers: authHeaders() }),
         fetch('/api/shifts/active', { headers: authHeaders() }),
       ]);
-      if (shiftsRes.ok) setShifts(await shiftsRes.json());
+      if (shiftsRes.ok) {
+        const data = await shiftsRes.json();
+        setShifts(data.items || []);
+        setTotalShifts(data.pagination?.total || 0);
+      }
       if (activeRes.ok) setActiveShift(await activeRes.json());
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -515,12 +520,9 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
     onInitialReportHandled?.();
   }, [initialReportShiftId, onInitialReportHandled]);
 
-  const totalPages = Math.max(1, Math.ceil(shifts.length / itemsPerPage));
+  const totalPages = Math.max(1, Math.ceil(totalShifts / itemsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
-  const paginatedShifts = useMemo(() => {
-    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
-    return shifts.slice(startIndex, startIndex + itemsPerPage);
-  }, [shifts, safeCurrentPage]);
+  const paginatedShifts = shifts; // Server-side paginated
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -684,10 +686,10 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
               <p className="text-center text-[#5A5A40]/40 py-8">{t('No shifts recorded yet')}</p>
             )}
           </div>
-          {shifts.length > itemsPerPage && (
+          {totalShifts > itemsPerPage && (
             <div className="mt-4 flex min-h-18 flex-col gap-3 rounded-2xl border border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-[#5A5A40]/70">
-                Показано {(safeCurrentPage - 1) * itemsPerPage + 1}-{Math.min(safeCurrentPage * itemsPerPage, shifts.length)} из {shifts.length}
+                Показано {(safeCurrentPage - 1) * itemsPerPage + 1}-{Math.min(safeCurrentPage * itemsPerPage, totalShifts)} из {totalShifts}
               </div>
               <div className="flex items-center gap-2">
                 <button

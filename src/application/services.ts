@@ -26,10 +26,7 @@ export interface TransactionDTO {
   discountAmount: number;
   taxAmount: number;
   total: number;
-  paymentType: 'CASH' | 'CARD' | 'CREDIT';
-  customer?: string;
-  customerPhone?: string;
-  customerId?: string;
+  paymentType: 'CASH' | 'CARD';
   paidAmount?: number;
   userId: string;
   date: Date;
@@ -136,10 +133,10 @@ export class POSService {
       let remainingToDeduct = item.quantity;
       product.totalStock -= item.quantity;
 
-      // FEFO: Sort batches by expiry date (earliest first, but NOT expired)
+      // FIFO: Sort batches by received date (first in, first out)
       const validBatches = product.batches.filter(b => b.expiryDate > new Date() && b.quantity > 0);
       const sortedBatches = [...validBatches].sort((a, b) => 
-        a.expiryDate.getTime() - b.expiryDate.getTime()
+        new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
       );
 
       if (sortedBatches.reduce((acc, b) => acc + b.quantity, 0) < item.quantity) {
@@ -157,7 +154,7 @@ export class POSService {
             type: 'DISPATCH',
             quantity: deduct,
             date: new Date(),
-            description: `POS Sale - Invoice ${transaction.customer || 'Walk-in'}`,
+            description: `POS Sale`,
             userId: transaction.userId
           });
           
@@ -183,7 +180,6 @@ export class POSService {
     const invoice: Invoice = {
       id: `inv-${Date.now()}`,
       invoiceNo: `INV-${Date.now().toString().slice(-6)}`,
-      customer: transaction.customer,
       totalAmount: transaction.total,
       taxAmount: transaction.taxAmount,
       discount: transaction.discountAmount,

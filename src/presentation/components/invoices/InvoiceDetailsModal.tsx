@@ -10,7 +10,6 @@ interface InvoiceDetailsModalProps {
   onClose: () => void;
   invoice: any | null;
   currencyCode: string;
-  isDebtorsView?: boolean;
 }
 
 export const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
@@ -18,7 +17,6 @@ export const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
   onClose,
   invoice,
   currencyCode,
-  isDebtorsView = false,
 }) => {
   const { t } = useTranslation();
   const { products } = usePharmacy();
@@ -55,11 +53,10 @@ export const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
         <div className="p-6 space-y-4 max-h-[75vh] overflow-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div>Накладная: <span className="font-semibold">{invoice.invoiceNo || invoice.id}</span></div>
-            {isDebtorsView && <div>Покупатель: <span className="font-semibold">{invoice.customer || '-'}</span></div>}
             <div>Дата: <span className="font-semibold">{new Date(invoice.createdAt).toLocaleString('ru-RU')}</span></div>
-            <div>{isDebtorsView ? 'Тип оплаты' : 'Оплата'}: <span className="font-semibold">{invoice.paymentType}</span></div>
+            <div>Оплата: <span className="font-semibold">{invoice.paymentType}</span></div>
             <div>Статус: <span className="font-semibold">{invoice.status}</span></div>
-            <div>{isDebtorsView ? 'Состояние долга' : 'Статус оплаты'}: <span className="font-semibold">{invoice.paymentStatus || 'UNPAID'}</span></div>
+            <div>Статус оплаты: <span className="font-semibold">{invoice.paymentStatus || 'PAID'}</span></div>
           </div>
 
           <div className="rounded-2xl border border-[#5A5A40]/10 overflow-hidden">

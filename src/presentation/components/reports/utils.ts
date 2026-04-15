@@ -23,7 +23,7 @@ export const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceRep
   },
   kpi: {
     revenueGross: toNumber(raw?.kpi?.revenueGross),
-    customerReturnsAmount: toNumber(raw?.kpi?.customerReturnsAmount),
+    retailReturnsAmount: toNumber(raw?.kpi?.customerReturnsAmount),
     netRevenue: toNumber(raw?.kpi?.netRevenue),
     cogs: toNumber(raw?.kpi?.cogs),
     grossProfit: toNumber(raw?.kpi?.grossProfit),
@@ -51,12 +51,8 @@ export const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceRep
     byMethod: typeof raw?.cashflow?.byMethod === 'object' && raw?.cashflow?.byMethod ? raw.cashflow.byMethod : {},
   },
   debts: {
-    receivableTotal: toNumber(raw?.debts?.receivableTotal),
-    receivableOverdue: toNumber(raw?.debts?.receivableOverdue),
     payableTotal: toNumber(raw?.debts?.payableTotal),
     payableOverdue: toNumber(raw?.debts?.payableOverdue),
-    netWorkingCapitalExposure: toNumber(raw?.debts?.netWorkingCapitalExposure),
-    arAging: normalizeAging(raw?.debts?.arAging),
     apAging: normalizeAging(raw?.debts?.apAging),
   },
   purchases: {
@@ -83,7 +79,6 @@ export const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceRep
   balanceLike: {
     cashLike: toNumber(raw?.balanceLike?.cashLike),
     inventoryCostValue: toNumber(raw?.balanceLike?.inventoryCostValue),
-    receivableTotal: toNumber(raw?.balanceLike?.receivableTotal),
     payableTotal: toNumber(raw?.balanceLike?.payableTotal),
     totalAssetsLike: toNumber(raw?.balanceLike?.totalAssetsLike),
     totalLiabilitiesLike: toNumber(raw?.balanceLike?.totalLiabilitiesLike),
@@ -103,11 +98,8 @@ export const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceRep
       invoiceId: String(s.invoiceId || ''),
       invoiceNo: String(s.invoiceNo || ''),
       createdAt: String(s.createdAt || ''),
-      customer: String(s.customer || ''),
       paymentType: String(s.paymentType || ''),
       totalAmount: toNumber(s.totalAmount),
-      paidAmount: toNumber(s.paidAmount),
-      outstandingAmount: toNumber(s.outstandingAmount),
       itemCount: toNumber(s.itemCount),
       soldUnits: toNumber(s.soldUnits),
       items: Array.isArray(s.items) ? s.items.map((i: any) => ({

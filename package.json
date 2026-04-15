@@ -25,7 +25,10 @@
     "type-check": "tsc --noEmit",
     "electron:dev": "node ./scripts/free-electron.mjs && node ./scripts/free-ports.mjs && concurrently --kill-others --success first \"npm run dev\" \"npm run dev:web\" \"cross-env NODE_ENV=development electron .\"",
     "electron:build": "node ./scripts/prepare-electron-build.mjs && node ./scripts/prepare-runtime-env.mjs && npm run build:prod && node ./scripts/prisma-generate-safe.mjs && npm run build:server && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder && node electron/launch-built.cjs",
-    "test": "vitest"
+    "test": "vitest",
+    "analyze:bundle": "node ./scripts/bundle-size-check.cjs",
+    "analyze:lighthouse": "node ./scripts/lighthouse-ci.js http://localhost:3000",
+    "analyze:api": "node ./scripts/api-benchmark.cjs"
   },
   "build": {
     "appId": "com.pharmapro.app",

@@ -40,29 +40,26 @@ export const InvoiceDeleteModal: React.FC<InvoiceDeleteModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#5A5A40]/10 overflow-hidden">
-        <div className="px-6 py-4 bg-red-600 text-white flex items-center justify-between">
-          <h3 className="text-base font-bold">Удаление накладной</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="p-6 space-y-5">
-          <p className="text-sm text-[#5A5A40]/80">
-            Удалить накладную <span className="font-semibold">{invoice.invoiceNo || invoice.id}</span>? 
-            Остатки и связанные долги/платежи будут откатаны.
+    <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+      <div className="w-full max-w-sm bg-white rounded-[32px] shadow-[0_32px_80px_rgba(0,0,0,0.15)] border border-[#5A5A40]/5 overflow-hidden animate-in zoom-in-95 duration-300">
+        <div className="p-8 text-center">
+          <div className="mx-auto w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-6">
+            <X size={32} />
+          </div>
+          <h3 className="text-xl font-bold text-[#5A5A40] mb-2">Удаление документа</h3>
+          <p className="text-sm text-[#5A5A40]/60 leading-relaxed mb-8">
+            Вы уверены, что хотите удалить накладную <span className="font-bold text-[#5A5A40] underline decoration-red-200">{invoice.invoiceNo || invoice.id}</span>? Это действие приведет к корректировке остатков на складе.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={onClose} className="py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors">
-              Отмена
-            </button>
+          <div className="flex flex-col gap-3">
             <button 
               onClick={handleSubmit} 
               disabled={busyId === invoice.id} 
-              className="py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
+              className="w-full py-4 rounded-2xl bg-red-600 text-white font-bold hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-red-200"
             >
-              {busyId === invoice.id ? 'Удаляю...' : 'Удалить'}
+              {busyId === invoice.id ? 'Выполняется...' : 'Да, удалить'}
+            </button>
+            <button onClick={onClose} className="w-full py-4 rounded-2xl bg-[#f5f5f0] text-[#5A5A40] font-bold hover:bg-[#eaeaE0] transition-colors">
+              Отмена
             </button>
           </div>
         </div>
