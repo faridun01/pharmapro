@@ -147,8 +147,10 @@ export class ReportService {
           createdAt: { gte: fromDate, lte: toDate },
           status: 'COMPLETED',
         },
-        include: {
-          items: true,
+        select: {
+          id: true,
+          type: true,
+          totalAmount: true,
         },
       }),
       prisma.writeOff.findMany({
@@ -213,6 +215,10 @@ export class ReportService {
             createdAt: { gte: fromDate, lte: toDate },
             status: 'COMPLETED',
           },
+        },
+        select: {
+          productId: true,
+          quantity: true,
         },
       }),
     ]);

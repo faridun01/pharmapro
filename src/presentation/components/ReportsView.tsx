@@ -47,8 +47,18 @@ export const ReportsView: React.FC = () => {
       });
 
       if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.message || t('errors.fetchFailed'));
+        let errText = '';
+        let errJson = undefined;
+        try {
+          errText = await resp.text();
+          errJson = JSON.parse(errText);
+        } catch {}
+        setError(
+          `Ошибка загрузки отчета: status=${resp.status} ${resp.statusText}\n` +
+          (errJson?.message ? `message: ${errJson.message}\n` : '') +
+          (errText ? `response: ${errText}` : t('errors.fetchFailed'))
+        );
+        return;
       }
 
       const raw = await resp.json();
@@ -167,9 +177,9 @@ export const ReportsView: React.FC = () => {
 
       {/* Error State */}
       {error && (
-        <div className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-center gap-3 text-red-700 animate-in slide-in-from-top-2">
+        <div className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-start gap-3 text-red-700 animate-in slide-in-from-top-2">
           <AlertCircle size={20} />
-          <p className="text-sm font-medium">{error}</p>
+          <pre className="text-xs font-mono whitespace-pre-wrap">{error}</pre>
         </div>
       )}
 

@@ -360,7 +360,7 @@ function CreateWriteOffModal({
                         onChange={(e) => updateItemPackaging(idx, '0', e.target.value)}
                         placeholder="Кол-во"
                       />
-                      <p className="text-[10px] text-[#5A5A40]/55 leading-tight">Количество в единицах</p>
+                      <p className="text-[10px] text-[#5A5A40]/80 font-semibold leading-tight">Количество в единицах</p>
                     </div>
                     <div className="xl:col-span-1 flex justify-center xl:justify-end">
                       {formItems.length > 1 && (
