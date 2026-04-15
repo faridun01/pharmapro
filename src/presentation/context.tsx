@@ -48,6 +48,7 @@ interface PharmacyContextType {
     invoiceNumber: string;
     invoiceDate: string;
     discountAmount?: number;
+    status?: 'DRAFT' | 'POSTED';
     items: Array<{
       productId: string;
       batchNumber: string;
@@ -227,6 +228,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     invoiceNumber: string;
     invoiceDate: string;
     discountAmount?: number;
+    status?: 'DRAFT' | 'POSTED';
     items: Array<{
       productId: string;
       batchNumber: string;

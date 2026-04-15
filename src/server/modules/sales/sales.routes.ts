@@ -25,8 +25,11 @@ salesRouter.post('/complete', authenticate, asyncHandler(async (req, res) => {
   const invoice = await salesService.completeSale({
     items: items.map((item: any) => ({
       productId: String(item.productId),
+      batchId: item.batchId ? String(item.batchId) : undefined,
       quantity: Number(item.quantity),
       sellingPrice: Number(item.sellingPrice),
+      discountAmount: item.discountAmount ? Number(item.discountAmount) : undefined,
+      prescriptionPresented: Boolean(item.prescriptionPresented),
     })),
     discountAmount: Number(discountAmount ?? 0),
     taxAmount: Number(taxAmount ?? 0),
@@ -40,4 +43,10 @@ salesRouter.post('/complete', authenticate, asyncHandler(async (req, res) => {
   });
 
   res.status(201).json(invoice);
+}));
+
+salesRouter.post('/void/:id', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const invoice = await salesService.voidSale(req.params.id, authedReq.user.id);
+  res.json(invoice);
 }));

@@ -17,6 +17,7 @@ import {
   Minus,
   X,
   Square,
+  CheckCircle2,
 } from 'lucide-react';
 import { usePharmacy } from '../context';
 import { useTranslation } from 'react-i18next';
@@ -96,6 +97,7 @@ const ReturnView = lazyNamedImport(() => import('./ReturnView'), 'ReturnView');
 const WriteOffView = lazyNamedImport(() => import('./WriteOffView'), 'WriteOffView');
 const ShiftView = lazyNamedImport(() => import('./ShiftView'), 'ShiftView');
 const CustomersView = lazyNamedImport(() => import('./CustomersView'), 'CustomersView');
+const PurchasesView = lazyNamedImport(() => import('./PurchasesView'), 'PurchasesView');
 
 const AppLoader: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Загрузка...', compact = false }) => (
   <div className={`${compact ? 'min-h-60' : 'h-full min-h-0'} flex items-center justify-center bg-[#f5f5f0]`}>
@@ -166,6 +168,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
     { id: 'invoices' as const, label: t('Sales History'), icon: Pill },
     { id: 'debtors' as const, label: 'Должники', icon: User },
     { id: 'shifts' as const, label: t('Shifts'), icon: Clock },
+    { id: 'purchases' as const, label: 'Приёмка товара', icon: CheckCircle2 },
     { id: 'suppliers' as const, label: t('Suppliers'), icon: Truck },
     { id: 'returns' as const, label: t('Returns'), icon: RotateCcw },
     { id: 'writeoffs' as const, label: t('Write-Offs'), icon: Trash2 },
@@ -259,6 +262,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       case 'returns': return <ReturnView />;
       case 'writeoffs': return <WriteOffView />;
       case 'shifts': return <ShiftView />;
+      case 'purchases': return <PurchasesView />;
       case 'settings': return <SettingsView />;
       case 'notifications': return <NotificationsView notifications={notifications} onNotificationClick={() => {}} />;
       default: return <DashboardView onOpenInvoicePayment={() => {}} />;

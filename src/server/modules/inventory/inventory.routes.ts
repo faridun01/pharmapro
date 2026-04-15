@@ -37,6 +37,21 @@ inventoryRouter.post('/restock', authenticate, requireRole(['PHARMACIST', 'ADMIN
   res.status(201).json(result);
 }));
 
+// GET /purchase-invoices — PHARMACIST, ADMIN, OWNER
+inventoryRouter.get('/purchase-invoices', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (_req, res) => {
+  const { prisma } = await import('../../infrastructure/prisma');
+  const invoices = await prisma.purchaseInvoice.findMany({
+    include: {
+      supplier: { select: { name: true } },
+      warehouse: { select: { name: true } },
+      items: { include: { product: { select: { name: true } } } },
+      createdBy: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(invoices);
+}));
+
 // POST /purchase-invoices — PHARMACIST, ADMIN, OWNER
 inventoryRouter.post('/purchase-invoices', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
@@ -102,5 +117,11 @@ inventoryRouter.patch('/batches/:id', authenticate, requireRole(['ADMIN', 'OWNER
 inventoryRouter.delete('/batches/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const result = await inventoryService.deleteBatch(String(req.params.id), authedReq.user.id);
+  res.json(result);
+}));
+// POST /purchase-invoices/:id/approve — PHARMACIST, ADMIN, OWNER
+inventoryRouter.post('/purchase-invoices/:id/approve', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const result = await inventoryService.approvePurchaseInvoice(req.params.id, authedReq.user.id);
   res.json(result);
 }));

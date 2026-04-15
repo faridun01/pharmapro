@@ -8,13 +8,16 @@ import { computeBatchStatus } from '../../common/batchStatus';
 
 export type SaleItemInput = {
   productId: string;
+  batchId?: string; // Opt-in manual batch selection
   quantity: number;
   sellingPrice: number;
+  discountAmount?: number;
+  prescriptionPresented?: boolean;
 };
 
 export type CompleteSaleInput = {
   items: SaleItemInput[];
-  discountAmount?: number;
+  discountAmount?: number; // Overall invoice discount
   taxAmount?: number;
   total: number;
   paymentType: 'CASH' | 'CARD' | 'CREDIT' | 'STORE_BALANCE';
@@ -126,6 +129,7 @@ export class SalesService {
         batchNo: string;
         quantity: number;
         unitPrice: number;
+        discountAmount: number;
         totalPrice: number;
       }> = [];
 
@@ -149,6 +153,7 @@ export class SalesService {
       for (const item of input.items) {
         const quantity = Number(item.quantity);
         const sellingPrice = Number(item.sellingPrice);
+        const itemDiscount = Number(item.discountAmount ?? 0);
 
         if (!item.productId) throw new ValidationError('productId is required');
         if (!quantity || quantity <= 0) throw new ValidationError('quantity must be a positive number');
@@ -158,16 +163,35 @@ export class SalesService {
         if (!product) throw new NotFoundError(`Product ${item.productId} not found`);
         if (product.totalStock < quantity) throw new ValidationError(`Insufficient stock for ${product.name}`);
 
-        const validBatches = product.batches.filter((batch) => batch.expiryDate > new Date());
-        const availableStock = validBatches.reduce((sum, batch) => sum + batch.quantity, 0);
-        if (availableStock < quantity) {
-          throw new ValidationError(`Insufficient non-expired stock for ${product.name}`);
+        if (product.prescription && !item.prescriptionPresented) {
+          throw new ValidationError(`Prescription is required for ${product.name}`);
         }
 
         let remainingToDeduct = quantity;
+        const validBatches = product.batches.filter((batch) => batch.expiryDate > new Date());
 
-        // FEFO for pharmacy inventory: consume the earliest expiry first.
-        for (const batch of validBatches) {
+        // If batchId is specified, we try that batch first.
+        // If it's not enough, we error out (manual choice must be exact or we fall back to auto)
+        // For simplicity: if batchId is provided, we ONLY use that batch.
+        const targetBatches = item.batchId 
+          ? validBatches.filter(b => b.id === item.batchId)
+          : validBatches;
+
+        if (item.batchId && targetBatches.length === 0) {
+          throw new ValidationError(`Selected batch for ${product.name} is either expired or not found`);
+        }
+
+        const availableStock = targetBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+        if (availableStock < quantity) {
+          throw new ValidationError(
+            item.batchId 
+              ? `Insufficient stock in selected batch for ${product.name}`
+              : `Insufficient non-expired stock for ${product.name}`
+          );
+        }
+
+        // Deduct from batches
+        for (const batch of targetBatches) {
           if (remainingToDeduct <= 0) break;
 
           const deduct = Math.min(batch.quantity, remainingToDeduct);
@@ -209,7 +233,7 @@ export class SalesService {
               batchId: batch.id,
               type: 'DISPATCH',
               quantity: deduct,
-              description: `POS sale${resolvedCustomerName ? ` for ${resolvedCustomerName}` : ''}`,
+              description: `POS sale${resolvedCustomerName ? ` for ${resolvedCustomerName}` : ''}${item.batchId ? ' (Manual selection)' : ''}`,
               userId: input.userId,
             },
           });
@@ -221,7 +245,8 @@ export class SalesService {
             batchNo: batch.batchNumber,
             quantity: deduct,
             unitPrice: sellingPrice,
-            totalPrice: deduct * sellingPrice,
+            discountAmount: (itemDiscount / quantity) * deduct,
+            totalPrice: (deduct * sellingPrice) - ((itemDiscount / quantity) * deduct),
           });
 
           remainingToDeduct -= deduct;
@@ -328,6 +353,88 @@ export class SalesService {
     reportCache.invalidatePattern(/^report:finance:/);
 
     return invoice;
+  }
+
+  async voidSale(invoiceId: string, userId: string) {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        items: true,
+        receivables: true,
+        payments: true,
+      },
+    });
+
+    if (!invoice) throw new NotFoundError('Invoice not found');
+    if (invoice.status === 'CANCELLED') throw new ValidationError('Invoice is already cancelled');
+    if (invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED') {
+      throw new ValidationError('Returned invoices cannot be voided, use return workflow');
+    }
+
+    return await prisma.$transaction(async (tx) => {
+      // 1. Restore stock
+      for (const item of invoice.items) {
+        await tx.batch.update({
+          where: { id: item.batchId },
+          data: {
+            quantity: { increment: item.quantity },
+            availableQty: { increment: item.quantity },
+            currentQty: { increment: item.quantity },
+          },
+        });
+
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { totalStock: { increment: item.quantity } },
+        });
+
+        await tx.batchMovement.create({
+          data: {
+            batchId: item.batchId,
+            type: 'RESTOCK',
+            quantity: item.quantity,
+            description: `Void sale: ${invoice.invoiceNo}`,
+            userId,
+          },
+        });
+      }
+
+      // 2. Cancel financial entries
+      if (invoice.receivables.length > 0) {
+        await tx.receivable.updateMany({
+          where: { invoiceId },
+          data: { status: 'WRITTEN_OFF' },
+        });
+      }
+
+      if (invoice.payments.length > 0) {
+        await tx.payment.updateMany({
+          where: { invoiceId },
+          data: { status: 'CANCELLED' },
+        });
+      }
+
+      // 3. Update invoice status
+      const updatedInvoice = await tx.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          status: 'CANCELLED',
+          paymentStatus: 'CANCELLED',
+          comment: `Voided by ${userId} at ${new Date().toISOString()}`,
+        },
+      });
+
+      await auditService.log({
+        userId,
+        module: 'sales',
+        action: 'VOID_SALE',
+        entity: 'INVOICE',
+        entityId: invoiceId,
+        newValue: { invoiceNo: invoice.invoiceNo, status: 'CANCELLED' },
+      }, tx);
+
+      return updatedInvoice;
+    });
   }
 }
 

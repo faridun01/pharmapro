@@ -129,18 +129,34 @@ function calculateShiftSummary(shift: ShiftWithReportData) {
   };
 }
 
-// List recent shifts
-shiftsRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
-  const shifts = await prisma.cashShift.findMany({
-    include: {
-      cashier: { select: { name: true } },
-      warehouse: { select: { name: true } },
-      _count: { select: { invoices: true, cashMovements: true } },
-    },
-    orderBy: { openAt: 'desc' },
-    take: 50,
+// List recent shifts (with pagination)
+shiftsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 25));
+
+  const [total, items] = await Promise.all([
+    prisma.cashShift.count(),
+    prisma.cashShift.findMany({
+      include: {
+        cashier: { select: { name: true } },
+        warehouse: { select: { name: true } },
+        _count: { select: { invoices: true, cashMovements: true } },
+      },
+      orderBy: { openAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    })
+  ]);
+
+  res.json({
+    items,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    }
   });
-  res.json(shifts);
 }));
 
 // Get my active shift

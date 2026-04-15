@@ -130,6 +130,8 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
     void refreshSuppliers();
   }, [isOpen, refreshSuppliers, suppliers.length]);
 
+  const [importStatus, setImportStatus] = useState<'DRAFT' | 'POSTED'>('DRAFT');
+
   useEffect(() => {
     if (!isOpen || products.length > 0) {
       return;
@@ -550,11 +552,12 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
         });
       }
 
-      await importPurchaseInvoice({
+      await (importPurchaseInvoice as any)({
         supplierId,
         invoiceNumber,
         invoiceDate: date,
         discountAmount,
+        status: importStatus,
         items: importItems,
       });
 
@@ -746,6 +749,30 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                   <div className="relative group">
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
                     <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-full pl-12 pr-4 py-3 bg-[#f5f5f0]/50 border-none rounded-2xl focus:ring-2 focus:ring-[#5A5A40]/20 text-sm outline-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest ml-1">Режим приёмки</label>
+                  <div className="flex gap-2 p-1 bg-[#f5f5f0]/50 rounded-2xl">
+                    <button
+                      type="button"
+                      onClick={() => setImportStatus('DRAFT')}
+                      className={`flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                        importStatus === 'DRAFT' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#5A5A40]/40 hover:text-[#5A5A40]'
+                      }`}
+                    >
+                      Черновик
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportStatus('POSTED')}
+                      className={`flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                        importStatus === 'POSTED' ? 'bg-[#5A5A40] text-white shadow-lg' : 'text-[#5A5A40]/40 hover:text-[#5A5A40]'
+                      }`}
+                    >
+                      Принять
+                    </button>
                   </div>
                 </div>
               </div>

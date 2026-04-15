@@ -89,3 +89,16 @@ writeoffRouter.delete('/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asy
   await writeOffService.deleteWriteOff(String(req.params.id), authedReq.user.id, authedReq.user.role);
   res.json({ ok: true });
 }));
+// POST /approve/:id — PHARMACIST, ADMIN, OWNER
+writeoffRouter.post('/approve/:id', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const result = await writeOffService.approveWriteOff(req.params.id, authedReq.user.id, authedReq.user.role);
+  res.json(result);
+}));
+
+// POST /mass-expired — ADMIN, OWNER, PHARMACIST
+writeoffRouter.post('/mass-expired', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const result = await writeOffService.massWriteOffExpired(authedReq.user.id, authedReq.user.role);
+  res.json(result);
+}));

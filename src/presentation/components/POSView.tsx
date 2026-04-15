@@ -22,7 +22,11 @@ import { Product } from '../../core/domain';
 
 type CartItem = Product & {
   quantity: number;
-  markingCode?: string;
+  batchId?: string;
+  batchNumber?: string;
+  discountAmount?: number;
+  prescriptionPresented?: boolean;
+  expiryDate?: string;
 };
 
 type ActiveShift = {
@@ -114,6 +118,119 @@ const ProductCatalog = memo(({
 
 ProductCatalog.displayName = 'ProductCatalog';
 
+const BatchSelectorModal = ({ 
+  product, 
+  onSelect, 
+  onClose 
+}: { 
+  product: Product & { batches: any[] }, 
+  onSelect: (batch: any) => void, 
+  onClose: () => void 
+}) => {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
+        <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold text-[#5A5A40]">{product.name}</h3>
+            <p className="text-sm text-[#5A5A40]/60">Выберите конкретную партию для продажи</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-[#f5f5f0] rounded-xl transition-colors">
+            <Plus className="rotate-45" size={24} />
+          </button>
+        </div>
+        <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+          <div className="grid gap-3">
+            {product.batches.map((batch) => {
+              const isExpired = new Date(batch.expiryDate) < new Date();
+              return (
+                <button
+                  key={batch.id}
+                  disabled={isExpired || batch.quantity <= 0}
+                  onClick={() => onSelect(batch)}
+                  className={`flex items-center justify-between p-4 rounded-2xl border text-left transition-all ${
+                    isExpired ? 'bg-red-50/50 border-red-100 opacity-60 cursor-not-allowed' : 'bg-white border-[#5A5A40]/10 hover:border-[#5A5A40] hover:shadow-md'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-[#5A5A40]">{batch.batchNumber}</span>
+                      {isExpired && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Истек</span>}
+                    </div>
+                    <p className="text-xs text-[#5A5A40]/60 mt-1">Годен до: {new Date(batch.expiryDate).toLocaleDateString()}</p>
+                    <p className="text-xs text-[#5A5A40]/60">Поставщик: {(batch as any).supplier?.name || (batch as any).supplierName || '—'}</p>
+                  </div>
+                  <div className="text-right shrink-0 ml-4">
+                    <p className="font-bold text-[#5A5A40]">{batch.quantity} ед.</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CustomerSearch = ({ onSelect }: { onSelect: (customer: any) => void }) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (query.length < 2) {
+      setResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/customers?search=${encodeURIComponent(query)}`, { headers: await buildApiHeaders() });
+        const data = await res.json();
+        setResults(data.items || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  return (
+    <div className="relative">
+      <div className="relative group">
+        <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={16} />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Найти клиента (ФИО / Телефон)"
+          className="w-full pl-10 pr-4 py-2 bg-white border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/15"
+        />
+      </div>
+      {results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-[#5A5A40]/10 z-50 overflow-hidden max-h-60 overflow-y-auto">
+          {results.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => { onSelect(c); setQuery(''); setResults([]); }}
+              className="w-full p-3 text-left hover:bg-[#f5f5f0] transition-colors border-b border-[#5A5A40]/5 last:border-0"
+            >
+              <p className="text-sm font-bold text-[#5A5A40]">{c.name}</p>
+              <div className="flex items-center gap-2 mt-0.5">
+               {c.phone && <p className="text-[10px] text-[#5A5A40]/60">{c.phone}</p>}
+               {c.defaultDiscount > 0 && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-bold">Скидка {c.defaultDiscount}%</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const POSView: React.FC = () => {
   const { products, refreshProducts, processTransaction, user } = usePharmacy();
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -131,10 +248,15 @@ export const POSView: React.FC = () => {
   const [shiftError, setShiftError] = useState<string | null>(null);
   const [isOpenShiftModal, setIsOpenShiftModal] = useState(false);
   const [isCloseShiftModal, setIsCloseShiftModal] = useState(false);
+  const [isRecentSalesModal, setIsRecentSalesModal] = useState(false);
+  const [recentSales, setRecentSales] = useState<any[]>([]);
   const [closedShiftSummary, setClosedShiftSummary] = useState<ClosedShiftSummary | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [barcodeScanning, setBarcodeScanning] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [showBatchModal, setShowBatchModal] = useState<{ productId: string, cartItemKey: string } | null>(null);
+  const [overallDiscountPercent, setOverallDiscountPercent] = useState<number>(0);
 
   const normalizedSearchTerm = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm]);
   const cartProductIds = useMemo(() => new Set(cart.map((item) => item.id)), [cart]);
@@ -150,7 +272,7 @@ export const POSView: React.FC = () => {
     );
   }), [products, normalizedSearchTerm, cartProductIds]);
 
-  const getCartItemKey = useCallback((item: Pick<CartItem, 'id' | 'markingCode'>) => `${item.id}:${item.markingCode || 'default'}`, []);
+  const getCartItemKey = useCallback((item: Pick<CartItem, 'id' | 'batchId'>) => `${item.id}:${item.batchId || 'default'}`, []);
   const findProductByScannedCode = useCallback((rawCode: string) => {
     const normalize = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const normalizedCode = normalize(rawCode);
@@ -163,26 +285,39 @@ export const POSView: React.FC = () => {
     );
   }, [products]);
 
-  const addToCart = useCallback((product: Product) => {
+  const addToCart = useCallback((product: Product, batch?: any) => {
     if (product.totalStock <= 0) {
       setError('Товар закончился на складе');
       window.setTimeout(() => setError(null), 2000);
       return;
     }
+
     setCart((currentCart) => {
-      const existing = currentCart.find((item) => item.id === product.id && !item.markingCode);
+      const existing = currentCart.find((item) => item.id === product.id && (!batch || item.batchId === batch.id));
       if (existing) {
         return currentCart.map((item) => {
-          if (item.id !== product.id || item.markingCode) return item;
-          return { ...item, quantity: Math.min(item.totalStock, item.quantity + 1) };
+          if (getCartItemKey(item) !== getCartItemKey({ id: product.id, batchId: batch?.id })) return item;
+          return { ...item, quantity: Math.min(batch ? batch.quantity : item.totalStock, item.quantity + 1) };
         });
       }
-      return [...currentCart, { ...product, quantity: 1 }];
+      return [
+        ...currentCart,
+        {
+          ...product,
+          quantity: 1,
+          batchId: batch?.id,
+          batchNumber: batch?.batchNumber,
+          expiryDate: batch?.expiryDate,
+          prescriptionPresented: !product.prescription, // Default to true if not required
+        }
+      ];
     });
-  }, []);
+  }, [getCartItemKey]);
 
   const subtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.sellingPrice * item.quantity), 0), [cart]);
-  const total = subtotal;
+  const discountFromCustomer = useMemo(() => (selectedCustomer?.defaultDiscount || 0) / 100 * subtotal, [selectedCustomer, subtotal]);
+  const total = Math.max(0, subtotal - discountFromCustomer);
+  
   const isCreditSale = paymentType === 'CREDIT';
   const enteredPaidAmountPreview = paidAmountInput.trim() === '' ? (isCreditSale ? 0 : total) : Number(paidAmountInput);
   const outstandingAmount = Number.isFinite(enteredPaidAmountPreview)
@@ -212,14 +347,26 @@ export const POSView: React.FC = () => {
     }
   }, []);
 
+  const loadRecentSales = useCallback(async () => {
+    try {
+      const res = await fetch('/api/sales/invoices?limit=10', { headers: await buildApiHeaders() });
+      const data = await res.json();
+      setRecentSales(data.items || []);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
   useEffect(() => {
     void loadActiveShift();
+    void loadRecentSales();
     const handleFocus = () => {
       void loadActiveShift();
+      void loadRecentSales();
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [loadActiveShift]);
+  }, [loadActiveShift, loadRecentSales]);
 
   useEffect(() => {
     if (products.length > 0) return;
@@ -333,8 +480,121 @@ export const POSView: React.FC = () => {
     setPaidAmountInput(total > 0 ? total.toFixed(2) : '');
   }, [paymentType, total]);
 
+  const togglePrescription = (cartItemKey: string) => {
+    setCart(curr => curr.map(item => getCartItemKey(item) === cartItemKey ? { ...item, prescriptionPresented: !item.prescriptionPresented } : item));
+  };
+
+  const handlePrintReceipt = (invoice: any) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const receiptHtml = `
+      <html>
+        <head>
+          <title>Чек - ${invoice.invoiceNo}</title>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: 80mm; padding: 5mm; }
+            .h { text-align: center; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
+            .sep { border-bottom: 1px dashed #000; margin: 5px 0; }
+            .item { display: flex; justify-content: space-between; margin-bottom: 2px; }
+            .total { font-weight: bold; font-size: 14px; display: flex; justify-content: space-between; margin-top: 5px; }
+            .footer { text-align: center; font-size: 10px; margin-top: 15px; }
+          </style>
+        </head>
+        <body onload="window.print(); window.close();">
+          <div class="h">АПТЕКА PHARMAPRO</div>
+          <div class="h">ТОВАРНЫЙ ЧЕК</div>
+          <div>№: ${invoice.invoiceNo}</div>
+          <div>Дата: ${new Date(invoice.createdAt).toLocaleString()}</div>
+          <div>Кассир: ${user?.name || 'Система'}</div>
+          ${invoice.customer ? `<div>Клиент: ${invoice.customer}</div>` : ''}
+          <div class="sep"></div>
+          ${invoice.items.map((it: any) => `
+            <div class="item">
+              <span>${it.productName} x${it.quantity}</span>
+              <span>${it.totalPrice.toFixed(2)}</span>
+            </div>
+          `).join('')}
+          <div class="sep"></div>
+          <div class="item"><span>Итого:</span><span>${invoice.totalAmount.toFixed(2)}</span></div>
+          ${invoice.discount > 0 ? `<div class="item"><span>Скидка:</span><span>-${invoice.discount.toFixed(2)}</span></div>` : ''}
+          <div class="total"><span>К ОПЛАТЕ:</span><span>${(invoice.totalAmount).toFixed(2)}</span></div>
+          <div class="sep"></div>
+          <div>Тип оплаты: ${invoice.paymentType}</div>
+          <div class="footer">Спасибо за покупку!<br>Желаем здоровья!</div>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(receiptHtml);
+    printWindow.document.close();
+  };
+
+  const handleVoidSale = async (id: string) => {
+    if (!window.confirm('Вы уверены, что хотите отменить этот чек? Товары вернутся на склад.')) return;
+    try {
+      setProcessing(true);
+      const res = await fetch(`/api/sales/void/${id}`, { method: 'POST', headers: await buildApiHeaders() });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Ошибка при отмене');
+      }
+      setSuccess(true);
+      void loadActiveShift();
+      void loadRecentSales();
+      void refreshProducts();
+      window.setTimeout(() => setSuccess(false), 2000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handlePrintZReport = async () => {
+    if (!activeShift) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    try {
+      const res = await fetch(`/api/reports/shift/${activeShift.id}`, { headers: await buildApiHeaders() });
+      const data = await res.json();
+
+      const html = `
+        <html>
+          <head><title>Z-Отчет - ${activeShift.shiftNo}</title><style>body { font-family: monospace; font-size: 12px; width: 80mm; padding: 5mm; }</style></head>
+          <body onload="window.print(); window.close();">
+            <h2 style="text-align:center">Z-ОТЧЕТ</h2>
+            <div>Смена: ${activeShift.shiftNo}</div>
+            <div>Открыта: ${new Date(activeShift.openAt).toLocaleString()}</div>
+            <div>Кассир: ${user?.name}</div>
+            <hr/>
+            <div style="display:flex; justify-content:space-between"><span>ПРОДАЖИ (ИТОГО):</span> <span>${data.totalSales?.toFixed(2) || '0.00'}</span></div>
+            <div style="display:flex; justify-content:space-between"><span>НАЛИЧНЫЕ:</span> <span>${data.cashSales?.toFixed(2) || '0.00'}</span></div>
+            <div style="display:flex; justify-content:space-between"><span>КАРТА:</span> <span>${data.cardSales?.toFixed(2) || '0.00'}</span></div>
+            <div style="display:flex; justify-content:space-between"><span>В ДОЛГ:</span> <span>${data.creditSales?.toFixed(2) || '0.00'}</span></div>
+            <hr/>
+            <div style="text-align:center">PHARMAPRO POS</div>
+          </body>
+        </html>
+      `;
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } catch (err) {
+      printWindow.close();
+      setError('Ошибка при формировании Z-отчета');
+    }
+  };
+
   const handleComplete = async () => {
     if (cart.length === 0) return;
+    
+    // Check if any prescription required items are not checked
+    const missingPrescription = cart.find(it => it.prescription && !it.prescriptionPresented);
+    if (missingPrescription) {
+      setError(`Для товара "${missingPrescription.name}" требуется рецепт`);
+      return;
+    }
+
     if (!activeShift) {
       setError('Сначала откройте смену, затем оформляйте продажу');
       return;
@@ -352,22 +612,31 @@ export const POSView: React.FC = () => {
     setProcessing(true);
     setError(null);
     try {
-      await processTransaction({
-        items: cart.map((item) => ({ productId: item.id, quantity: item.quantity, sellingPrice: item.sellingPrice })),
-        discountAmount: 0,
+      const res = await processTransaction({
+        items: cart.map((item) => ({ 
+          productId: item.id, 
+          batchId: item.batchId,
+          quantity: item.quantity, 
+          sellingPrice: item.sellingPrice,
+          prescriptionPresented: item.prescriptionPresented,
+        })),
+        discountAmount: discountFromCustomer,
         taxAmount: 0,
         total,
         paymentType,
-        customer: enteredPaidAmount < total ? creditCustomerName.trim() : undefined,
-        customerPhone: enteredPaidAmount < total ? creditCustomerPhone.trim() : undefined,
+        customer: selectedCustomer?.name || (enteredPaidAmount < total ? creditCustomerName.trim() : undefined),
+        customerId: selectedCustomer?.id,
+        customerPhone: selectedCustomer?.phone || (enteredPaidAmount < total ? creditCustomerPhone.trim() : undefined),
         paidAmount,
         userId: user?.id || '',
         date: new Date(),
       });
       setSuccess(true);
+      if (res && (res as any).id) handlePrintReceipt(res);
       setCart([]);
       setCreditCustomerName('');
       setCreditCustomerPhone('');
+      setSelectedCustomer(null);
       setPaidAmountInput('');
       void loadActiveShift();
       window.setTimeout(() => setSuccess(false), 3000);
@@ -406,8 +675,12 @@ export const POSView: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <button type="button" onClick={() => setIsRecentSalesModal(true)} className="px-3 py-2 rounded-xl border border-[#5A5A40]/10 bg-white text-[#5A5A40] text-xs font-semibold hover:bg-[#f5f5f0] transition-colors">История</button>
                 {activeShift ? (
-                  <button type="button" onClick={() => setIsCloseShiftModal(true)} className="px-3 py-2 rounded-xl bg-[#5A5A40] text-white text-xs font-semibold hover:bg-[#4A4A30] transition-colors">Закрыть смену</button>
+                  <>
+                    <button type="button" onClick={handlePrintZReport} className="px-3 py-2 rounded-xl border border-[#5A5A40]/10 bg-white text-[#5A5A40] text-xs font-semibold hover:bg-[#f5f5f0] transition-colors">Z-Отчет</button>
+                    <button type="button" onClick={() => setIsCloseShiftModal(true)} className="px-3 py-2 rounded-xl bg-[#5A5A40] text-white text-xs font-semibold hover:bg-[#4A4A30] transition-colors">Закрыть смену</button>
+                  </>
                 ) : (
                   <button type="button" onClick={() => setIsOpenShiftModal(true)} className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors">Открыть смену</button>
                 )}
@@ -460,7 +733,16 @@ export const POSView: React.FC = () => {
             </div>
           </div>
 
-          <ProductCatalog filteredProducts={filteredProducts} onAddToCart={addToCart} />
+          <ProductCatalog 
+            filteredProducts={filteredProducts} 
+            onAddToCart={(p) => {
+              if (p.batches && p.batches.length > 1) {
+                setShowBatchModal({ productId: p.id, cartItemKey: '' } as any);
+              } else {
+                addToCart(p, p.batches?.[0]);
+              }
+            }} 
+          />
         </div>
 
         <div className="bg-white rounded-3xl shadow-xl border border-[#5A5A40]/5 flex flex-col overflow-hidden min-w-0">
@@ -482,12 +764,23 @@ export const POSView: React.FC = () => {
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
                         <h4 className="text-[12px] font-bold text-[#5A5A40] truncate leading-tight">{item.name}</h4>
-                        {metaBadges.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1.5">
-                            {item.countryOfOrigin && <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-semibold text-sky-700">{item.countryOfOrigin}</span>}
-                          </div>
-                        )}
-                        <p className="text-[10px] text-[#5A5A40]/55 mt-0.5 leading-tight">{item.sellingPrice.toFixed(2)} TJS / ед. • Остаток: {formatUnitQuantity(item.totalStock)}</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {item.batchNumber && <span className="bg-[#5A5A40]/10 text-[#5A5A40] text-[9px] px-1.5 py-0.5 rounded-full font-bold">Партия: {item.batchNumber}</span>}
+                          {item.expiryDate && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${new Date(item.expiryDate) < new Date(new Date().getTime() + 30*24*60*60*1000) ? 'bg-amber-100 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>
+                              До: {new Date(item.expiryDate).toLocaleDateString()}
+                            </span>
+                          )}
+                          {item.prescription && (
+                             <button 
+                               onClick={() => togglePrescription(cartItemKey)}
+                               className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold border transition-colors ${item.prescriptionPresented ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-600'}`}
+                             >
+                               {item.prescriptionPresented ? 'Рецепт принят' : 'Нужен рецепт!'}
+                             </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-[#5A5A40]/55 mt-1 leading-tight">{item.sellingPrice.toFixed(2)} TJS / ед. • Склад: {formatUnitQuantity(item.totalStock)}</p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <p className="text-[12px] font-bold text-[#5A5A40] tabular-nums min-w-22 text-right">{(item.sellingPrice * item.quantity).toFixed(2)} TJS</p>
@@ -520,10 +813,40 @@ export const POSView: React.FC = () => {
 
           <div className="p-3 bg-[#f5f5f0]/50 border-t border-[#5A5A40]/5 space-y-2.5 shrink-0">
             <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-sm font-medium text-[#5A5A40]/60">
+                <span>Промежуточный итог</span>
+                <span className="tabular-nums">{subtotal.toFixed(2)} TJS</span>
+              </div>
+              {discountFromCustomer > 0 && (
+                <div className="flex justify-between items-center text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                  <div className="flex items-center gap-1.5">
+                    <UserIcon size={12} />
+                    <span>Скидка клиента ({selectedCustomer.defaultDiscount}%)</span>
+                  </div>
+                  <span className="tabular-nums">-{discountFromCustomer.toFixed(2)} TJS</span>
+                </div>
+              )}
               <div className="flex justify-between text-[18px] font-bold text-[#5A5A40] pt-2 border-t border-[#5A5A40]/10">
                 <span>Итого</span>
                 <span className="tabular-nums min-w-30 text-right">{total.toFixed(2)} TJS</span>
               </div>
+            </div>
+
+            <div className="bg-white p-2.5 rounded-xl border border-[#5A5A40]/10 space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60">Идентификация клиента</label>
+              {selectedCustomer ? (
+                <div className="flex items-center justify-between bg-[#f5f5f0] p-2 rounded-xl border border-[#5A5A40]/10">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-[#5A5A40] truncate">{selectedCustomer.name}</p>
+                    <p className="text-[10px] text-[#5A5A40]/60">{selectedCustomer.phone || 'Нет телефона'}</p>
+                  </div>
+                  <button onClick={() => setSelectedCustomer(null)} className="p-1 text-[#5A5A40]/40 hover:text-red-500 transition-colors">
+                    <Plus className="rotate-45" size={18} />
+                  </button>
+                </div>
+              ) : (
+                <CustomerSearch onSelect={setSelectedCustomer} />
+              )}
             </div>
 
             <div className="bg-white p-2.5 rounded-xl border border-[#5A5A40]/10 space-y-1.5">
@@ -600,6 +923,48 @@ export const POSView: React.FC = () => {
             void loadActiveShift();
           }}
         />
+      )}
+      {showBatchModal && (
+        <BatchSelectorModal
+          product={products.find(p => p.id === showBatchModal.productId) as any}
+          onClose={() => setShowBatchModal(null)}
+          onSelect={(batch) => {
+            addToCart(products.find(p => p.id === showBatchModal.productId)!, batch);
+            setShowBatchModal(null);
+          }}
+        />
+      )}
+      {isRecentSalesModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden">
+            <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-[#5A5A40]">Последние продажи</h3>
+              <button onClick={() => setIsRecentSalesModal(false)} className="p-2 hover:bg-[#f5f5f0] rounded-xl transition-colors"><Plus className="rotate-45" size={24} /></button>
+            </div>
+            <div className="p-4 max-h-[70vh] overflow-y-auto">
+              <div className="space-y-2">
+                {recentSales.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between p-4 bg-[#f5f5f0]/40 border border-[#5A5A40]/5 rounded-2xl">
+                    <div>
+                      <p className="font-bold text-[#5A5A40]">{s.invoiceNo}</p>
+                      <p className="text-xs text-[#5A5A40]/60">{new Date(s.createdAt).toLocaleString()} • {s.totalAmount.toFixed(2)} TJS</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${s.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {s.status}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handlePrintReceipt(s)} className="p-2 bg-white border border-[#5A5A40]/10 rounded-xl hover:bg-[#f5f5f0] text-[#5A5A40]"><Barcode size={16} /></button>
+                      {s.status !== 'CANCELLED' && (
+                        <button onClick={() => handleVoidSale(s.id)} className="px-3 py-1 bg-red-50 text-red-600 text-xs font-bold rounded-xl hover:bg-red-100 transition-colors">Отменить</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {recentSales.length === 0 && <div className="text-center py-8 text-[#5A5A40]/50">Нет недавних продаж</div>}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

@@ -211,28 +211,43 @@ export class WriteOffService {
     const writeOffNo = buildWriteOffNumber();
 
     const writeOff = await prisma.$transaction(async (tx) => {
-      const normalizedItems = await applyWriteOffItems(tx, writeOffNo, input);
+      const normalizedItems: any[] = [];
+      for (const item of input.items) {
+        const batch = await tx.batch.findUnique({ where: { id: item.batchId! } });
+        if (!batch) throw new NotFoundError('Batch not found');
+        const unitCost = Number(batch.costBasis || 0);
+        normalizedItems.push({
+          productId: item.productId,
+          batchId: item.batchId,
+          quantity: item.quantity,
+          unitCost,
+          lineTotal: unitCost * item.quantity,
+        });
+      }
 
-      return tx.writeOff.create({
+      const status = (input.userRole === 'ADMIN' || input.userRole === 'OWNER' || input.userRole === 'PHARMACIST') ? 'POSTED' : 'DRAFT';
+
+      const wo = await tx.writeOff.create({
         data: {
           writeOffNo,
           warehouseId,
           reason: input.reason,
           note: input.note || null,
+          status,
           totalAmount: normalizedItems.reduce((sum, item) => sum + item.lineTotal, 0),
           createdById: input.userId,
           items: {
-            create: normalizedItems.map((item) => ({
-              productId: item.productId,
-              batchId: item.batchId || null,
-              quantity: item.quantity,
-              unitCost: item.unitCost,
-              lineTotal: item.lineTotal,
-            })),
+            create: normalizedItems,
           },
         },
         include: { items: { include: { product: true } } },
       });
+
+      if (status === 'POSTED') {
+        await applyWriteOffItems(tx, writeOffNo, input);
+      }
+
+      return wo;
     });
 
     await auditService.log({
@@ -341,6 +356,62 @@ export class WriteOffService {
 
     reportCache.invalidatePattern(/^metrics:/);
     reportCache.invalidatePattern(/^report:/);
+  }
+
+  async approveWriteOff(writeOffId: string, userId: string, userRole: string) {
+    if (userRole !== 'ADMIN' && userRole !== 'OWNER' && userRole !== 'PHARMACIST') {
+      throw new ValidationError('Only Pharmacists or Admins can approve write-offs');
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const existing = await tx.writeOff.findUnique({
+        where: { id: writeOffId },
+        include: { items: true },
+      });
+
+      if (!existing) throw new NotFoundError('Write-off not found');
+      if (existing.status === 'POSTED') throw new ValidationError('Already approved');
+
+      await applyWriteOffItems(tx, existing.writeOffNo, {
+        reason: existing.reason as any,
+        items: existing.items.map(it => ({ productId: it.productId, batchId: it.batchId, quantity: it.quantity })),
+        userId: existing.createdById,
+        warehouseId: existing.warehouseId,
+      });
+
+      return tx.writeOff.update({
+        where: { id: writeOffId },
+        data: { status: 'POSTED', approvedById: userId },
+      });
+    });
+
+    await auditService.log({ userId, userRole: userRole as any, module: 'writeoff', action: 'APPROVE_WRITE_OFF', entity: 'WRITE_OFF', entityId: writeOffId });
+    return updated;
+  }
+
+  async massWriteOffExpired(userId: string, userRole: string) {
+     if (userRole !== 'ADMIN' && userRole !== 'OWNER' && userRole !== 'PHARMACIST') {
+      throw new ValidationError('Only Pharmacists or Admins can mass write-off');
+    }
+
+    const expiredBatches = await prisma.batch.findMany({
+      where: {
+        expiryDate: { lt: new Date() },
+        quantity: { gt: 0 },
+      },
+    });
+
+    if (expiredBatches.length === 0) return { count: 0 };
+
+    const writeOff = await this.createWriteOff({
+      reason: 'EXPIRED',
+      note: 'Auto mass write-off for all expired batches',
+      items: expiredBatches.map(b => ({ productId: b.productId, batchId: b.id, quantity: b.quantity })),
+      userId,
+      userRole,
+    });
+
+    return { count: expiredBatches.length, writeOffId: writeOff.id };
   }
 }
 

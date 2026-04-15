@@ -33,6 +33,7 @@ export type PurchaseInvoiceImportInput = {
   discountAmount?: number;
   taxAmount?: number;
   comment?: string;
+  status?: 'DRAFT' | 'POSTED';
   items: PurchaseInvoiceImportItemInput[];
 };
 
@@ -344,7 +345,7 @@ export class InventoryService {
           supplierId: supplier.id,
           warehouseId: warehouse.id,
           invoiceDate: input.invoiceDate,
-          status: 'POSTED',
+          status: input.status === 'POSTED' ? 'POSTED' : 'DRAFT',
           totalAmount,
           discountAmount,
           taxAmount,
@@ -354,91 +355,27 @@ export class InventoryService {
         },
       });
 
-      for (const item of input.items) {
-        if (!item.productId) throw new ValidationError('productId is required for each purchase item');
-        if (!item.batchNumber) throw new ValidationError('batchNumber is required for each purchase item');
-        if (!item.quantity || item.quantity <= 0) throw new ValidationError('quantity must be a positive number');
-
-        const product = await tx.product.findUnique({
-          where: { id: item.productId },
-        });
-
-        if (!product) throw new NotFoundError(`Product ${item.productId} not found`);
-
-        const purchaseItem = await tx.purchaseInvoiceItem.create({
-          data: {
-            purchaseInvoiceId: purchaseInvoice.id,
-            productId: product.id,
-            batchNumber: item.batchNumber,
-            manufacturedDate: item.manufacturedDate,
-            expiryDate: item.expiryDate,
-            quantity: item.quantity,
-            purchasePrice: item.costBasis,
-            wholesalePrice: item.wholesalePrice ?? null,
-            lineTotal: Number(item.costBasis) * Number(item.quantity),
-          },
-        });
-
-        const batch = await tx.batch.create({
-          data: {
-            batchNumber: item.batchNumber,
-            quantity: item.quantity,
-            initialQty: item.quantity,
-            currentQty: item.quantity,
-            reservedQty: 0,
-            availableQty: item.quantity,
-            unit: item.unit,
-            costBasis: item.costBasis,
-            purchasePrice: item.costBasis,
-            wholesalePrice: item.wholesalePrice ?? null,
-            retailPrice: null,
-            supplierId: supplier.id,
-            warehouseId: warehouse.id,
-            manufacturedDate: item.manufacturedDate,
-            receivedAt: input.invoiceDate,
-            expiryDate: item.expiryDate,
-            status: computeBatchStatus(item.expiryDate),
-            productId: product.id,
-            purchaseItemId: purchaseItem.id,
-          },
-        });
-
-        await tx.batchMovement.create({
-          data: {
-            batchId: batch.id,
-            type: 'RESTOCK',
-            quantity: item.quantity,
-            description: `Purchase invoice ${purchaseInvoice.invoiceNumber}`,
-            userId,
-          },
-        });
-
-        await tx.warehouseStock.upsert({
-          where: {
-            warehouseId_productId: {
-              warehouseId: warehouse.id,
-              productId: product.id,
+      if (purchaseInvoice.status === 'POSTED') {
+        for (const item of input.items) {
+           await this._processPurchaseItem(tx, purchaseInvoice, item, supplier.id, warehouse.id, userId);
+        }
+      } else {
+        // Just create items in WAIT state or similar
+        for (const item of input.items) {
+          await tx.purchaseInvoiceItem.create({
+            data: {
+              purchaseInvoiceId: purchaseInvoice.id,
+              productId: item.productId,
+              batchNumber: item.batchNumber,
+              manufacturedDate: item.manufacturedDate,
+              expiryDate: item.expiryDate,
+              quantity: item.quantity,
+              purchasePrice: item.costBasis,
+              wholesalePrice: item.wholesalePrice ?? null,
+              lineTotal: Number(item.costBasis) * Number(item.quantity),
             },
-          },
-          update: {
-            quantity: { increment: item.quantity },
-          },
-          create: {
-            warehouseId: warehouse.id,
-            productId: product.id,
-            quantity: item.quantity,
-          },
-        });
-
-        const newTotalStock = product.totalStock + item.quantity;
-        await tx.product.update({
-          where: { id: product.id },
-          data: {
-            totalStock: newTotalStock,
-            costPrice: item.costBasis,
-            status: mapProductStatus(newTotalStock, product.minStock),
-          },
-        });
+          });
+        }
       }
 
       await auditService.log({
@@ -705,6 +642,108 @@ export class InventoryService {
     reportCache.invalidatePattern(/^report:/);
 
     return result;
+  }
+
+  async _processPurchaseItem(tx: any, invoice: any, item: any, supplierId: string, warehouseId: string, userId: string) {
+    const product = await tx.product.findUnique({ where: { id: item.productId } });
+    if (!product) throw new NotFoundError(`Product ${item.productId} not found`);
+
+    const purchaseItem = await tx.purchaseInvoiceItem.findFirst({
+        where: { purchaseInvoiceId: invoice.id, productId: product.id, batchNumber: item.batchNumber }
+    }) || await tx.purchaseInvoiceItem.create({
+      data: {
+        purchaseInvoiceId: invoice.id,
+        productId: product.id,
+        batchNumber: item.batchNumber,
+        manufacturedDate: item.manufacturedDate,
+        expiryDate: item.expiryDate,
+        quantity: item.quantity,
+        purchasePrice: item.costBasis,
+        wholesalePrice: item.wholesalePrice ?? null,
+        lineTotal: Number(item.costBasis) * Number(item.quantity),
+      },
+    });
+
+    const batch = await tx.batch.create({
+      data: {
+        batchNumber: item.batchNumber,
+        quantity: item.quantity,
+        initialQty: item.quantity,
+        currentQty: item.quantity,
+        reservedQty: 0,
+        availableQty: item.quantity,
+        unit: item.unit || 'units',
+        costBasis: item.costBasis,
+        purchasePrice: item.costBasis,
+        wholesalePrice: item.wholesalePrice ?? null,
+        retailPrice: null,
+        supplierId,
+        warehouseId,
+        manufacturedDate: item.manufacturedDate,
+        receivedAt: invoice.invoiceDate,
+        expiryDate: item.expiryDate,
+        status: computeBatchStatus(item.expiryDate),
+        productId: product.id,
+        purchaseItemId: purchaseItem.id,
+      },
+    });
+
+    await tx.batchMovement.create({
+      data: {
+        batchId: batch.id,
+        type: 'RESTOCK',
+        quantity: item.quantity,
+        description: `Purchase invoice ${invoice.invoiceNumber}`,
+        userId,
+      },
+    });
+
+    await tx.warehouseStock.upsert({
+      where: { warehouseId_productId: { warehouseId, productId: product.id } },
+      update: { quantity: { increment: item.quantity } },
+      create: { warehouseId, productId: product.id, quantity: item.quantity },
+    });
+
+    const newTotalStock = product.totalStock + item.quantity;
+    await tx.product.update({
+      where: { id: product.id },
+      data: {
+        totalStock: newTotalStock,
+        costPrice: item.costBasis,
+        status: mapProductStatus(newTotalStock, product.minStock),
+      },
+    });
+  }
+
+  async approvePurchaseInvoice(invoiceId: string, userId: string) {
+    return await prisma.$transaction(async (tx) => {
+      const invoice = await tx.purchaseInvoice.findUnique({
+        where: { id: invoiceId },
+        include: { items: true },
+      });
+      if (!invoice) throw new NotFoundError('Invoice not found');
+      if (invoice.status === 'POSTED') throw new ValidationError('Invoice already posted');
+
+      for (const item of invoice.items) {
+        await this._processPurchaseItem(tx, invoice, item, invoice.supplierId, invoice.warehouseId, userId);
+      }
+
+      const updated = await tx.purchaseInvoice.update({
+        where: { id: invoiceId },
+        data: { status: 'POSTED' },
+      });
+
+      await auditService.log({
+        userId,
+        module: 'inventory',
+        action: 'APPROVE_PURCHASE_INVOICE',
+        entity: 'PURCHASE_INVOICE',
+        entityId: invoiceId,
+        newValue: { invoiceNumber: invoice.invoiceNumber },
+      }, tx);
+
+      return updated;
+    });
   }
 }
 
