@@ -296,16 +296,26 @@ export class InvoiceService {
           throw new ValidationError(`Cannot return more than sold for item ${lineItem.productName}`);
         }
 
+        // Update Invoice Item (Details change)
+        const lineReturnAmount = Number(lineItem.unitPrice) * returnItem.quantity;
+        await tx.invoiceItem.update({
+          where: { id: lineItem.id },
+          data: {
+            quantity: { decrement: returnItem.quantity },
+            totalPrice: { decrement: lineReturnAmount }
+          }
+        });
+
         returnItems.push({
           productId: lineItem.productId,
           batchId: lineItem.batchId,
           invoiceItemId: lineItem.id,
           quantity: returnItem.quantity,
           unitPrice: lineItem.unitPrice,
-          lineTotal: Number(lineItem.unitPrice) * returnItem.quantity,
+          lineTotal: lineReturnAmount,
         });
 
-        returnTotal += Number(lineItem.unitPrice) * returnItem.quantity;
+        returnTotal += lineReturnAmount;
 
         // Restore stock
         if (lineItem.batchId) {
@@ -345,19 +355,90 @@ export class InvoiceService {
         }
       });
 
-      // Update invoice status if everything returned
-      const totalQuantity = invoice.items.reduce((sum, i) => sum + Number(i.quantity), 0);
-      const totalReturned = await tx.returnItem.aggregate({
-        where: { return: { invoiceId, status: 'COMPLETED' } },
+      // Update invoice status and total
+      const updatedInvoiceTotal = Math.max(0, Number(invoice.totalAmount) - returnTotal);
+      
+      const totalRemainingQty = await tx.invoiceItem.aggregate({
+        where: { invoiceId },
         _sum: { quantity: true }
       });
       
-      const isFullReturn = Number(totalReturned._sum.quantity || 0) >= totalQuantity;
+      const isFullReturn = Number(totalRemainingQty._sum.quantity || 0) === 0;
+      
       await tx.invoice.update({
         where: { id: invoiceId },
-        data: { status: isFullReturn ? 'RETURNED' : 'PARTIALLY_RETURNED' }
+        data: { 
+          totalAmount: updatedInvoiceTotal,
+          status: isFullReturn ? 'RETURNED' : 'PARTIALLY_RETURNED' 
+        }
       });
 
+      // Sync with Debt record if exists
+      const debt = await tx.debt.findUnique({ where: { invoiceId } });
+      if (debt) {
+        let newPaidAmount = Number(debt.paidAmount);
+        
+        // If customer already paid more than the new total, issue a refund and reduce paidAmount
+        if (newPaidAmount > updatedInvoiceTotal) {
+          const refundAmount = newPaidAmount - updatedInvoiceTotal;
+          
+          await tx.payment.create({
+            data: {
+              direction: 'OUT',
+              counterpartyType: 'OTHER',
+              method: mapPaymentMethod(payload.refundMethod),
+              amount: refundAmount,
+              paymentDate: new Date(),
+              status: 'PAID',
+              invoiceId: invoice.id,
+              createdById: userId,
+              comment: `Refund for return ${invoiceReturn.returnNo} (Invoice ${invoice.invoiceNo})`,
+            },
+          });
+          
+          newPaidAmount = updatedInvoiceTotal;
+        }
+
+        const nextRemaining = Math.max(0, updatedInvoiceTotal - newPaidAmount);
+
+        await tx.debt.update({
+          where: { id: debt.id },
+          data: {
+            originalAmount: updatedInvoiceTotal,
+            paidAmount: newPaidAmount,
+            remainingAmount: nextRemaining,
+            status: nextRemaining <= 0 ? 'PAID' : (newPaidAmount > 0 ? 'PARTIAL' : 'OPEN')
+          }
+        });
+      } else {
+        // Even if no debt record, check if we need to refund for cash/card sales
+        const paymentsIn = await tx.payment.aggregate({
+          where: { invoiceId, direction: 'IN', status: 'PAID' },
+          _sum: { amount: true }
+        });
+        const paymentsOut = await tx.payment.aggregate({
+          where: { invoiceId, direction: 'OUT', status: 'PAID' },
+          _sum: { amount: true }
+        });
+        
+        const netPaid = Number(paymentsIn._sum.amount || 0) - Number(paymentsOut._sum.amount || 0);
+        if (netPaid > updatedInvoiceTotal) {
+          const refundAmount = netPaid - updatedInvoiceTotal;
+          await tx.payment.create({
+            data: {
+              direction: 'OUT',
+              counterpartyType: 'OTHER',
+              method: mapPaymentMethod(payload.refundMethod),
+              amount: refundAmount,
+              paymentDate: new Date(),
+              status: 'PAID',
+              invoiceId: invoice.id,
+              createdById: userId,
+              comment: `Refund for return ${invoiceReturn.returnNo} (Invoice ${invoice.invoiceNo})`,
+            },
+          });
+        }
+      }
 
       await auditService.log({
         userId,
@@ -366,7 +447,7 @@ export class InvoiceService {
         action: 'PROCESS_INVOICE_RETURN',
         entity: 'INVOICE',
         entityId: invoice.id,
-        newValue: { returnId: invoiceReturn.id, total: returnTotal }
+        newValue: { returnId: invoiceReturn.id, total: returnTotal, newInvoiceTotal: updatedInvoiceTotal }
       }, tx);
 
       return invoiceReturn;

@@ -167,20 +167,119 @@ export class ReturnsService {
         });
       }
 
-      // ── Step 2: For CUSTOMER returns — create a Payment (refund to buyer) ────
-      // This is the critical fix: money leaves the pharmacy → direction=OUT
-      if (ret.type === 'CUSTOMER' && Number(ret.totalAmount || 0) > 0) {
+      // ── Step 2: For CUSTOMER returns — create a Payment (refund) and update Invoice ──
+      if (ret.type === 'CUSTOMER' && ret.invoiceId) {
+        const invoice = await tx.invoice.findUnique({
+          where: { id: ret.invoiceId },
+          include: { items: true, debt: true }
+        });
+
+        if (invoice) {
+          const returnAmount = Number(ret.totalAmount || 0);
+          
+          // 2.1 Update Invoice Items
+          for (const item of ret.items) {
+            const invItem = invoice.items.find(i => 
+              i.productId === item.productId && 
+              i.batchId === item.batchId
+            );
+            if (invItem) {
+              const lineReturnAmount = Number(item.unitPrice || invItem.unitPrice) * item.quantity;
+              await tx.invoiceItem.update({
+                where: { id: invItem.id },
+                data: {
+                  quantity: { decrement: item.quantity },
+                  totalPrice: { decrement: lineReturnAmount }
+                }
+              });
+            }
+          }
+
+          // 2.2 Update Invoice total and status
+          const updatedInvoiceTotal = Math.max(0, Number(invoice.totalAmount) - returnAmount);
+          const totalRemainingQty = await tx.invoiceItem.aggregate({
+            where: { invoiceId: invoice.id },
+            _sum: { quantity: true }
+          });
+          const isFullReturn = Number(totalRemainingQty._sum.quantity || 0) === 0;
+
+          await tx.invoice.update({
+            where: { id: invoice.id },
+            data: {
+              totalAmount: updatedInvoiceTotal,
+              status: isFullReturn ? 'RETURNED' : 'PARTIALLY_RETURNED'
+            }
+          });
+
+          // 2.3 Calculate refund and update Debt
+          let refundAmount = 0;
+          if (invoice.debt) {
+            // Credit sale logic
+            const currentPaid = Number(invoice.debt.paidAmount);
+            const newOriginalAmount = updatedInvoiceTotal;
+            
+            if (currentPaid > newOriginalAmount) {
+              refundAmount = currentPaid - newOriginalAmount;
+            }
+            
+            const nextPaid = currentPaid - refundAmount;
+            const nextRemaining = Math.max(0, newOriginalAmount - nextPaid);
+
+            await tx.debt.update({
+              where: { id: invoice.debt.id },
+              data: {
+                originalAmount: newOriginalAmount,
+                paidAmount: nextPaid,
+                remainingAmount: nextRemaining,
+                status: nextRemaining <= 0 ? 'PAID' : (nextPaid > 0 ? 'PARTIAL' : 'OPEN')
+              }
+            });
+          } else {
+            // Cash/Card sale logic (calculate net paid from payments)
+            const paymentsIn = await tx.payment.aggregate({
+              where: { invoiceId: invoice.id, direction: 'IN', status: 'PAID' },
+              _sum: { amount: true }
+            });
+            const paymentsOut = await tx.payment.aggregate({
+              where: { invoiceId: invoice.id, direction: 'OUT', status: 'PAID' },
+              _sum: { amount: true }
+            });
+            const netPaid = Number(paymentsIn._sum.amount || 0) - Number(paymentsOut._sum.amount || 0);
+            
+            if (netPaid > updatedInvoiceTotal) {
+              refundAmount = netPaid - updatedInvoiceTotal;
+            }
+          }
+
+          // 2.4 Create refund payment if needed
+          if (refundAmount > 0) {
+            const refundMethod = (ret.refundMethod || 'CASH') as string;
+            const methodMap: Record<string, 'CASH' | 'CARD' | 'BANK_TRANSFER'> = {
+              CASH: 'CASH', CARD: 'CARD', STORE_BALANCE: 'CASH', BANK_TRANSFER: 'BANK_TRANSFER',
+            };
+            const paymentMethod = methodMap[refundMethod] ?? 'CASH';
+
+            await tx.payment.create({
+              data: {
+                direction: 'OUT',
+                counterpartyType: 'OTHER',
+                invoiceId: invoice.id,
+                method: paymentMethod,
+                amount: refundAmount,
+                paymentDate: new Date(),
+                status: 'PAID',
+                createdById: userId,
+                comment: `Возврат покупателю по документу ${ret.returnNo} (Корректировка накладной ${invoice.invoiceNo})`,
+              },
+            });
+          }
+        }
+      } else if (ret.type === 'CUSTOMER' && Number(ret.totalAmount || 0) > 0) {
+        // Fallback for customer returns NOT linked to an invoice (blind refund)
         const refundAmount = Number(ret.totalAmount);
         const refundMethod = (ret.refundMethod || 'CASH') as string;
-
-        // No customerId needed for retail refunds
-
-        // Map refundMethod to PaymentMethod
         const methodMap: Record<string, 'CASH' | 'CARD' | 'BANK_TRANSFER'> = {
-          CASH: 'CASH',
-          CARD: 'CARD',
-          STORE_BALANCE: 'CASH',  // store credit treated as cash refund
-          BANK_TRANSFER: 'BANK_TRANSFER',
+          CASH: 'CASH', CARD: 'CARD', STORE_BALANCE: 'CASH', BANK_TRANSFER: 'BANK_TRANSFER',
         };
         const paymentMethod = methodMap[refundMethod] ?? 'CASH';
 
@@ -188,16 +287,14 @@ export class ReturnsService {
           data: {
             direction: 'OUT',
             counterpartyType: 'OTHER',
-            ...(ret.invoiceId ? { invoiceId: ret.invoiceId } : {}),
             method: paymentMethod,
             amount: refundAmount,
             paymentDate: new Date(),
             status: 'PAID',
             createdById: userId,
-            comment: `Возврат покупателю по документу ${ret.returnNo}`,
+            comment: `Возврат покупателю по документу ${ret.returnNo} (Без привязки к накладной)`,
           },
         });
-
       }
 
       // ── Step 3: Mark return as COMPLETED ────────────────────────────────────
