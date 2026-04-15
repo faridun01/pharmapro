@@ -533,7 +533,6 @@ export const POSView: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button type="button" onClick={() => setIsRecentSalesModal(true)} className="px-3 py-2 rounded-xl border border-[#5A5A40]/10 bg-white text-[#5A5A40] text-xs font-semibold hover:bg-[#f5f5f0] transition-colors">История</button>
                 {activeShift ? (
                   <>
                     <button type="button" onClick={() => setIsCloseShiftModal(true)} className="px-3 py-2 rounded-xl bg-[#5A5A40] text-white text-xs font-semibold hover:bg-[#4A4A30] transition-colors">Закрыть смену</button>
@@ -678,20 +677,20 @@ export const POSView: React.FC = () => {
             </div>
 
 
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setPaymentType('CASH')} className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[11px] transition-all ${paymentType === 'CASH' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
-                <Wallet size={13} />
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => setPaymentType('CASH')} className={`flex items-center justify-center gap-1 py-2 rounded-xl font-medium text-[10px] transition-all ${paymentType === 'CASH' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
+                <Wallet size={12} />
                 Наличные
               </button>
-              <button onClick={() => setPaymentType('CARD')} className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[11px] transition-all ${paymentType === 'CARD' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
-                <CreditCard size={13} />
+              <button onClick={() => setPaymentType('CARD')} className={`flex items-center justify-center gap-1 py-2 rounded-xl font-medium text-[10px] transition-all ${paymentType === 'CARD' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}>
+                <CreditCard size={12} />
                 Карта
               </button>
               <button 
                 onClick={() => setPaymentType('CREDIT')} 
-                className={`col-span-2 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-bold text-[12px] transition-all shadow-sm ${paymentType === 'CREDIT' ? 'bg-amber-600 text-white shadow-amber-200' : 'bg-white text-amber-600 border border-amber-200 hover:bg-amber-50'}`}
+                className={`flex items-center justify-center gap-1 py-2 rounded-xl font-bold text-[10px] transition-all shadow-sm ${paymentType === 'CREDIT' ? 'bg-amber-600 text-white shadow-amber-200' : 'bg-white text-amber-600 border border-amber-200 hover:bg-amber-50'}`}
               >
-                <User size={14} />
+                <User size={12} />
                 В долг
               </button>
             </div>

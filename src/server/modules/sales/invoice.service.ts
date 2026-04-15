@@ -476,9 +476,23 @@ export class InvoiceService {
           }
       }
 
+      // Recalculate payment status based on new total and existing payments
+      const aggregate = await tx.payment.aggregate({
+        where: { invoiceId, status: 'PAID' },
+        _sum: { amount: true },
+      });
+      const paidTotal = Number(aggregate._sum.amount || 0);
+      const newTotal = payload.totalAmount ?? Number(existing.totalAmount);
+      const remaining = Math.max(0, newTotal - paidTotal);
+      
+      const newPaymentStatus = remaining <= 0 ? 'PAID' : paidTotal > 0 ? 'PARTIALLY_PAID' : 'UNPAID';
+
       const updated = await tx.invoice.update({
         where: { id: invoiceId },
-        data: updateData,
+        data: {
+            ...updateData,
+            paymentStatus: newPaymentStatus,
+        },
         include: { items: true }
       });
 

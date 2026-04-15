@@ -16,6 +16,12 @@ invoicesRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
+invoicesRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const result = await invoiceService.updateInvoice(req.params.id, req.body, authedReq.user.id, authedReq.user.role);
+  res.json(result);
+}));
+
 invoicesRouter.patch('/:id', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const result = await invoiceService.updateInvoice(req.params.id, req.body, authedReq.user.id, authedReq.user.role);
