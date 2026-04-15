@@ -165,7 +165,6 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
     { id: 'inventory' as const, label: 'Товары и партии', icon: Package },
     { id: 'invoices' as const, label: t('Sales History'), icon: Pill },
     { id: 'debtors' as const, label: 'Должники', icon: User },
-    { id: 'customers' as const, label: 'Покупатели', icon: Users },
     { id: 'shifts' as const, label: t('Shifts'), icon: Clock },
     { id: 'suppliers' as const, label: t('Suppliers'), icon: Truck },
     { id: 'returns' as const, label: t('Returns'), icon: RotateCcw },
@@ -254,7 +253,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       case 'inventory': return <InventoryView />;
       case 'invoices': return <InvoicesView viewMode="history" />;
       case 'debtors': return <InvoicesView viewMode="debtors" />;
-      case 'customers': return <CustomersView />;
+      // Покупатели убраны
       case 'suppliers': return <SuppliersPage />;
       case 'reports': return <ReportsView />;
       case 'returns': return <ReturnView />;
