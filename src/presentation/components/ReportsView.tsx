@@ -12,7 +12,14 @@ import { ReportInventorySection } from './reports/ReportInventorySection';
 import { ReportDetailedView } from './reports/ReportDetailedView';
 import { ReportExpirySection } from './reports/ReportExpirySection';
 import { exportReportToXlsx } from './reports/ExportUtils';
-import { formatMoney } from './reports/utils';
+
+const formatMoney = (amount: number, currency = 'UZS') => {
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 0,
+  }).format(amount);
+};
 
 export const ReportsView: React.FC = () => {
   const { t } = useTranslation();

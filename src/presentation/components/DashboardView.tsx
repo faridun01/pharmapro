@@ -4,6 +4,7 @@ import { usePharmacy } from '../context';
 import { lazyNamedImport } from '../../lib/lazyLoadComponents';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { formatProductDisplayName } from '../../lib/productDisplay';
+import { formatMoney } from './reports/utils';
 import {
   TrendingUp,
   Package,
@@ -44,8 +45,6 @@ export const DashboardView: React.FC = () => {
   const [showChart, setShowChart] = useState(false);
   const [serverMetrics, setServerMetrics] = useState<DashboardMetricsResponse | null>(null);
 
-  const formatMoney = (value: number) =>
-    `${Number(value || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TJS`;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setShowChart(true), 150);
@@ -97,7 +96,7 @@ export const DashboardView: React.FC = () => {
     { label: 'Складской запас', value: serverMetrics?.inventoryHighlights?.totalInventoryUnits ?? totalStock, sub: 'Единиц в наличии', icon: Activity, color: 'text-emerald-500', bg: 'bg-emerald-50' },
     { label: 'Низкий остаток', value: serverMetrics?.lowStock?.count ?? 0, sub: 'Требуют закупа', icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-50' },
     { label: 'Срок годности', value: serverMetrics?.expiry?.expiringSoon ?? 0, sub: 'Критическая зона', icon: Clock, color: 'text-rose-500', bg: 'bg-rose-50' },
-    { label: `Выручка (${dashboardPeriodLabel})`, value: formatMoney(serverMetrics?.revenue?.total ?? 0), sub: `${serverMetrics?.revenue?.recognizedInvoiceCount ?? 0} чеков`, icon: TrendingUp, color: 'text-indigo-500', bg: 'bg-indigo-50' },
+    { label: `Выручка (${dashboardPeriodLabel})`, value: formatMoney(serverMetrics?.revenue?.total ?? 0, 'TJS'), sub: `${serverMetrics?.revenue?.recognizedInvoiceCount ?? 0} чеков`, icon: TrendingUp, color: 'text-indigo-500', bg: 'bg-indigo-50' },
   ];
 
   return (
@@ -149,7 +148,7 @@ export const DashboardView: React.FC = () => {
               <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
               <h3 className="text-xl font-normal text-[#151619] tracking-tight">{t('Sales Dynamics')}</h3>
             </div>
-            <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{dashboardPeriodLabel} • {formatMoney(serverMetrics?.revenue?.total ?? 0)}</p>
+            <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{dashboardPeriodLabel} • {formatMoney(serverMetrics?.revenue?.total ?? 0, 'TJS')}</p>
           </div>
 
           <div className="h-[320px] w-full relative z-10">
@@ -284,12 +283,12 @@ export const DashboardView: React.FC = () => {
             <div className="flex flex-wrap gap-12">
               <div>
                 <p className="text-indigo-200/30 text-[10px] uppercase tracking-widest mb-3 italic">Валовая прибыль</p>
-                <p className="text-3xl font-normal text-indigo-400 tabular-nums">{formatMoney(serverMetrics?.finance?.grossMarginMonth ?? 0)}</p>
+                <p className="text-3xl font-normal text-indigo-400 tabular-nums">{formatMoney(serverMetrics?.finance?.grossMarginMonth ?? 0, 'TJS')}</p>
               </div>
               <div className="w-px h-16 bg-white/10 hidden md:block" />
               <div>
                 <p className="text-indigo-200/30 text-[10px] uppercase tracking-widest mb-3 italic">Списания за месяц</p>
-                <p className="text-3xl font-normal text-rose-400 tabular-nums">-{formatMoney(serverMetrics?.finance?.writeOffAmountMonth ?? 0)}</p>
+                <p className="text-3xl font-normal text-rose-400 tabular-nums">-{formatMoney(serverMetrics?.finance?.writeOffAmountMonth ?? 0, 'TJS')}</p>
               </div>
             </div>
           </div>
