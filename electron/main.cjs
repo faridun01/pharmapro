@@ -667,11 +667,13 @@ ipcMain.handle('desktop:perform-backup', async () => {
     // Note: We try 'pg_dump' from PATH first, then common Windows paths
     let pgDumpPath = 'pg_dump';
     const commonPaths = [
+       'C:\\Program Files\\PostgreSQL\\18\\bin\\pg_dump.exe',
        'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
        'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
        'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
        'C:\\Program Files\\PostgreSQL\\14\\bin\\pg_dump.exe',
-       'C:\\Program Files\\PostgreSQL\\13\\bin\\pg_dump.exe'
+       'C:\\Program Files\\PostgreSQL\\13\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\18\\pgAdmin 4\\runtime\\pg_dump.exe'
     ];
 
     for (const cp of commonPaths) {
@@ -726,11 +728,13 @@ ipcMain.handle('desktop:check-system-status', async () => {
   };
 
   const commonPaths = [
+    'C:\\Program Files\\PostgreSQL\\18\\bin\\pg_dump.exe',
     'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
     'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
     'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
     'C:\\Program Files\\PostgreSQL\\14\\bin\\pg_dump.exe',
-    'C:\\Program Files\\PostgreSQL\\13\\bin\\pg_dump.exe'
+    'C:\\Program Files\\PostgreSQL\\13\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\18\\pgAdmin 4\\runtime\\pg_dump.exe'
   ];
 
   for (const cp of commonPaths) {

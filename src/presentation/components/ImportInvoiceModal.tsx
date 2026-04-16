@@ -863,15 +863,15 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
             <div className="p-8 bg-[#f5f5f0]/30 border-t border-[#5A5A40]/5 flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-8">
                 <div>
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest">Всего позиций</p>
-                  <p className="text-xl font-bold text-[#5A5A40]">{items.length}</p>
+                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest leading-tight">Всего позиций</p>
+                  <p className="text-sm font-bold text-[#5A5A40]">{items.length}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest">Сумма до скидки</p>
-                  <p className="text-xl font-bold text-[#5A5A40]">{grossTotal.toFixed(2)} TJS</p>
+                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest leading-tight">Сумма до скидки</p>
+                  <p className="text-sm font-bold text-[#5A5A40]">{grossTotal.toFixed(2)} TJS</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest">Скидка</p>
+                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest leading-tight">Скидка</p>
                   <input
                     type="number"
                     min="0"
@@ -882,8 +882,8 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                   />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest">Итог с учетом скидки</p>
-                  <p className="text-xl font-bold text-[#5A5A40]">{netTotal.toFixed(2)} TJS</p>
+                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest leading-tight">Итог с учетом скидки</p>
+                  <p className="text-sm font-bold text-[#5A5A40]">{netTotal.toFixed(2)} TJS</p>
                 </div>
               </div>
 
