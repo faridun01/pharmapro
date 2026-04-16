@@ -110,11 +110,17 @@ const ProductCatalog = memo(({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                        <h3 className="text-[14px] font-normal text-[#151619] truncate leading-tight">{product.name}</h3>
+                       {product.countryOfOrigin && (
+                          <span className="shrink-0 px-1.5 py-0.5 bg-[#5A5A40]/5 text-[#5A5A40]/60 text-[8px] uppercase tracking-wider rounded-md border border-[#5A5A40]/10 font-bold">
+                            {product.countryOfOrigin}
+                          </span>
+                       )}
                        {expiryStatus === 'EXPIRED' && <span className="shrink-0 scale-75 px-1.5 py-0.5 bg-red-600 text-white text-[8px] uppercase tracking-tighter rounded-md font-bold">Просрочено</span>}
                        {expiryStatus === 'CRITICAL' && <span className="shrink-0 scale-75 px-1.5 py-0.5 bg-orange-500 text-white text-[8px] uppercase tracking-tighter rounded-md font-bold">Срок!</span>}
                     </div>
                     <div className="flex items-center gap-2.5 mt-0.5">
                       <span className="text-[9px] text-[#5A5A40]/40 uppercase tracking-widest">{product.sku}</span>
+                      <span className="text-[9px] text-[#5A5A40]/30 italic truncate max-w-[120px]">{product.manufacturer}</span>
                       <span className={`text-[9px] font-normal px-1.5 py-0.5 rounded-md ${lowStock ? 'bg-red-50 text-red-600' : 'bg-[#f5f5f0] text-[#5A5A40]/50'}`}>
                         {stockLabel}
                       </span>
@@ -411,6 +417,9 @@ export const POSView: React.FC = () => {
                            )}
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1">
+                          {item.countryOfOrigin && (
+                             <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-[#5A5A40]/5 text-[#5A5A40]/40 border border-[#5A5A40]/10 uppercase tracking-widest font-normal">{item.countryOfOrigin}</span>
+                          )}
                           {item.prescription && (
                              <button onClick={() => togglePrescription(cartItemKey)} className={`text-[8px] px-1.5 py-0.5 rounded-full uppercase tracking-tighter border transition-colors ${item.prescriptionPresented ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-red-50 border-red-100 text-red-500'}`}>{item.prescriptionPresented ? 'Рецепт OK' : 'Нужен рецепт'}</button>
                           )}

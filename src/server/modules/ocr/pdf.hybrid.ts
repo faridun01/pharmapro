@@ -134,7 +134,7 @@ const normalizeUnit = (value: unknown) => {
   if (!normalized) return '';
   if (normalized.startsWith('короб')) return 'коробка';
   if (normalized.startsWith('меш')) return 'мешок';
-  if (normalized === 'шт.' || normalized === 'шт') return 'шт';
+  if (normalized === 'шт.' || normalized === 'шт' || normalized === 'дона' || normalized === 'д') return 'шт';
   return normalized;
 };
 
@@ -155,7 +155,7 @@ const detectTableLikeText = (rawText: string) => {
   if (!lines.length) return false;
 
   const headerHits = lines.slice(0, 20).filter((line) =>
-    /(наимен|товар|price|qty|quantity|сумма|итого|unit|колич|цена|упаков|короб|invoice|артикул)/i.test(line),
+    /(наимен|товар|price|qty|quantity|сумма|итого|unit|колич|цена|упаков|короб|invoice|артикул|микдор|нарх|маблаг|номгуй)/i.test(line),
   ).length;
 
   const rowHits = lines.filter((line) => {
@@ -176,17 +176,17 @@ const extractHeader = (rawText: string) => {
 
   for (const line of lines.slice(0, 30)) {
     if (!invoiceNumber) {
-      const match = line.match(/(?:накладная|сч[её]т|фактура|invoice|акт|заказ)\s*[№#]?\s*([A-ZА-ЯЁa-zа-яё0-9\/-]{2,30})/i);
+      const match = line.match(/(?:накладная|накладнома|сч[её]т|фактура|invoice|акт|заказ)\s*[№#]?\s*([A-ZА-ЯЁa-zа-яё0-9\/-]{2,30})/i);
       if (match?.[1]) invoiceNumber = match[1].trim();
     }
 
     if (!invoiceDate) {
-      const match = line.match(/(?:от|дата|date)?\s*(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4})/i);
+      const match = line.match(/(?:от|дата|date|сана)?\s*(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4})/i);
       if (match?.[1]) invoiceDate = normalizeDateString(match[1]);
     }
 
     if (!supplierName) {
-      const keywordMatch = line.match(/(?:поставщик|supplier|продавец|от кого)\s*[:\-]?\s*(.+)/i);
+      const keywordMatch = line.match(/(?:поставщик|supplier|продавец|от кого|таъминкунанда|фурушанда)\s*[:\-]?\s*(.+)/i);
       if (keywordMatch?.[1]) supplierName = keywordMatch[1].trim();
     }
   }
