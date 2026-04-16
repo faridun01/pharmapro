@@ -527,17 +527,25 @@ export class ReportService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const summary = debts.reduce((acc, inv) => {
+    const summary = { totalDebt: 0, unpaidCount: 0, partialCount: 0, totalCount: 0 };
+    
+    // Final check to ensure consistency between list and summary
+    for (const inv of debts) {
       const remaining = Number(inv.receivable?.remainingAmount || 0);
-      if (remaining <= 0.01) return acc;
+      if (remaining <= 0.01) continue;
 
-      acc.totalDebt += remaining;
-      if (inv.paymentStatus === 'UNPAID') acc.unpaidCount++;
-      if (inv.paymentStatus === 'PARTIALLY_PAID') acc.partialCount++;
-      acc.totalCount++;
+      summary.totalDebt += remaining;
+      summary.totalCount++;
       
-      return acc;
-    }, { totalDebt: 0, unpaidCount: 0, partialCount: 0, totalCount: 0 });
+      const paid = Number(inv.receivable?.paidAmount || 0);
+
+      // Define partial/unpaid based on actual payment progress, not just status string
+      if (paid < 0.01) {
+        summary.unpaidCount++;
+      } else {
+        summary.partialCount++;
+      }
+    }
 
     return { items: debts, summary };
   }

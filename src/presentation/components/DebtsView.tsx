@@ -124,6 +124,31 @@ export const DebtsView: React.FC = () => {
     }).sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
   }, [debts, searchTerm, filter]);
 
+  // Full summary calculated from current data to avoid discrepancies
+  const calculatedSummary = useMemo(() => {
+    let debt = 0;
+    let unpaid = 0;
+    let partial = 0;
+    
+    // We base the totals on the full list of invoices that HAVE debt
+    debts.forEach(d => {
+      const remaining = Number(d.receivable?.remainingAmount || 0);
+      if (remaining > 0.01) {
+        debt += remaining;
+        const paid = Number(d.receivable?.paidAmount || 0);
+        if (paid < 0.01) unpaid++;
+        else partial++;
+      }
+    });
+
+    return { 
+      totalDebt: debt, 
+      unpaidCount: unpaid, 
+      partialCount: partial, 
+      totalCustomers: groupedDebts.length 
+    };
+  }, [debts, groupedDebts.length]);
+
   const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
 
   return (
@@ -137,7 +162,7 @@ export const DebtsView: React.FC = () => {
             </div>
           </div>
           <h3 className="text-[#5A5A40]/50 text-[10px] font-black uppercase tracking-widest mb-1">Общий долг</h3>
-          <p className="text-2xl font-black text-[#5A5A40] tabular-nums">{summary?.totalDebt?.toFixed(2) || '0.00'} TJS</p>
+          <p className="text-2xl font-black text-[#5A5A40] tabular-nums">{calculatedSummary.totalDebt.toFixed(2)} TJS</p>
         </div>
 
         <div className="bg-white p-6 rounded-[32px] border border-[#5A5A40]/5 shadow-sm">
@@ -147,7 +172,7 @@ export const DebtsView: React.FC = () => {
             </div>
           </div>
           <h3 className="text-[#5A5A40]/50 text-[10px] font-black uppercase tracking-widest mb-1">Неоплачено</h3>
-          <p className="text-2xl font-black text-[#5A5A40] tabular-nums">{summary?.unpaidCount || 0}</p>
+          <p className="text-2xl font-black text-[#5A5A40] tabular-nums">{calculatedSummary.unpaidCount}</p>
         </div>
 
         <div className="bg-white p-6 rounded-[32px] border border-[#5A5A40]/5 shadow-sm">
@@ -157,7 +182,7 @@ export const DebtsView: React.FC = () => {
             </div>
           </div>
           <h3 className="text-[#5A5A40]/50 text-[10px] font-black uppercase tracking-widest mb-1">Частично</h3>
-          <p className="text-2xl font-black text-[#5A5A40] tabular-nums">{summary?.partialCount || 0}</p>
+          <p className="text-2xl font-black text-[#5A5A40] tabular-nums">{calculatedSummary.partialCount}</p>
         </div>
 
         <div className="bg-white p-6 rounded-[32px] border border-[#5A5A40]/5 shadow-sm">
@@ -167,7 +192,7 @@ export const DebtsView: React.FC = () => {
             </div>
           </div>
           <h3 className="text-[#5A5A40]/50 text-[10px] font-black uppercase tracking-widest mb-1">Всего клиентов</h3>
-          <p className="text-2xl font-black text-[#5A5A40] tabular-nums">{groupedDebts.length}</p>
+          <p className="text-2xl font-black text-[#5A5A40] tabular-nums">{calculatedSummary.totalCustomers}</p>
         </div>
       </div>
 
