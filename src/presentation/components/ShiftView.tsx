@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { AppModal } from './AppModal';
 import { loadLatestClosedShiftNotice, saveLatestClosedShiftNotice } from '../../lib/shiftCloseNotice';
+import { DateRangeFilter, ReportRangePreset } from './common/DateRangeFilter';
 
 interface CashMovement {
   id: string;
@@ -486,12 +487,21 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
   const [isCashMovModal, setIsCashMovModal] = useState(false);
   const [reportShiftId, setReportShiftId] = useState<string | null>(null);
   const [totalShifts, setTotalShifts] = useState(0);
+  const [preset, setPreset] = useState<ReportRangePreset>('month');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const q = new URLSearchParams();
+      q.set('page', String(currentPage));
+      q.set('limit', String(itemsPerPage));
+      if (fromDate) q.set('from', fromDate);
+      if (toDate) q.set('to', toDate);
+
       const [shiftsRes, activeRes] = await Promise.all([
-        fetch(`/api/shifts?page=${currentPage}&limit=${itemsPerPage}`, { headers: authHeaders() }),
+        fetch(`/api/shifts?${q.toString()}`, { headers: authHeaders() }),
         fetch('/api/shifts/active', { headers: authHeaders() }),
       ]);
       if (shiftsRes.ok) {
@@ -503,7 +513,30 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
     } finally {
       setLoading(false);
     }
-  }, [currentPage]);
+  }, [currentPage, fromDate, toDate]);
+
+  useEffect(() => {
+    const today = new Date();
+    if (preset === 'today') {
+      const start = new Date(today); start.setHours(0,0,0,0);
+      const end = new Date(today); end.setHours(23,59,59,999);
+      setFromDate(start.toISOString());
+      setToDate(end.toISOString());
+    } else if (preset === 'month') {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+      setFromDate(start.toISOString());
+      setToDate(end.toISOString());
+    } else if (preset === 'lastMonth') {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const end = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+      setFromDate(start.toISOString());
+      setToDate(end.toISOString());
+    } else if (preset === 'all') {
+      setFromDate('');
+      setToDate('');
+    }
+  }, [preset]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -631,91 +664,109 @@ export const ShiftView: React.FC<{ initialReportShiftId?: string; onInitialRepor
         </div>
       )}
 
-      {/* Shift history */}
-      {loading ? (
-        <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40]" /></div>
-      ) : (
-        <div>
-          <h3 className="text-xs font-semibold text-[#5A5A40]/40 uppercase tracking-widest mb-4">{t('Shift History')}</h3>
-          <div className="space-y-3">
-            {paginatedShifts.map((shift) => (
-              <div key={shift.id} className="bg-white rounded-2xl shadow-sm border border-[#5A5A40]/5 px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${shift.status === 'OPEN' ? 'bg-emerald-100' : 'bg-[#f5f5f0]'}`}>
-                    {shift.status === 'OPEN'
-                      ? <Clock size={16} className="text-emerald-600" />
-                      : <CheckCircle2 size={16} className="text-[#5A5A40]/40" />}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-3">
+          <DateRangeFilter
+            preset={preset}
+            setPreset={setPreset}
+            fromDate={fromDate}
+            setFromDate={(d) => { setFromDate(d); setPreset('custom'); }}
+            toDate={toDate}
+            setToDate={(d) => { setToDate(d); setPreset('custom'); }}
+            onRefresh={load}
+          />
+        </div>
+
+        <div className="lg:col-span-9">
+          {loading ? (
+             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40] mb-4" />
+                <p className="text-sm text-[#5A5A40]/40 font-medium">Загружаем историю смен...</p>
+             </div>
+          ) : (
+            <div>
+              <h3 className="text-xs font-semibold text-[#5A5A40]/40 uppercase tracking-widest mb-4">{t('Shift History')}</h3>
+              <div className="space-y-3">
+                {paginatedShifts.map((shift) => (
+                  <div key={shift.id} className="bg-white rounded-2xl shadow-sm border border-[#5A5A40]/5 px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${shift.status === 'OPEN' ? 'bg-emerald-100' : 'bg-[#f5f5f0]'}`}>
+                        {shift.status === 'OPEN'
+                          ? <Clock size={16} className="text-emerald-600" />
+                          : <CheckCircle2 size={16} className="text-[#5A5A40]/40" />}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-[#151619] text-sm">{shift.shiftNo}</p>
+                        <p className="text-xs text-[#5A5A40]/50 mt-0.5">
+                          {shift.cashier?.name} · {new Date(shift.openAt).toLocaleDateString()} {new Date(shift.openAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {shift.closeAt && ` → ${new Date(shift.closeAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-xs text-[#5A5A40]/40">{t('Opening')}</p>
+                          <p className="font-bold text-sm text-[#5A5A40]">{shift.openingCash.toFixed(2)} TJS</p>
+                      </div>
+                      {shift.closingCash !== undefined && shift.closingCash !== null && (
+                        <div className="text-right hidden sm:block">
+                          <p className="text-xs text-[#5A5A40]/40">{t('Closing')}</p>
+                          <p className="font-bold text-sm text-[#5A5A40]">{shift.closingCash.toFixed(2)} TJS</p>
+                        </div>
+                      )}
+                      {shift.discrepancy !== undefined && shift.discrepancy !== null && shift.discrepancy !== 0 && (
+                        <div className="text-right min-w-27">
+                          <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{t('Discrepancy')}</p>
+                          <span className={`inline-flex mt-1 text-xs font-bold px-2 py-1 rounded-lg ${shift.discrepancy < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                            {shift.discrepancy > 0 ? '+' : ''}{shift.discrepancy.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setReportShiftId(shift.id)}
+                        className="p-2 rounded-xl border border-[#5A5A40]/10 hover:bg-[#f5f5f0] transition-all text-[#5A5A40]/60"
+                      >
+                        <BarChart3 size={16} />
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-[#151619] text-sm">{shift.shiftNo}</p>
-                    <p className="text-xs text-[#5A5A40]/50 mt-0.5">
-                      {shift.cashier?.name} · {new Date(shift.openAt).toLocaleDateString()} {new Date(shift.openAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {shift.closeAt && ` → ${new Date(shift.closeAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                    </p>
+                ))}
+                {shifts.length === 0 && (
+                  <p className="text-center text-[#5A5A40]/40 py-8">{t('No shifts recorded yet')}</p>
+                )}
+              </div>
+              {totalShifts > itemsPerPage && (
+                <div className="mt-4 flex min-h-18 flex-col gap-3 rounded-2xl border border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
+                  <div className="text-sm text-[#5A5A40]/70">
+                    Показано {(safeCurrentPage - 1) * itemsPerPage + 1}-{Math.min(safeCurrentPage * itemsPerPage, totalShifts)} из {totalShifts}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      disabled={safeCurrentPage === 1}
+                      className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Назад
+                    </button>
+                    <span className="px-3 py-2 text-sm font-semibold text-[#5A5A40]">
+                      {safeCurrentPage} / {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                      disabled={safeCurrentPage === totalPages}
+                      className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Вперед
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-xs text-[#5A5A40]/40">{t('Opening')}</p>
-                      <p className="font-bold text-sm text-[#5A5A40]">{shift.openingCash.toFixed(2)} TJS</p>
-                  </div>
-                  {shift.closingCash !== undefined && shift.closingCash !== null && (
-                    <div className="text-right hidden sm:block">
-                      <p className="text-xs text-[#5A5A40]/40">{t('Closing')}</p>
-                      <p className="font-bold text-sm text-[#5A5A40]">{shift.closingCash.toFixed(2)} TJS</p>
-                    </div>
-                  )}
-                  {shift.discrepancy !== undefined && shift.discrepancy !== null && shift.discrepancy !== 0 && (
-                    <div className="text-right min-w-27">
-                      <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{t('Discrepancy')}</p>
-                      <span className={`inline-flex mt-1 text-xs font-bold px-2 py-1 rounded-lg ${shift.discrepancy < 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                        {shift.discrepancy > 0 ? '+' : ''}{shift.discrepancy.toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => setReportShiftId(shift.id)}
-                    className="p-2 rounded-xl border border-[#5A5A40]/10 hover:bg-[#f5f5f0] transition-all text-[#5A5A40]/60"
-                  >
-                    <BarChart3 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
-            {shifts.length === 0 && (
-              <p className="text-center text-[#5A5A40]/40 py-8">{t('No shifts recorded yet')}</p>
-            )}
-          </div>
-          {totalShifts > itemsPerPage && (
-            <div className="mt-4 flex min-h-18 flex-col gap-3 rounded-2xl border border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
-              <div className="text-sm text-[#5A5A40]/70">
-                Показано {(safeCurrentPage - 1) * itemsPerPage + 1}-{Math.min(safeCurrentPage * itemsPerPage, totalShifts)} из {totalShifts}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                  disabled={safeCurrentPage === 1}
-                  className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Назад
-                </button>
-                <span className="px-3 py-2 text-sm font-semibold text-[#5A5A40]">
-                  {safeCurrentPage} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                  disabled={safeCurrentPage === totalPages}
-                  className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Вперед
-                </button>
-              </div>
+              )}
             </div>
           )}
         </div>
-      )}
+      </div>
 
       {/* Modals */}
       <OpenShiftModal open={isOpenModal} onClose={() => setIsOpenModal(false)} onOpened={load} />

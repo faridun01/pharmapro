@@ -10,8 +10,19 @@ export const writeoffRouter = Router();
 const VALID_REASONS = ['EXPIRED', 'DAMAGED', 'LOST', 'INTERNAL_USE', 'MISMATCH', 'BROKEN_PACKAGING', 'OTHER'] as const;
 type WriteOffReasonStr = (typeof VALID_REASONS)[number];
 
-writeoffRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
+writeoffRouter.get('/', authenticate, asyncHandler(async (req, res) => {
+  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+
+  const where: any = {};
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt.gte = from;
+    if (to) where.createdAt.lte = to;
+  }
+
   const writeOffs = await prisma.writeOff.findMany({
+    where,
     include: {
       items: { include: { product: true, batch: true } },
       createdBy: { select: { name: true } },

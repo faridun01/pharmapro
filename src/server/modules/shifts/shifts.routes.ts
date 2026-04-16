@@ -146,10 +146,20 @@ function calculateShiftSummary(shift: ShiftWithReportData) {
 shiftsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 25));
+  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+
+  const where: any = {};
+  if (from || to) {
+    where.openAt = {};
+    if (from) where.openAt.gte = from;
+    if (to) where.openAt.lte = to;
+  }
 
   const [total, items] = await Promise.all([
-    prisma.cashShift.count(),
+    prisma.cashShift.count({ where }),
     prisma.cashShift.findMany({
+      where,
       include: {
         cashier: { select: { name: true } },
         warehouse: { select: { name: true } },

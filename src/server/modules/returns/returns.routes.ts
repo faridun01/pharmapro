@@ -7,8 +7,19 @@ import { returnsService } from './returns.service';
 
 export const returnsRouter = Router();
 
-returnsRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
+returnsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
+  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+
+  const where: any = {};
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt.gte = from;
+    if (to) where.createdAt.lte = to;
+  }
+
   const returns = await prisma.return.findMany({
+    where,
     include: {
       items: { include: { product: true, batch: true } },
       createdBy: { select: { name: true } },

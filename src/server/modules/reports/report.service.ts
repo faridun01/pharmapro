@@ -403,7 +403,7 @@ export class ReportService {
       };
     });
 
-    const productTotalsMap = new Map<string, { productId: string; name: string; sku: string; soldUnits: number; salesCount: number; revenue: number }>();
+    const productTotalsMap = new Map<string, { productId: string; name: string; sku: string; soldUnits: number; salesCount: number; revenue: number; profit: number }>();
     for (const sale of saleDetails) {
       for (const item of sale.items) {
         const existing = productTotalsMap.get(item.productId) || {
@@ -413,10 +413,12 @@ export class ReportService {
           soldUnits: 0,
           salesCount: 0,
           revenue: 0,
+          profit: 0,
         };
         existing.soldUnits += item.quantity;
         existing.salesCount += 1;
         existing.revenue += item.lineTotal;
+        existing.profit += item.lineProfit;
         productTotalsMap.set(item.productId, existing);
       }
     }

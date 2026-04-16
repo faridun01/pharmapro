@@ -106,6 +106,7 @@ export type FinanceReport = {
       soldUnits: number;
       salesCount: number;
       revenue: number;
+      profit: number;
     }>;
   };
 };

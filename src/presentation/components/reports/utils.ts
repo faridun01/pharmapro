@@ -123,6 +123,7 @@ export const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceRep
       soldUnits: toNumber(p.soldUnits),
       salesCount: toNumber(p.salesCount),
       revenue: toNumber(p.revenue),
+      profit: toNumber(p.profit),
     })) : [],
   },
 });

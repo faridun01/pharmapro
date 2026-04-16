@@ -31,6 +31,25 @@ export const exportReportToXlsx = async (report: FinanceReport, viewMode: Report
 
     const detailSheet = XLSX.utils.aoa_to_sheet(detailRows);
     XLSX.utils.book_append_sheet(wb, detailSheet, 'Детализация');
+
+    // Add Product Totals Sheet
+    const productRows: Array<Array<string | number>> = [
+      ['Итоги по товарам за период'],
+      [],
+      ['Товар', 'SKU', 'Продано (ед.)', 'Кол-во продаж', 'Выручка', 'Прибыль']
+    ];
+    for (const p of report.currentMonthSales.productTotals) {
+      productRows.push([
+        p.name,
+        p.sku,
+        p.soldUnits,
+        p.salesCount,
+        toNumber(p.revenue),
+        toNumber(p.profit)
+      ]);
+    }
+    const productSheet = XLSX.utils.aoa_to_sheet(productRows);
+    XLSX.utils.book_append_sheet(wb, productSheet, 'По товарам');
   } else {
     // Summary Export
     const summaryData = [
@@ -38,18 +57,20 @@ export const exportReportToXlsx = async (report: FinanceReport, viewMode: Report
       ['Выручка (гросс)', report.kpi.revenueGross],
       ['Возвраты', report.kpi.retailReturnsAmount],
       ['Чистая выручка', report.kpi.netRevenue],
-      ['Себестоимость', report.kpi.cogs],
+      ['Себестоимость (COGS)', report.kpi.cogs],
       ['Валовая прибыль', report.kpi.grossProfit],
       ['Маржа %', report.kpi.grossMarginPct],
       ['Кредиторская задолженность', report.debts.payableTotal],
+      ['Операционная прибыль', report.kpi.operatingProfit],
+      ['Денежный поток (Net)', report.cashflow.net],
     ];
     const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, summarySheet, 'Сводка');
 
     const inventoryRows = [
-      ['Товар', 'SKU', 'Остаток', 'Продано', 'Себестоимость (всего)', 'Розничная стоимость (всего)'],
+      ['Товар', 'SKU', 'Остаток на складе', 'Себестоимость остатка', 'Розничная стоимость остатка'],
       ...report.inventory.details.map(d => [
-        d.name, d.sku, d.totalStock, d.soldUnits, d.costValue, d.retailValue
+        d.name, d.sku, d.totalStock, d.costValue, d.retailValue
       ])
     ];
     const inventorySheet = XLSX.utils.aoa_to_sheet(inventoryRows);

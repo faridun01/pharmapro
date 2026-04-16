@@ -7,6 +7,7 @@ import { useCurrencyCode } from '../../lib/useCurrencyCode';
 import { runRefreshTasks } from '../../lib/utils';
 import { Plus, CheckCircle2, XCircle, Clock, RefreshCw, ChevronDown, ChevronUp, Package, Printer } from 'lucide-react';
 import { AppModal } from './AppModal';
+import { DateRangeFilter, ReportRangePreset } from './common/DateRangeFilter';
 
 interface ReturnItem {
   id: string;
@@ -407,16 +408,45 @@ export const ReturnView: React.FC = () => {
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'RETAIL' | 'SUPPLIER'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'COMPLETED' | 'REJECTED'>('ALL');
+  const [preset, setPreset] = useState<ReportRangePreset>('month');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/returns', { headers: await buildApiHeaders() });
+      const q = new URLSearchParams();
+      if (fromDate) q.set('from', fromDate);
+      if (toDate) q.set('to', toDate);
+      const res = await fetch(`/api/returns?${q.toString()}`, { headers: await buildApiHeaders() });
       if (res.ok) setReturns(await res.json());
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fromDate, toDate]);
+
+  useEffect(() => {
+    const today = new Date();
+    if (preset === 'today') {
+      const start = new Date(today); start.setHours(0,0,0,0);
+      const end = new Date(today); end.setHours(23,59,59,999);
+      setFromDate(start.toISOString());
+      setToDate(end.toISOString());
+    } else if (preset === 'month') {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+      setFromDate(start.toISOString());
+      setToDate(end.toISOString());
+    } else if (preset === 'lastMonth') {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const end = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+      setFromDate(start.toISOString());
+      setToDate(end.toISOString());
+    } else if (preset === 'all') {
+      setFromDate('');
+      setToDate('');
+    }
+  }, [preset]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -589,63 +619,77 @@ export const ReturnView: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-        <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 px-4 py-4 shadow-sm min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold mb-2">Тип возврата</p>
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { value: 'ALL', label: 'Все' },
-              { value: 'RETAIL', label: 'Розничный' },
-              { value: 'SUPPLIER', label: 'Поставщику' },
-            ].map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setTypeFilter(option.value as typeof typeFilter)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
-                  typeFilter === option.value
-                    ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
-                    : 'bg-[#f5f5f0] text-[#5A5A40] border-[#5A5A40]/10 hover:bg-[#ecebe5]'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-3 space-y-4">
+          <DateRangeFilter
+            preset={preset}
+            setPreset={setPreset}
+            fromDate={fromDate}
+            setFromDate={(d) => { setFromDate(d); setPreset('custom'); }}
+            toDate={toDate}
+            setToDate={(d) => { setToDate(d); setPreset('custom'); }}
+            onRefresh={load}
+          />
+          <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 px-4 py-4 shadow-sm min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold mb-2">Тип возврата</p>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: 'ALL', label: 'Все' },
+                { value: 'RETAIL', label: 'Розничный' },
+                { value: 'SUPPLIER', label: 'Поставщику' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setTypeFilter(option.value as typeof typeFilter)}
+                  className={`px-4 py-2 rounded-xl text-xs font-medium border transition-all ${
+                    typeFilter === option.value
+                      ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
+                      : 'bg-[#f5f5f0] text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#ecebe5]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 px-4 py-4 shadow-sm min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold mb-2">Статус</p>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: 'ALL', label: 'Все' },
+                { value: 'DRAFT', label: 'Черновик' },
+                { value: 'COMPLETED', label: 'Завершен' },
+                { value: 'REJECTED', label: 'Отклонен' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setStatusFilter(option.value as typeof statusFilter)}
+                  className={`px-4 py-2 rounded-xl text-xs font-medium border transition-all ${
+                    statusFilter === option.value
+                      ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
+                      : 'bg-[#f5f5f0] text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#ecebe5]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 px-4 py-4 shadow-sm min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold mb-2">Статус</p>
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { value: 'ALL', label: 'Все' },
-              { value: 'DRAFT', label: 'Черновик' },
-              { value: 'COMPLETED', label: 'Завершен' },
-              { value: 'REJECTED', label: 'Отклонен' },
-            ].map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setStatusFilter(option.value as typeof statusFilter)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
-                  statusFilter === option.value
-                    ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
-                    : 'bg-[#f5f5f0] text-[#5A5A40] border-[#5A5A40]/10 hover:bg-[#ecebe5]'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
 
-      {loading ? (
-        <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40]" /></div>
-      ) : filteredReturns.length === 0 ? (
-        <div className="text-center py-20 text-[#5A5A40]/40">
-          <Package size={48} className="mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">Нет возвратов по выбранным фильтрам</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
+        <div className="lg:col-span-9">
+          {loading ? (
+             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40] mb-4" />
+                <p className="text-sm text-[#5A5A40]/40 font-medium">Загружаем возвраты...</p>
+             </div>
+          ) : filteredReturns.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm text-[#5A5A40]/40">
+              <Package size={48} className="mx-auto mb-4 opacity-30" />
+              <p className="text-lg font-medium">Нет возвратов по выбранным фильтрам</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
           {filteredReturns.map((ret) => {
             const returnTotal = getReturnTotal(ret);
             const returnQuantity = ret.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
@@ -748,8 +792,10 @@ export const ReturnView: React.FC = () => {
               )}
             </div>
           )})}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <CreateReturnModal open={isModalOpen} onClose={() => setIsModalOpen(false)} onCreated={load} />
     </div>

@@ -4,6 +4,7 @@ import { Plus, Trash2, RefreshCw, AlertTriangle, Package, Pencil, CheckCircle2, 
 import { runRefreshTasks } from '../../lib/utils';
 import { AppModal } from './AppModal';
 import { useCurrencyCode } from '../../lib/useCurrencyCode';
+import { DateRangeFilter, ReportRangePreset } from './common/DateRangeFilter';
 
 const REASONS = ['EXPIRED', 'DAMAGED', 'LOST', 'INTERNAL_USE', 'MISMATCH', 'BROKEN_PACKAGING', 'OTHER'] as const;
 type Reason = (typeof REASONS)[number];
@@ -479,15 +480,45 @@ export const WriteOffView: React.FC = () => {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const [preset, setPreset] = useState<ReportRangePreset>('month');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/writeoffs', { headers: authHeaders() });
+      const q = new URLSearchParams();
+      if (fromDate) q.set('from', fromDate);
+      if (toDate) q.set('to', toDate);
+      const res = await fetch(`/api/writeoffs?${q.toString()}`, { headers: authHeaders() });
       if (res.ok) setWriteOffs(await res.json());
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fromDate, toDate]);
+
+  useEffect(() => {
+    const today = new Date();
+    if (preset === 'today') {
+      const start = new Date(today); start.setHours(0,0,0,0);
+      const end = new Date(today); end.setHours(23,59,59,999);
+      setFromDate(start.toISOString());
+      setToDate(end.toISOString());
+    } else if (preset === 'month') {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+      setFromDate(start.toISOString());
+      setToDate(end.toISOString());
+    } else if (preset === 'lastMonth') {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const end = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+      setFromDate(start.toISOString());
+      setToDate(end.toISOString());
+    } else if (preset === 'all') {
+      setFromDate('');
+      setToDate('');
+    }
+  }, [preset]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -603,15 +634,32 @@ export const WriteOffView: React.FC = () => {
         </div>
       )}
 
-      {loading ? (
-        <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40]" /></div>
-      ) : writeOffs.length === 0 ? (
-        <div className="text-center py-20 text-[#5A5A40]/40">
-          <Package size={48} className="mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">Списаний пока нет</p>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-3">
+          <DateRangeFilter
+            preset={preset}
+            setPreset={setPreset}
+            fromDate={fromDate}
+            setFromDate={(d) => { setFromDate(d); setPreset('custom'); }}
+            toDate={toDate}
+            setToDate={(d) => { setToDate(d); setPreset('custom'); }}
+            onRefresh={load}
+          />
         </div>
-      ) : (
-        <div className="space-y-3">
+
+        <div className="lg:col-span-9">
+          {loading ? (
+             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40] mb-4" />
+                <p className="text-sm text-[#5A5A40]/40 font-medium">Загружаем списания...</p>
+             </div>
+          ) : writeOffs.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm text-[#5A5A40]/40">
+              <Package size={48} className="mx-auto mb-4 opacity-30" />
+              <p className="text-lg font-medium">Списаний пока нет</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
           {writeOffs.map((wo) => (
             <div key={wo.id} className="bg-white rounded-2xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
               <div
@@ -690,8 +738,10 @@ export const WriteOffView: React.FC = () => {
               )}
             </div>
           ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <CreateWriteOffModal open={isModalOpen} onClose={closeModal} onCreated={handleCreated} initialWriteOff={editingWriteOff} />
 
