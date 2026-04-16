@@ -10,8 +10,8 @@ interface Props {
 
 export const ReportDetailedView: React.FC<Props> = ({ data, currencyCode }) => {
   const { t } = useTranslation();
-  const sales = data.currentMonthSales;
-  const topProducts = sales.productTotals.slice(0, 10);
+  const sales = data?.currentMonthSales || { productTotals: [], saleDetails: [], from: new Date().toISOString(), to: new Date().toISOString() };
+  const topProducts = (sales?.productTotals || []).slice(0, 10);
 
   return (
     <div className="space-y-6">
@@ -22,12 +22,12 @@ export const ReportDetailedView: React.FC<Props> = ({ data, currencyCode }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
           <p className="text-xs uppercase font-semibold text-slate-400 mb-1">{t('reports.totalSales')}</p>
-          <p className="text-xl font-bold text-slate-900">{sales.saleDetails.length}</p>
+          <p className="text-xl font-bold text-slate-900">{sales.saleDetails?.length || 0}</p>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
           <p className="text-xs uppercase font-semibold text-slate-400 mb-1">{t('reports.revenue')}</p>
           <p className="text-xl font-bold text-slate-900">
-            {formatMoney(sales.saleDetails.reduce((sum, s) => sum + s.totalAmount, 0), currencyCode)}
+            {formatMoney((sales.saleDetails || []).reduce((sum, s) => sum + s.totalAmount, 0), currencyCode)}
           </p>
         </div>
       </div>
@@ -73,7 +73,7 @@ export const ReportDetailedView: React.FC<Props> = ({ data, currencyCode }) => {
           <h3 className="font-semibold text-slate-800">{t('reports.saleDetails')}</h3>
         </div>
         <div className="divide-y divide-slate-100">
-          {sales.saleDetails.map((sale) => (
+          {(sales?.saleDetails || []).map((sale) => (
             <div key={sale.invoiceId} className="p-4 hover:bg-slate-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <div>
@@ -106,7 +106,7 @@ export const ReportDetailedView: React.FC<Props> = ({ data, currencyCode }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {sale.items.map((item, idx) => (
+                    {(sale.items || []).map((item, idx) => (
                       <tr key={`${sale.invoiceId}-${idx}`}>
                         <td className="py-2 text-slate-700">{item.productName}</td>
                         <td className="py-2 text-right">{item.quantity}</td>

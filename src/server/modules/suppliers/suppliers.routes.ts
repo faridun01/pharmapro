@@ -31,6 +31,8 @@ const getSupplierOverview = async (supplierId: string) => {
           select: {
             quantity: true,
             lineTotal: true,
+            purchasePrice: true,
+            product: { select: { name: true, sku: true } }
           },
         },
       },
@@ -55,13 +57,14 @@ const getSupplierOverview = async (supplierId: string) => {
     }),
   ]);
 
-  const invoiceSummaries = purchaseInvoices.map((invoice) => {
-    const paidAmount = invoice.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const invoiceSummaries = purchaseInvoices.map((inv) => {
+    const invoice = inv as any;
+    const paidAmount = invoice.payments.reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0);
     const payable = invoice.payables[0] || null;
     const debtAmount = payable
       ? Math.max(0, Number(payable.remainingAmount || 0))
       : Math.max(0, Number(invoice.totalAmount || 0) - paidAmount);
-    const itemCount = invoice.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const itemCount = invoice.items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0);
 
     return {
       id: invoice.id,
@@ -73,6 +76,14 @@ const getSupplierOverview = async (supplierId: string) => {
       itemCount,
       status: invoice.status,
       paymentStatus: invoice.paymentStatus,
+      // Add items for drill-down details
+      items: invoice.items?.map((item: any) => ({
+        productName: item.product?.name || 'Товар',
+        sku: item.product?.sku || '',
+        quantity: Number(item.quantity || 0),
+        unitCost: Number(item.purchasePrice || 0),
+        lineTotal: Number(item.lineTotal || 0)
+      })) || []
     };
   });
 

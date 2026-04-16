@@ -54,6 +54,9 @@ export const normalizeReport = (raw: any, preset: ReportRangePreset): FinanceRep
     payableTotal: toNumber(raw?.debts?.payableTotal),
     payableOverdue: toNumber(raw?.debts?.payableOverdue),
     apAging: normalizeAging(raw?.debts?.apAging),
+    receivableTotal: toNumber(raw?.debts?.receivableTotal),
+    receivableOverdue: toNumber(raw?.debts?.receivableOverdue),
+    arAging: normalizeAging(raw?.debts?.arAging),
   },
   purchases: {
     total: toNumber(raw?.purchases?.total),

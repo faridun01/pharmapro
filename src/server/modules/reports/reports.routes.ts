@@ -321,7 +321,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         },
       },
     }),
-    prisma.debt.findMany({
+    prisma.receivable.findMany({
       where: {
         status: { not: 'PAID' },
       },

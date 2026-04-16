@@ -73,6 +73,7 @@ const App: React.FC = () => {
   const [status, setStatus] = React.useState('Запуск системы...');
   const [error, setError] = React.useState<string | null>(null);
   const desktopControls = window.pharmaproDesktop?.controls;
+  const appStartupStartedAt = window.pharmaproDesktop?.startupStartedAt || Date.now();
 
   const checkHealth = React.useCallback(async () => {
     try {
@@ -107,11 +108,25 @@ const App: React.FC = () => {
       const isHealthy = await checkHealth();
       
       if (isHealthy) {
-        // Minimum branding display time: 3 seconds
-        setTimeout(() => {
+        // Strict splash duration for premium feel: 4 seconds total from launch
+        const now = Date.now();
+        const elapsed = now - appStartupStartedAt;
+        const remainingTime = Math.max(0, 4000 - elapsed);
+        
+        setTimeout(async () => {
           setShowSplash(false);
           polling = false;
-        }, 3000);
+          
+          // Auto-login to admin page for seamless demo experience
+          if (!user) {
+            try {
+              setStatus('Авторизация...');
+              await handleLogin('admin@pharmapro.com', 'dev-password');
+            } catch (err) {
+              console.warn('Auto-login failed, showing login screen');
+            }
+          }
+        }, remainingTime);
       } else {
         attempts++;
         if (attempts >= MAX_ATTEMPTS) {
@@ -125,7 +140,7 @@ const App: React.FC = () => {
 
     poll();
     return () => { polling = false; };
-  }, [checkHealth]);
+  }, [checkHealth, user, appStartupStartedAt]);
 
   const handleLogin = async (login: string, password: string) => {
     const authSession = await loginWithPassword(login, password);

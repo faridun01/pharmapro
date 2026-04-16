@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, Truck, Phone, Mail, MapPin, Edit3, Trash2, Package, DollarSign, X, CalendarClock, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Truck, Phone, Mail, MapPin, Edit3, Trash2, Package, DollarSign, X, CalendarClock, AlertTriangle, ChevronRight } from 'lucide-react';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { useDebounce } from '../../lib/useDebounce';
 import { SupplierPaymentModal } from './suppliers/SupplierPaymentModal';
@@ -23,6 +23,13 @@ type SupplierInvoiceSummary = {
   itemCount: number;
   status: string;
   paymentStatus: string;
+  items?: Array<{
+    productName: string;
+    sku: string;
+    quantity: number;
+    unitCost: number;
+    lineTotal: number;
+  }>;
 };
 
 type SupplierBatchSummary = {
@@ -79,6 +86,7 @@ export const SuppliersPage: React.FC = () => {
   const [suppliers, setSuppliers] = useState<SupplierRecord[]>([]);
   const [supplierStats, setSupplierStats] = useState<Record<string, SupplierOverview>>({});
   const [openSupplierId, setOpenSupplierId] = useState<string | null>(null);
+  const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
   const [paymentModal, setPaymentModal] = useState<{ invoice: SupplierInvoiceSummary; supplierId: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [initialLoadPending, setInitialLoadPending] = useState(true);
@@ -343,37 +351,46 @@ export const SuppliersPage: React.FC = () => {
                 <div className="w-14 h-14 bg-[#f5f5f0] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
                   <Truck size={28} />
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openEdit(supplier);
-                      }}
-                      disabled={submitting}
-                      className="p-2 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-xl transition-all disabled:opacity-50"
-                      title={t('Edit Supplier')}
-                    >
-                      <Edit3 size={18} />
-                    </button>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setDeleteTarget({ id: supplier.id, name: supplier.name });
-                      }}
-                      disabled={submitting}
-                      className="p-2 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
-                      title={t('Delete Supplier')}
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex items-center gap-1">
+                      {(summary?.totalDebt || 0) > 0 ? (
+                        <span className="bg-red-50 text-red-600 px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border border-red-100 animate-pulse">
+                          Есть долг
+                        </span>
+                      ) : (
+                        <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border border-emerald-100">
+                          Оплачено
+                        </span>
+                      )}
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openEdit(supplier);
+                        }}
+                        disabled={submitting}
+                        className="p-2 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-xl transition-all disabled:opacity-50"
+                        title={t('Edit Supplier')}
+                      >
+                        <Edit3 size={18} />
+                      </button>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDeleteTarget({ id: supplier.id, name: supplier.name });
+                        }}
+                        disabled={submitting}
+                        className="p-2 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
+                        title={t('Delete Supplier')}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                    {summary?.lastInvoiceDate && (
+                      <span className="text-[9px] uppercase font-bold text-[#5A5A40]/30 tracking-widest">
+                        Last: {new Date(summary.lastInvoiceDate).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
-                  {summary?.lastInvoiceDate && (
-                    <span className="text-[9px] uppercase font-bold text-[#5A5A40]/30 tracking-widest">
-                      Last: {new Date(summary.lastInvoiceDate).toLocaleDateString()}
-                    </span>
-                  )}
-                </div>
               </div>
 
               <h3 className="text-lg font-bold text-[#5A5A40] mb-2">{supplier.name}</h3>
@@ -455,7 +472,12 @@ export const SuppliersPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <h4 className="text-sm font-bold mb-3">Приходы и оплаты</h4>
+                    <div className="flex justify-between items-end mb-3">
+                      <h4 className="text-sm font-bold">Приходы и оплаты</h4>
+                      <span className="text-[10px] font-medium text-[#5A5A40]/40 uppercase tracking-widest italic flex items-center gap-1">
+                        <Plus size={10} /> Нажмите на строку для деталей
+                      </span>
+                    </div>
                     <div className="overflow-x-auto rounded-2xl border border-[#5A5A40]/10">
                       <table className="min-w-full text-sm">
                         <thead className="bg-[#f8f7f2] text-[#5A5A40]/60">
@@ -470,84 +492,86 @@ export const SuppliersPage: React.FC = () => {
                             <th className="px-4 py-3 text-center">Действие</th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {selectedStats.invoices.map((invoice) => (
-                            <tr key={invoice.id} className="border-t border-[#5A5A40]/10">
-                              <td className="px-4 py-3 font-medium text-[#5A5A40]">{invoice.invoiceNumber}</td>
-                              <td className="px-4 py-3 text-[#5A5A40]/70">{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : '—'}</td>
-                              <td className="px-4 py-3 text-right text-[#5A5A40]/70">{invoice.itemCount}</td>
-                              <td className="px-4 py-3 text-right">{formatMoney(invoice.totalAmount)}</td>
-                              <td className="px-4 py-3 text-right text-emerald-700">{formatMoney(invoice.paidAmount)}</td>
-                              <td className="px-4 py-3 text-right font-semibold text-red-700">{formatMoney(invoice.debtAmount)}</td>
-                              <td className="px-4 py-3 text-center">
-                                <span className="inline-flex rounded-full bg-[#f5f5f0] px-3 py-1 text-xs font-semibold text-[#5A5A40]">
-                                  {invoice.paymentStatus}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {invoice.debtAmount > 0 ? (
-                                  <button
-                                    className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-100 text-emerald-700 text-xs font-semibold hover:bg-emerald-200"
-                                    onClick={() => setPaymentModal({ invoice, supplierId: openSupplierId })}
-                                    disabled={busyId === invoice.id}
-                                  >
-                                    <DollarSign size={14} /> Оплатить
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-[#5A5A40]/35">Закрыто</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                          {selectedStats.invoices.length === 0 && (
-                            <tr>
-                              <td colSpan={8} className="px-4 py-8 text-center text-[#5A5A40]/45">По поставщику еще нет приходов</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-bold mb-3">Активные партии</h4>
-                    <div className="overflow-x-auto rounded-2xl border border-[#5A5A40]/10">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-[#f8f7f2] text-[#5A5A40]/60">
-                          <tr>
-                            <th className="px-4 py-3 text-left">Партия</th>
-                            <th className="px-4 py-3 text-left">Товар</th>
-                            <th className="px-4 py-3 text-right">Кол-во</th>
-                            <th className="px-4 py-3 text-right">Себест.</th>
-                            <th className="px-4 py-3 text-right">Срок годн.</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedStats.batchList.map((batch) => {
-                            const daysLeft = Math.ceil((new Date(batch.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                        <tbody className="divide-y divide-[#5A5A40]/10">
+                          {(selectedStats?.invoices || []).map((invoice) => {
+                            const isExpanded = expandedInvoiceId === invoice.id;
                             return (
-                              <tr key={batch.id} className="border-t border-[#5A5A40]/10">
-                                <td className="px-4 py-3 font-medium text-[#5A5A40]">{batch.batchNumber}</td>
-                                <td className="px-4 py-3">
-                                  <div className="text-[#5A5A40]">{batch.productName}</div>
-                                  <div className="text-xs text-[#5A5A40]/45">{batch.productSku}</div>
-                                </td>
-                                <td className="px-4 py-3 text-right">{batch.quantity}</td>
-                                <td className="px-4 py-3 text-right">{formatMoney(batch.costBasis)}</td>
-                                <td className="px-4 py-3 text-right">
-                                  <div className="inline-flex items-center gap-2">
-                                    {daysLeft <= 30 && <AlertTriangle size={14} className="text-amber-600" />}
-                                    <span className={daysLeft <= 30 ? 'text-amber-700 font-semibold' : 'text-[#5A5A40]/70'}>
-                                      {new Date(batch.expiryDate).toLocaleDateString()}
+                              <React.Fragment key={invoice.id}>
+                                <tr 
+                                  className={`group cursor-pointer hover:bg-[#f8f7f2] transition-all ${isExpanded ? 'bg-[#f8f7f2]/50' : ''}`}
+                                  onClick={() => setExpandedInvoiceId(isExpanded ? null : invoice.id)}
+                                >
+                                  <td className="px-4 py-4 font-bold text-[#5A5A40] flex items-center gap-2">
+                                    <div className={`transition-all duration-300 ${isExpanded ? 'rotate-90 text-emerald-600' : 'group-hover:translate-x-1 group-hover:text-emerald-600'}`}>
+                                      <ChevronRight size={14} />
+                                    </div>
+                                    <span className="group-hover:text-emerald-700 transition-colors">{invoice.invoiceNumber}</span>
+                                  </td>
+                                  <td className="px-4 py-4 text-[#5A5A40]/70">{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : '—'}</td>
+                                  <td className="px-4 py-4 text-right text-[#5A5A40]/70">{invoice.itemCount}</td>
+                                  <td className="px-4 py-4 text-right font-medium">{formatMoney(invoice.totalAmount)}</td>
+                                  <td className="px-4 py-4 text-right text-emerald-700 font-medium">{formatMoney(invoice.paidAmount)}</td>
+                                  <td className="px-4 py-4 text-right font-bold text-red-700">{formatMoney(invoice.debtAmount)}</td>
+                                  <td className="px-4 py-4 text-center">
+                                    <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${invoice.paymentStatus === 'PAID' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                      {invoice.paymentStatus}
                                     </span>
-                                  </div>
-                                </td>
-                              </tr>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    {invoice.debtAmount > 0 ? (
+                                      <button
+                                        className="inline-flex items-center gap-1 px-4 py-2 rounded-xl bg-[#5A5A40] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#4A4A30] transition-all"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPaymentModal({ invoice, supplierId: openSupplierId });
+                                        }}
+                                        disabled={busyId === invoice.id}
+                                      >
+                                        Оплата
+                                      </button>
+                                    ) : (
+                                      <span className="text-[10px] font-black uppercase tracking-widest text-[#5A5A40]/20">Закрыт</span>
+                                    )}
+                                  </td>
+                                </tr>
+                                {isExpanded && (
+                                  <tr className="bg-[#f8f7f2]/30">
+                                    <td colSpan={8} className="px-8 py-6">
+                                      <div className="bg-white rounded-2xl border border-[#5A5A40]/5 p-4 shadow-inner">
+                                        <h5 className="text-[10px] font-black uppercase tracking-widest text-[#5A5A40]/40 mb-4 ml-1">Детализация прихода:</h5>
+                                        <table className="w-full text-xs">
+                                          <thead>
+                                            <tr className="text-[#5A5A40]/40 border-b border-[#5A5A40]/5">
+                                              <th className="pb-3 text-left font-black uppercase tracking-widest">Товар</th>
+                                              <th className="pb-3 text-right font-black uppercase tracking-widest">Кол-во</th>
+                                              <th className="pb-3 text-right font-black uppercase tracking-widest">Цена зак.</th>
+                                              <th className="pb-3 text-right font-black uppercase tracking-widest">Итог</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-[#5A5A40]/5">
+                                            {(invoice.items || []).map((item: any, idx: number) => (
+                                              <tr key={idx}>
+                                                <td className="py-3">
+                                                  <div className="font-bold text-[#5A5A40]">{item.productName}</div>
+                                                  <div className="text-[10px] text-[#5A5A40]/40">{item.sku}</div>
+                                                </td>
+                                                <td className="py-3 text-right font-medium">{item.quantity}</td>
+                                                <td className="py-3 text-right text-[#5A5A40]/60">{formatMoney(item.unitCost)}</td>
+                                                <td className="py-3 text-right font-bold text-[#5A5A40]">{formatMoney(item.lineTotal)}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
                             );
                           })}
-                          {selectedStats.batchList.length === 0 && (
+                          {(!selectedStats?.invoices || selectedStats.invoices.length === 0) && (
                             <tr>
-                              <td colSpan={5} className="px-4 py-8 text-center text-[#5A5A40]/45">Нет активных партий этого поставщика</td>
+                              <td colSpan={8} className="px-4 py-8 text-center text-[#5A5A40]/45">По поставщику еще нет приходов</td>
                             </tr>
                           )}
                         </tbody>
@@ -568,7 +592,7 @@ export const SuppliersPage: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {selectedStats.payments.map((payment) => (
+                          {(selectedStats?.payments || []).map((payment) => (
                             <tr key={payment.id} className="border-t border-[#5A5A40]/10">
                               <td className="px-4 py-3">
                                 <div className="inline-flex items-center gap-2 text-[#5A5A40]/70">
@@ -581,7 +605,7 @@ export const SuppliersPage: React.FC = () => {
                               <td className="px-4 py-3 text-[#5A5A40]/70">{payment.comment || '—'}</td>
                             </tr>
                           ))}
-                          {selectedStats.payments.length === 0 && (
+                          {(!selectedStats?.payments || selectedStats.payments.length === 0) && (
                             <tr>
                               <td colSpan={4} className="px-4 py-8 text-center text-[#5A5A40]/45">Оплат по поставщику пока нет</td>
                             </tr>

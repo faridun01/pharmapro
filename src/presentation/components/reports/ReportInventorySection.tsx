@@ -10,17 +10,17 @@ interface Props {
 
 export const ReportInventorySection: React.FC<Props> = ({ data, currencyCode }) => {
   const { t } = useTranslation();
-  const inventory = data.inventory;
-  const totalSoldUnits = inventory.details.reduce((sum, row) => sum + row.soldUnits, 0);
-  const totalReturnedUnits = inventory.details.reduce((sum, row) => sum + row.returnedUnits, 0);
-  const totalWriteOffUnits = inventory.details.reduce((sum, row) => sum + row.writeOffUnits, 0);
+  const inventory = data?.inventory || { details: [], costValue: 0, retailValue: 0, unrealizedMargin: 0 };
+  const totalSoldUnits = (inventory.details || []).reduce((sum, row) => sum + row.soldUnits, 0);
+  const totalReturnedUnits = (inventory.details || []).reduce((sum, row) => sum + row.returnedUnits, 0);
+  const totalWriteOffUnits = (inventory.details || []).reduce((sum, row) => sum + row.writeOffUnits, 0);
 
   return (
     <div className="space-y-4 mb-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
           <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Товаров в отчете</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{inventory.details.length}</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{inventory.details?.length || 0}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
           <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Продано / возвращено</p>
@@ -36,7 +36,7 @@ export const ReportInventorySection: React.FC<Props> = ({ data, currencyCode }) 
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <h3 className="font-semibold text-slate-800">{t('reports.inventoryPerformance')}</h3>
           <span className="text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-700">
-              {inventory.details.length} {t('reports.activeItems')}
+              {inventory.details?.length || 0} {t('reports.activeItems')}
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -53,7 +53,7 @@ export const ReportInventorySection: React.FC<Props> = ({ data, currencyCode }) 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {inventory.details.map((row) => (
+              {(inventory.details || []).map((row) => (
                 <tr key={row.productId} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-slate-900">{row.name}</div>

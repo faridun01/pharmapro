@@ -46,6 +46,9 @@ export type FinanceReport = {
     payableTotal: number;
     payableOverdue: number;
     apAging: AgingBuckets;
+    receivableTotal: number;
+    receivableOverdue: number;
+    arAging: AgingBuckets;
   };
   purchases: { total: number; count: number; unpaidCount: number };
   inventory: {

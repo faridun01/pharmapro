@@ -1,5 +1,5 @@
-import { Prisma, UserRole } from '@prisma/client';
-import { prisma } from '../infrastructure/prisma';
+import { prisma, Prisma } from '../infrastructure/prisma';
+import { UserRole } from '../infrastructure/generated-client';
 
 type AuditInput = {
   userId: string;

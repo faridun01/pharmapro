@@ -16,6 +16,7 @@ import { usePharmacy } from '../context';
 import { buildApiHeaders } from '../../infrastructure/api';
 
 export const DebtsView: React.FC = () => {
+  const { refreshInvoices } = usePharmacy();
   const [debts, setDebts] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -50,7 +51,6 @@ export const DebtsView: React.FC = () => {
     if (!paymentModal || !payAmount || paying) return;
     setPaying(true);
     try {
-      // paymentModal now has an id from the Invoice object
       const response = await fetch(`/api/sales/pay-debt/${paymentModal.id}`, {
         method: 'POST',
         headers: await buildApiHeaders(),
@@ -65,7 +65,10 @@ export const DebtsView: React.FC = () => {
       }
       setPaymentModal(null);
       setPayAmount('');
+      
+      // Refresh both local debts and global invoices
       void fetchDebts();
+      void refreshInvoices();
     } catch (err: any) {
       console.error(err);
       alert(`Ошибка при оплате долга: ${err.message}`);
@@ -97,8 +100,8 @@ export const DebtsView: React.FC = () => {
           lastActivity: new Date(debt.createdAt) 
         };
       }
-      const paid = Number(debt.debt?.paidAmount || 0);
-      const total = Number(debt.debt?.originalAmount || debt.totalAmount);
+      const paid = Number(debt.receivable?.paidAmount || 0);
+      const total = Number(debt.receivable?.originalAmount || debt.totalAmount);
       
       groups[name].totalDebt += total;
       groups[name].paidAmount += paid;
@@ -244,21 +247,21 @@ export const DebtsView: React.FC = () => {
                       <div className="flex items-center gap-8">
                         <div className="space-y-0.5">
                           <p className="text-[9px] text-[#5A5A40]/40 font-black uppercase tracking-widest leading-none">Сумма</p>
-                          <p className="text-sm font-black text-[#5A5A40] tabular-nums">{Number(invoice.debt?.originalAmount || invoice.totalAmount).toFixed(2)}</p>
+                          <p className="text-sm font-black text-[#5A5A40] tabular-nums">{Number(invoice.receivable?.originalAmount || invoice.totalAmount).toFixed(2)}</p>
                         </div>
                         <div className="space-y-0.5">
                           <p className="text-[9px] text-[#5A5A40]/40 font-black uppercase tracking-widest leading-none">Оплачено</p>
-                          <p className="text-sm font-black text-emerald-600 tabular-nums">{Number(invoice.debt?.paidAmount || 0).toFixed(2)}</p>
+                          <p className="text-sm font-black text-emerald-600 tabular-nums">{Number(invoice.receivable?.paidAmount || 0).toFixed(2)}</p>
                         </div>
                         <div className="space-y-0.5">
                           <p className="text-[9px] text-[#5A5A40]/40 font-black uppercase tracking-widest leading-none">Остаток</p>
-                          <p className="text-lg font-black text-red-500 tabular-nums">{Number(invoice.debt?.remainingAmount || invoice.totalAmount).toFixed(2)}</p>
+                          <p className="text-lg font-black text-red-500 tabular-nums">{Number(invoice.receivable?.remainingAmount || invoice.totalAmount).toFixed(2)}</p>
                         </div>
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
                             setPaymentModal(invoice);
-                            setPayAmount(Number(invoice.debt?.remainingAmount || invoice.totalAmount).toFixed(2));
+                            setPayAmount(Number(invoice.receivable?.remainingAmount || invoice.totalAmount).toFixed(2));
                           }}
                           className="bg-[#5A5A40] text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#4A4A30] transition-all"
                         >
@@ -297,7 +300,7 @@ export const DebtsView: React.FC = () => {
             <div className="p-8 space-y-6">
               <div className="bg-[#f5f5f0]/50 p-6 rounded-3xl border border-[#5A5A40]/5 flex justify-between items-center tabular-nums">
                 <span className="text-xs font-bold text-[#5A5A40]/60 uppercase tracking-widest">Остаток:</span>
-                <span className="text-xl font-black text-[#5A5A40]">{(Number(paymentModal.totalAmount) - Number(paymentModal.paidAmount || 0)).toFixed(2)} TJS</span>
+                <span className="text-xl font-black text-[#5A5A40]">{Number(paymentModal.receivable?.remainingAmount || paymentModal.totalAmount).toFixed(2)} TJS</span>
               </div>
 
               <div className="space-y-2">

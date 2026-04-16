@@ -1,4 +1,4 @@
-import { prisma } from '../../infrastructure/prisma';
+import { prisma, Prisma } from '../../infrastructure/prisma';
 import { z } from 'zod';
 
 export const ReportParamsSchema = z.object({
@@ -111,7 +111,6 @@ export class ReportService {
     const invoiceWhere = {
       createdAt: { gte: fromDate, lte: toDate },
       status: { not: 'CANCELLED' as const },
-      paymentType: { not: 'CREDIT' as const },
     };
 
     const [
@@ -125,6 +124,7 @@ export class ReportService {
       expenses,
       purchaseInvoiceItems,
       returnItems,
+      receivables,
     ] = await Promise.all([
       prisma.invoice.findMany({
         where: invoiceWhere,
@@ -215,6 +215,11 @@ export class ReportService {
           quantity: true,
         },
       }),
+      prisma.receivable.findMany({
+        where: {
+          status: { not: 'PAID' },
+        },
+      }),
     ]);
 
     const activeInvoices = invoices.filter((invoice) => invoice.status !== 'RETURNED');
@@ -245,6 +250,16 @@ export class ReportService {
       addToAging(apAging, payable.dueDate, remaining, now);
       if (payable.dueDate && payable.dueDate.getTime() < now.getTime()) {
         payableOverdue += remaining;
+      }
+    }
+
+    const arAging = emptyAging();
+    let receivableOverdue = 0;
+    for (const receivable of receivables) {
+      const remaining = Number(receivable.remainingAmount || 0);
+      addToAging(arAging, receivable.dueDate, remaining, now);
+      if (receivable.dueDate && receivable.dueDate.getTime() < now.getTime()) {
+        receivableOverdue += remaining;
       }
     }
 
@@ -449,6 +464,9 @@ export class ReportService {
         payableTotal: apAging.total,
         payableOverdue,
         apAging,
+        receivableTotal: arAging.total,
+        receivableOverdue,
+        arAging,
       },
       purchases: {
         total: purchaseInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0),
@@ -499,7 +517,7 @@ export class ReportService {
       include: {
         items: true,
         payments: true,
-        debt: true,
+        receivable: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -521,3 +539,4 @@ export class ReportService {
 }
 
 export const reportService = new ReportService();
+

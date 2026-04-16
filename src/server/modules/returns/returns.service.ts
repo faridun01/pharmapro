@@ -171,7 +171,7 @@ export class ReturnsService {
       if (ret.type === 'CUSTOMER' && ret.invoiceId) {
         const invoice = await tx.invoice.findUnique({
           where: { id: ret.invoiceId },
-          include: { items: true, debt: true }
+          include: { items: true, receivable: true }
         });
 
         if (invoice) {
@@ -213,9 +213,9 @@ export class ReturnsService {
 
           // 2.3 Calculate refund and update Debt
           let refundAmount = 0;
-          if (invoice.debt) {
+          if (invoice.receivable) {
             // Credit sale logic
-            const currentPaid = Number(invoice.debt.paidAmount);
+            const currentPaid = Number(invoice.receivable.paidAmount);
             const newOriginalAmount = updatedInvoiceTotal;
             
             if (currentPaid > newOriginalAmount) {
@@ -225,8 +225,8 @@ export class ReturnsService {
             const nextPaid = currentPaid - refundAmount;
             const nextRemaining = Math.max(0, newOriginalAmount - nextPaid);
 
-            await tx.debt.update({
-              where: { id: invoice.debt.id },
+            await tx.receivable.update({
+              where: { id: invoice.receivable.id },
               data: {
                 originalAmount: newOriginalAmount,
                 paidAmount: nextPaid,

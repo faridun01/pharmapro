@@ -1,5 +1,4 @@
-import { Prisma } from '@prisma/client';
-import { prisma } from '../../infrastructure/prisma';
+import { prisma, Prisma } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { computeProductStatus } from '../../common/productStatus';
@@ -373,10 +372,10 @@ export class InvoiceService {
         }
       });
 
-      // Sync with Debt record if exists
-      const debt = await tx.debt.findUnique({ where: { invoiceId } });
-      if (debt) {
-        let newPaidAmount = Number(debt.paidAmount);
+      // Sync with Receivable record if exists
+      const receivable = await tx.receivable.findUnique({ where: { invoiceId } });
+      if (receivable) {
+        let newPaidAmount = Number(receivable.paidAmount);
         
         // If customer already paid more than the new total, issue a refund and reduce paidAmount
         if (newPaidAmount > updatedInvoiceTotal) {
@@ -401,8 +400,8 @@ export class InvoiceService {
 
         const nextRemaining = Math.max(0, updatedInvoiceTotal - newPaidAmount);
 
-        await tx.debt.update({
-          where: { id: debt.id },
+        await tx.receivable.update({
+          where: { id: receivable.id },
           data: {
             originalAmount: updatedInvoiceTotal,
             paidAmount: newPaidAmount,
@@ -594,3 +593,4 @@ export class InvoiceService {
 }
 
 export const invoiceService = new InvoiceService();
+

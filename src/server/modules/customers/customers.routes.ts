@@ -76,10 +76,10 @@ customersRouter.get(
       where: { id: req.params.id },
       include: {
         invoices: {
-          orderBy: { date: 'desc' },
+          orderBy: { createdAt: 'desc' },
           take: 20,
           select: {
-            id: true, invoiceNo: true, date: true,
+            id: true, invoiceNo: true, createdAt: true,
             totalAmount: true, paymentStatus: true, paymentType: true,
           },
         },

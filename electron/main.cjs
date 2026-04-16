@@ -375,8 +375,8 @@ function createWindow() {
     },
     icon: windowIcon,
     title: 'PharmaPro Management System',
-    backgroundColor: '#f5f5f0',
-    show: isDev,
+    backgroundColor: '#151619',
+    show: false,
   });
 
   writeRuntimeLog('window-created', {

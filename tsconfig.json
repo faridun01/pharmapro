@@ -15,10 +15,10 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@prisma/client": ["src/server/infrastructure/generated-client"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,

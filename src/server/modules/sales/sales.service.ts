@@ -225,7 +225,7 @@ export class SalesService {
         const totalAmount = Number(input.total);
         const remaining = Math.max(0, totalAmount - initialPaid);
         
-        await tx.debt.create({
+        await tx.receivable.create({
           data: {
             invoiceId: createdInvoice.id,
             customerName: input.customerName,
@@ -387,7 +387,7 @@ export class SalesService {
   async payDebt(invoiceId: string, input: { amount: number, paymentMethod: 'CASH' | 'CARD', userId: string }) {
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
-      include: { debt: true }
+      include: { receivable: true }
     });
 
     if (!invoice) throw new NotFoundError('Invoice not found');
@@ -397,10 +397,10 @@ export class SalesService {
     const result = await prisma.$transaction(async (tx) => {
       const amount = Number(input.amount);
       
-      // Resiliency: if debt record is missing for some reason, create it now
-      let debt = invoice.debt;
-      if (!debt) {
-        debt = await tx.debt.create({
+      // Resiliency: if receivable record is missing for some reason, create it now
+      let receivableRecord = invoice.receivable;
+      if (!receivableRecord) {
+        receivableRecord = await tx.receivable.create({
           data: {
             invoiceId: invoice.id,
             customerName: invoice.customer || 'Аноним',
@@ -411,14 +411,14 @@ export class SalesService {
         });
       }
 
-      // Update Debt
-      const currentPaid = Number(debt.paidAmount || 0);
+      // Update Receivable
+      const currentPaid = Number(receivableRecord.paidAmount || 0);
       const newPaid = currentPaid + amount;
       const totalAmount = Number(invoice.totalAmount);
       const isFullyPaid = newPaid >= totalAmount;
 
-      const debtRecord = await tx.debt.update({
-        where: { id: debt.id },
+      const updatedReceivable = await tx.receivable.update({
+        where: { id: receivableRecord.id },
         data: {
           paidAmount: newPaid,
           remainingAmount: Math.max(0, totalAmount - newPaid),
@@ -459,7 +459,7 @@ export class SalesService {
         });
       }
 
-      return debtRecord;
+      return updatedReceivable;
     });
 
     reportCache.invalidatePattern(/^metrics:dashboard:/);
