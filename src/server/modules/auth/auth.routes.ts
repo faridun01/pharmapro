@@ -9,6 +9,44 @@ import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseStartupError } from '../../comm
 
 export const authRouter = Router();
 
+// GET /initial-status — Checks if the system needs first-time setup
+authRouter.get('/initial-status', asyncHandler(async (req, res) => {
+  const count = await prisma.user.count();
+  res.json({ needsSetup: count === 0 });
+}));
+
+// POST /setup-admin — Creates the first OWNER user (only allowed if count is 0)
+authRouter.post('/setup-admin', asyncHandler(async (req, res) => {
+  const count = await prisma.user.count();
+  if (count > 0) {
+    throw new ValidationError('System is already initialized');
+  }
+
+  const { password, name, login } = req.body ?? {};
+  if (!login || !password || !name) {
+    throw new ValidationError('Имя, логин и пароль обязательны');
+  }
+  validatePassword(String(password));
+
+  // Generate internal email to satisfy DB schema if login is not an email
+  const email = login.includes('@') ? login.toLowerCase() : `${login.toLowerCase()}@pharmapro.local`;
+  const username = login.toLowerCase();
+
+  const hashedPassword = await bcrypt.hash(String(password), 12);
+  const user = await prisma.user.create({
+    data: { 
+      email, 
+      username,
+      password: hashedPassword, 
+      name: String(name).trim(), 
+      role: 'OWNER', 
+      isActive: true 
+    },
+  });
+
+  res.status(201).json({ success: true, email: user.email });
+}));
+
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 
 const validatePassword = (password: string) => {

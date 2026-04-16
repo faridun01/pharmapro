@@ -11,16 +11,9 @@ window.pharmaproDesktop?.markRuntime?.('app-module-evaluated', {
 const AuthenticatedApp = lazy(() => import('./presentation/components/AuthenticatedApp'));
 
 const DesktopTitlebar: React.FC<{
-  controls: NonNullable<NonNullable<(Window & {
-    pharmaproDesktop?: {
-      controls?: {
-        minimize: () => void;
-        toggleMaximize: () => void;
-        close: () => void;
-      };
-    };
-  })['pharmaproDesktop']>['controls']>;
-}> = ({ controls }) => (
+  controls: any;
+  onClose: () => void;
+}> = ({ controls, onClose }) => (
   <div className="desktop-titlebar shrink-0 flex items-center justify-between pl-3">
     <div className="app-drag min-w-0 flex-1 self-stretch" />
 
@@ -43,7 +36,7 @@ const DesktopTitlebar: React.FC<{
       </button>
       <button
         type="button"
-        onClick={() => controls.close()}
+        onClick={onClose}
         className="desktop-titlebar__button desktop-titlebar__button--close"
         aria-label="Close window"
       >
@@ -72,6 +65,7 @@ const App: React.FC = () => {
   const [showSplash, setShowSplash] = React.useState(true);
   const [status, setStatus] = React.useState('Запуск системы...');
   const [error, setError] = React.useState<string | null>(null);
+  const [backingUp, setBackingUp] = React.useState(false);
   const desktopControls = window.pharmaproDesktop?.controls;
   const appStartupStartedAt = window.pharmaproDesktop?.startupStartedAt || Date.now();
 
@@ -167,6 +161,37 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSafeClose = async () => {
+    if (!window.pharmaproDesktop) {
+       window.close();
+       return;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const lastBackup = localStorage.getItem('pharmapro_last_backup_date');
+
+    if (lastBackup !== today) {
+       setBackingUp(true);
+       try {
+          const res = await (window.pharmaproDesktop as any).performBackup();
+          if (res.success) {
+             localStorage.setItem('pharmapro_last_backup_date', today);
+          } else {
+             console.error('Backup failed:', res.error);
+             if (!confirm('Не удалось создать резервную копию. Продолжить закрытие?')) {
+                setBackingUp(false);
+                return;
+             }
+          }
+       } catch (err) {
+          console.error('Backup exception:', err);
+       }
+       setBackingUp(false);
+    }
+
+    window.pharmaproDesktop.controls.close();
+  };
+
   return (
     <>
       <BootSplash 
@@ -180,17 +205,27 @@ const App: React.FC = () => {
         }}
         onSaveConfig={handleSaveConfig}
       />
+
+      {backingUp && (
+        <div className="fixed inset-0 z-[1000] bg-[#151619] flex flex-col items-center justify-center text-white px-8 text-center animate-in fade-in duration-500">
+          <div className="w-16 h-16 border-4 border-white/10 border-t-white rounded-full animate-spin mb-8" />
+          <h2 className="text-2xl font-normal tracking-tight mb-4">Создание резервной копии</h2>
+          <p className="text-sm text-white/50 max-w-sm lowercase tracking-wider leading-relaxed italic">
+            Пожалуйста, не выключайте компьютер. Мы сохраняем базу данных на диск D для вашей безопасности.
+          </p>
+        </div>
+      )}
       
       {!user ? (
         <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">
-          {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
+          {desktopControls ? <DesktopTitlebar controls={desktopControls} onClose={handleSafeClose} /> : null}
           <div className="flex-1 min-h-0">
             <LoginView embedded={Boolean(desktopControls)} onLogin={handleLogin} />
           </div>
         </div>
       ) : (
         <Suspense fallback={<AppLoader label="Загружаем панель" />}>
-          <AuthenticatedApp onSignedOut={handleSignedOut} />
+          <AuthenticatedApp onSignedOut={handleSignedOut} onClose={handleSafeClose} />
         </Suspense>
       )}
     </>

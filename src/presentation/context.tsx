@@ -321,6 +321,26 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
         return;
       }
 
+      // Proactive Theme Loading for Premium Feel
+      const applyTheme = (theme: string) => {
+        document.documentElement.dataset.theme = theme;
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      };
+
+      // Load initial theme from server-side preferences
+      void fetch('/api/system/me/preferences', { headers: await buildApiHeaders(false) })
+        .then(res => res.json())
+        .then(prefs => {
+           if (prefs?.appearance?.theme) {
+             applyTheme(prefs.appearance.theme);
+           }
+        })
+        .catch(() => { /* use default if failed */ });
+
       setIsLoading(false);
 
       let bootstrapPromise = bootstrapLoads.get(loadKey);

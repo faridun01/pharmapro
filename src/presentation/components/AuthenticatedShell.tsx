@@ -107,7 +107,10 @@ const AppLoader: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Ð
   </div>
 );
 
-const DesktopTitlebar: React.FC<{ controls: any }> = ({ controls }) => (
+const DesktopTitlebar: React.FC<{ 
+  controls: any;
+  onClose?: () => void;
+}> = ({ controls, onClose }) => (
   <div className="desktop-titlebar shrink-0 flex items-center justify-between pl-3 bg-[#151619] border-b border-white/5 h-10">
     <div className="app-drag min-w-0 flex-1 self-stretch" />
     <div className="flex items-center app-no-drag h-full">
@@ -126,7 +129,7 @@ const DesktopTitlebar: React.FC<{ controls: any }> = ({ controls }) => (
         <Square size={12} strokeWidth={2.1} />
       </button>
       <button
-        onClick={() => controls.close()}
+        onClick={() => onClose ? onClose() : controls.close()}
         className="w-12 h-full flex items-center justify-center hover:bg-red-500 hover:text-white text-white/60 transition-colors"
         title="Close"
       >
@@ -136,7 +139,7 @@ const DesktopTitlebar: React.FC<{ controls: any }> = ({ controls }) => (
   </div>
 );
 
-export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () => void }) {
+export default function AuthenticatedShell({ onSignedOut, onClose }: { onSignedOut?: () => void, onClose?: () => void }) {
   const { t } = useTranslation();
   const { user, logout, error } = usePharmacy();
   const [currentView, setCurrentView] = useState<SidebarView>('pos');
@@ -297,7 +300,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
       />
 
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        {window.pharmaproDesktop?.controls && <DesktopTitlebar controls={window.pharmaproDesktop.controls} />}
+        {window.pharmaproDesktop?.controls && <DesktopTitlebar controls={window.pharmaproDesktop.controls} onClose={onClose} />}
 
         <header className="h-24 bg-white/80 backdrop-blur-md border-b border-[#5A5A40]/5 flex items-center justify-between px-10 shrink-0 z-20">
           <div className="flex flex-col">

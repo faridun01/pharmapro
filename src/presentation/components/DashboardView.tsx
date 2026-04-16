@@ -4,11 +4,11 @@ import { usePharmacy } from '../context';
 import { lazyNamedImport } from '../../lib/lazyLoadComponents';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { formatProductDisplayName } from '../../lib/productDisplay';
-import { 
-  TrendingUp, 
-  Package, 
-  AlertTriangle, 
-  ArrowUpRight, 
+import {
+  TrendingUp,
+  Package,
+  AlertTriangle,
+  ArrowUpRight,
   ArrowDownLeft,
   Clock,
   ShieldAlert,
@@ -44,7 +44,7 @@ export const DashboardView: React.FC = () => {
   const [showChart, setShowChart] = useState(false);
   const [serverMetrics, setServerMetrics] = useState<DashboardMetricsResponse | null>(null);
 
-  const formatMoney = (value: number) => 
+  const formatMoney = (value: number) =>
     `${Number(value || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TJS`;
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export const DashboardView: React.FC = () => {
   // Client-side calculations as fallbacks
   const now = useMemo(() => new Date(), []);
   const totalStock = useMemo(() => products.reduce((acc, p) => acc + p.totalStock, 0), [products]);
-  
+
   const activityData = useMemo(() => {
     const invoiceActs = invoices.map(inv => ({
       id: inv.id,
@@ -102,12 +102,12 @@ export const DashboardView: React.FC = () => {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-10 pb-12 animate-in fade-in duration-700 font-normal">
-      
+
       {/* Header section with period selector */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
         <div>
-          <h2 className="text-3xl font-normal text-[#151619] tracking-tight">{t('Analytic Dashboard')}</h2>
-          <p className="text-[#5A5A40]/50 mt-1 text-sm uppercase tracking-widest">{t('Pharmacy operational control center')}</p>
+          <h2 className="text-3xl font-normal text-[#151619] tracking-tight">{t('Главная панель')}</h2>
+          <p className="text-[#5A5A40]/50 mt-1 text-sm uppercase tracking-widest">{t('Операционный центр аптеки')}</p>
         </div>
         <div className="flex bg-white/40 p-1 rounded-2xl border border-[#5A5A40]/5 shadow-sm">
           {(['month', 'q1', 'q2', 'q3', 'q4', 'year'] as DashboardPeriodPreset[]).map((p) => (
@@ -141,7 +141,7 @@ export const DashboardView: React.FC = () => {
 
       {/* Secondary Row: Chart and Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Sales Chart Container */}
         <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-sm border border-white relative overflow-hidden group">
           <div className="flex items-center justify-between mb-10 relative z-10">
@@ -151,7 +151,7 @@ export const DashboardView: React.FC = () => {
             </div>
             <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{dashboardPeriodLabel} • {formatMoney(serverMetrics?.revenue?.total ?? 0)}</p>
           </div>
-          
+
           <div className="h-[320px] w-full relative z-10">
             {showChart && serverMetrics?.revenueTrend?.items ? (
               <Suspense fallback={<div className="h-full w-full bg-[#f8f7f2] animate-pulse rounded-3xl" />}>
@@ -168,8 +168,8 @@ export const DashboardView: React.FC = () => {
         {/* Recent Activity Mini-Widget */}
         <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-white flex flex-col">
           <div className="flex items-center justify-between mb-8">
-             <h3 className="text-xl font-normal text-[#151619] tracking-tight">Активность</h3>
-             <Activity size={18} className="text-[#5A5A40]/20" />
+            <h3 className="text-xl font-normal text-[#151619] tracking-tight">Активность</h3>
+            <Activity size={18} className="text-[#5A5A40]/20" />
           </div>
           <div className="flex-1 space-y-6">
             {activityData.map((act) => (
@@ -203,7 +203,7 @@ export const DashboardView: React.FC = () => {
 
       {/* Critical Risks Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
+
         {/* Low Stock List */}
         <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-white">
           <div className="flex items-center justify-between mb-8">
@@ -213,7 +213,7 @@ export const DashboardView: React.FC = () => {
             </div>
             <span className="text-[10px] bg-amber-50 text-amber-600 px-3 py-1 rounded-full uppercase tracking-widest leading-none">Внимание</span>
           </div>
-          
+
           <div className="space-y-4">
             {(serverMetrics?.inventoryHighlights?.lowStockItems || []).slice(0, 5).map((item, idx) => (
               <div key={item.productId} className="flex items-center justify-between p-4 hover:bg-[#f8f7f2]/50 rounded-2xl transition-all border border-transparent hover:border-[#5A5A40]/5">
@@ -238,7 +238,7 @@ export const DashboardView: React.FC = () => {
 
         {/* Expiry Risk List */}
         <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-white">
-           <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl"><ShieldAlert size={18} /></div>
               <h3 className="text-xl font-normal text-[#151619] tracking-tight">Контроль сроков</h3>
@@ -282,15 +282,15 @@ export const DashboardView: React.FC = () => {
               <p className="text-indigo-200/40 text-xs uppercase tracking-[0.3em]">Расчет прибыли за текущий период</p>
             </div>
             <div className="flex flex-wrap gap-12">
-               <div>
-                  <p className="text-indigo-200/30 text-[10px] uppercase tracking-widest mb-3 italic">Валовая прибыль</p>
-                  <p className="text-3xl font-normal text-indigo-400 tabular-nums">{formatMoney(serverMetrics?.finance?.grossMarginMonth ?? 0)}</p>
-               </div>
-               <div className="w-px h-16 bg-white/10 hidden md:block" />
-               <div>
-                  <p className="text-indigo-200/30 text-[10px] uppercase tracking-widest mb-3 italic">Списания за месяц</p>
-                  <p className="text-3xl font-normal text-rose-400 tabular-nums">-{formatMoney(serverMetrics?.finance?.writeOffAmountMonth ?? 0)}</p>
-               </div>
+              <div>
+                <p className="text-indigo-200/30 text-[10px] uppercase tracking-widest mb-3 italic">Валовая прибыль</p>
+                <p className="text-3xl font-normal text-indigo-400 tabular-nums">{formatMoney(serverMetrics?.finance?.grossMarginMonth ?? 0)}</p>
+              </div>
+              <div className="w-px h-16 bg-white/10 hidden md:block" />
+              <div>
+                <p className="text-indigo-200/30 text-[10px] uppercase tracking-widest mb-3 italic">Списания за месяц</p>
+                <p className="text-3xl font-normal text-rose-400 tabular-nums">-{formatMoney(serverMetrics?.finance?.writeOffAmountMonth ?? 0)}</p>
+              </div>
             </div>
           </div>
         </div>

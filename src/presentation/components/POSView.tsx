@@ -73,6 +73,29 @@ const ProductCatalog = memo(({
           const stockLabel = formatUnitQuantity(product.totalStock);
           const lowStock = product.totalStock < (product.minStock || 10);
 
+          // Expiry Analysis
+          const now = new Date();
+          const soonDays = 90;
+          const criticalDays = 30;
+          
+          let expiryStatus: 'EXPIRED' | 'CRITICAL' | 'SOON' | 'OK' = 'OK';
+          let minDays = Infinity;
+
+          if (product.batches && product.batches.length > 0) {
+            for (const b of product.batches) {
+              if (b.quantity <= 0) continue;
+              const exp = new Date(b.expiryDate);
+              const diffTime = exp.getTime() - now.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              if (diffDays < minDays) minDays = diffDays;
+              
+              if (diffDays <= 0) expiryStatus = 'EXPIRED';
+              else if (diffDays <= criticalDays && expiryStatus !== 'EXPIRED') expiryStatus = 'CRITICAL';
+              else if (diffDays <= soonDays && expiryStatus === 'OK') expiryStatus = 'SOON';
+            }
+          }
+
           return (
             <button
               key={product.id}
@@ -85,16 +108,20 @@ const ProductCatalog = memo(({
                 </div>
                 <div className="min-w-0 flex-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
                   <div className="min-w-0">
-                    <h3 className="text-[14px] font-normal text-[#151619] truncate leading-tight">{product.name}</h3>
+                    <div className="flex items-center gap-2">
+                       <h3 className="text-[14px] font-normal text-[#151619] truncate leading-tight">{product.name}</h3>
+                       {expiryStatus === 'EXPIRED' && <span className="shrink-0 scale-75 px-1.5 py-0.5 bg-red-600 text-white text-[8px] uppercase tracking-tighter rounded-md font-bold">Просрочено</span>}
+                       {expiryStatus === 'CRITICAL' && <span className="shrink-0 scale-75 px-1.5 py-0.5 bg-orange-500 text-white text-[8px] uppercase tracking-tighter rounded-md font-bold">Срок!</span>}
+                    </div>
                     <div className="flex items-center gap-2.5 mt-0.5">
                       <span className="text-[9px] text-[#5A5A40]/40 uppercase tracking-widest">{product.sku}</span>
                       <span className={`text-[9px] font-normal px-1.5 py-0.5 rounded-md ${lowStock ? 'bg-red-50 text-red-600' : 'bg-[#f5f5f0] text-[#5A5A40]/50'}`}>
                         {stockLabel}
                       </span>
-                      {product.countryOfOrigin && (
-                        <span className="text-[9px] text-sky-600/50 font-normal italic truncate max-w-[80px]">
-                          {product.countryOfOrigin}
-                        </span>
+                      {expiryStatus !== 'OK' && expiryStatus !== 'EXPIRED' && (
+                         <span className={`text-[9px] font-normal px-1.5 py-0.5 rounded-md flex items-center gap-1 ${expiryStatus === 'CRITICAL' ? 'text-orange-600 bg-orange-50' : 'text-amber-600 bg-amber-50'}`}>
+                            <AlertCircle size={8} /> {minDays <= 0 ? 'Истек' : `${minDays} дн.`}
+                         </span>
                       )}
                     </div>
                   </div>
@@ -136,7 +163,7 @@ export const POSView: React.FC = () => {
   const [barcodeScanning, setBarcodeScanning] = useState(false);
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
 
-  const alphabet = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ".split("");
+  const alphabet = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ".split("");
 
   const normalizedSearchTerm = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm]);
   const cartProductIds = useMemo(() => new Set(cart.map((item) => item.id)), [cart]);
@@ -377,10 +404,21 @@ export const POSView: React.FC = () => {
                   <div key={cartItemKey} className="p-2.5 bg-[#f5f5f0]/50 rounded-2xl border border-[#5A5A40]/5 group space-y-1.5">
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-[12px] font-normal text-[#151619] truncate leading-tight">{item.name}</h4>
+                        <div className="flex items-center gap-2">
+                           <h4 className="text-[12px] font-normal text-[#151619] truncate leading-tight">{item.name}</h4>
+                           {item.batches?.some(b => new Date(b.expiryDate).getTime() < Date.now()) && (
+                              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" title="В составе есть просроченные партии!" />
+                           )}
+                        </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {item.prescription && (
                              <button onClick={() => togglePrescription(cartItemKey)} className={`text-[8px] px-1.5 py-0.5 rounded-full uppercase tracking-tighter border transition-colors ${item.prescriptionPresented ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-red-50 border-red-100 text-red-500'}`}>{item.prescriptionPresented ? 'Рецепт OK' : 'Нужен рецепт'}</button>
+                          )}
+                          {item.batches?.some(b => {
+                             const days = Math.ceil((new Date(b.expiryDate).getTime() - Date.now()) / (1000*60*60*24));
+                             return days > 0 && days <= 30;
+                          }) && (
+                             <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 uppercase tracking-tighter font-bold">Срок поджимает</span>
                           )}
                         </div>
                         <p className="text-[10px] text-[#5A5A40]/40 mt-1">{item.sellingPrice.toFixed(2)} TJS</p>

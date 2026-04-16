@@ -33,6 +33,7 @@ interface WriteOff {
   id: string;
   writeOffNo: string;
   reason: Reason;
+  status: 'DRAFT' | 'POSTED';
   note?: string;
   totalAmount?: number;
   createdAt: string;
@@ -575,13 +576,31 @@ export const WriteOffView: React.FC = () => {
     }
   };
 
+  const handleApprove = async (writeOff: WriteOff) => {
+    try {
+      setFeedback(null);
+      const res = await fetch(`/api/writeoffs/approve/${writeOff.id}`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Ошибка при подтверждении');
+      }
+      setFeedback({ tone: 'success', message: `Списание ${writeOff.writeOffNo} успешно проведено!` });
+      await runRefreshTasks(refreshProducts, load);
+    } catch (err: any) {
+      setFeedback({ tone: 'error', message: err.message });
+    }
+  };
+
   const handleCreated = async () => {
     await load();
     setFeedback({
       tone: 'success',
       message: editingWriteOff
         ? `Списание ${editingWriteOff.writeOffNo} обновлено.`
-        : 'Новое списание сохранено.',
+        : 'Новое списание сохранено и ожидает подтверждения (если вы не администратор).',
     });
   };
 
@@ -658,14 +677,18 @@ export const WriteOffView: React.FC = () => {
                     <AlertTriangle size={18} className="text-red-400" />
                   </div>
                   <div>
-                    <p className="font-semibold text-[#151619]">{wo.writeOffNo}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-[#151619]">{wo.writeOffNo}</p>
+                      {wo.status === 'DRAFT' && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black uppercase tracking-widest rounded-md border border-amber-200">Черновик</span>}
+                      {wo.status === 'POSTED' && <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-widest rounded-md border border-emerald-100">Проведено</span>}
+                    </div>
                     <p className="text-xs text-[#5A5A40]/50 mt-0.5">
                       {wo.warehouse?.name} · {wo.createdBy?.name} · {wo.items.length} поз.
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-sm font-bold text-[#151619]">{Number(wo.totalAmount || 0).toFixed(2)} {currencyCode}</span>
+                  <span className="text-sm font-bold text-[#151619] tabular-nums">{Number(wo.totalAmount || 0).toFixed(2)} {currencyCode}</span>
                   <span className="text-xs text-[#5A5A40]/40">{new Date(wo.createdAt).toLocaleDateString()}</span>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${REASON_STYLES[wo.reason] ?? 'bg-gray-100 text-gray-600'}`}>
                     {REASON_LABELS[wo.reason] || 'Другое'}
@@ -680,16 +703,32 @@ export const WriteOffView: React.FC = () => {
                       {wo.note && <p className="text-sm text-[#5A5A40]/60">Примечание: {wo.note}</p>}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEditModal(wo);
-                        }}
-                        className="inline-flex items-center gap-2 rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-all"
-                      >
-                        <Pencil size={15} /> Редактировать
-                      </button>
+                      {wo.status === 'DRAFT' && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleApprove(wo);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl bg-[#5A5A40] px-4 py-2 text-sm font-bold text-white hover:bg-[#4A4A30] shadow-md transition-all active:scale-95"
+                        >
+                          <CheckCircle2 size={15} /> Провести списание
+                        </button>
+                      )}
+                      
+                      {wo.status === 'DRAFT' && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEditModal(wo);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-all"
+                        >
+                          <Pencil size={15} /> Редактировать
+                        </button>
+                      )}
+                      
                       <button
                         type="button"
                         onClick={(event) => {

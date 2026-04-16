@@ -16,11 +16,11 @@ import { ProductBarcodeModal } from './inventory/ProductBarcodeModal';
 import { ProductDeleteModal } from './inventory/ProductDeleteModal';
 import { ProductBatchHistoryModal } from './inventory/ProductBatchHistoryModal';
 import { ProductRestockModal } from './inventory/ProductRestockModal';
-import { 
-  NewProductForm, 
-  PriceEditModalState, 
-  BarcodeEditModalState, 
-  RestockModalState 
+import {
+  NewProductForm,
+  PriceEditModalState,
+  BarcodeEditModalState,
+  RestockModalState
 } from './inventory/types';
 
 const ImportInvoiceModal = lazyNamedImport(() => import('./ImportInvoiceModal'), 'ImportInvoiceModal');
@@ -28,14 +28,14 @@ const ImportInvoiceModal = lazyNamedImport(() => import('./ImportInvoiceModal'),
 export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }> = ({ initialSection = 'catalog' }) => {
   const { t } = useTranslation();
   const currencyCode = useCurrencyCode();
-  const { 
-    products, 
-    isLoading, 
-    createProduct, 
-    updateProduct, 
-    deleteProduct, 
-    refreshProducts, 
-    restockInventory 
+  const {
+    products,
+    isLoading,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+    refreshProducts,
+    restockInventory
   } = usePharmacy();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,12 +43,12 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
-  
+
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [priceEditModal, setPriceEditModal] = useState<PriceEditModalState | null>(null);
   const [barcodeEditModal, setBarcodeEditModal] = useState<BarcodeEditModalState | null>(null);
   const [batchHistoryProduct, setBatchHistoryProduct] = useState<Product | null>(null);
-  
+
   const [restockModal, setRestockModal] = useState<RestockModalState>({
     open: false,
     productId: '',
@@ -146,12 +146,12 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 pb-12 animate-in fade-in duration-700 font-normal">
-      
+
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
         <div>
           <h2 className="text-3xl font-normal text-[#151619] tracking-tight">Инвентаризация</h2>
-          <p className="text-[#5A5A40]/50 mt-1 text-sm uppercase tracking-widest italic">{t('Detailed Stock Audit & Catalog Control')}</p>
+          <p className="text-[#5A5A40]/50 mt-1 text-sm uppercase tracking-widest italic">{t('Детальный аудит запасов и контроль каталога')}</p>
         </div>
         <div className="flex gap-3">
           <button onClick={() => setIsImportOpen(true)} className="px-5 py-3 rounded-2xl bg-white border border-[#5A5A40]/10 text-[10px] uppercase tracking-widest text-[#5A5A40]/60 hover:bg-[#f5f5f0] transition-all">
@@ -181,8 +181,8 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                 <stat.icon size={24} />
               </div>
               <div>
-                 <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/40 mb-1">{stat.label}</p>
-                 <p className="text-2xl font-normal text-[#151619] tracking-tight">{stat.count}</p>
+                <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/40 mb-1">{stat.label}</p>
+                <p className="text-2xl font-normal text-[#151619] tracking-tight">{stat.count}</p>
               </div>
             </div>
           </button>
@@ -192,7 +192,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
       {/* Main Table Container */}
       <div className="bg-white rounded-[3rem] shadow-sm border border-white overflow-hidden relative">
         <div className="p-8 border-b border-[#5A5A40]/5 flex flex-col md:flex-row md:items-center justify-between gap-6">
-           <div className="relative group w-full md:max-w-md">
+          <div className="relative group w-full md:max-w-md">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/20 group-focus-within:text-[#5A5A40]/60 transition-colors" size={18} />
             <input
               type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
@@ -201,8 +201,8 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
             />
           </div>
           <div className="flex items-center gap-3">
-             <span className="text-[10px] uppercase tracking-widest text-[#5A5A40]/30 px-2">Вид:</span>
-             <button className="p-2.5 rounded-xl bg-[#5A5A40]/5 text-[#5A5A40]"><LayoutGrid size={16}/></button>
+            <span className="text-[10px] uppercase tracking-widest text-[#5A5A40]/30 px-2">Вид:</span>
+            <button className="p-2.5 rounded-xl bg-[#5A5A40]/5 text-[#5A5A40]"><LayoutGrid size={16} /></button>
           </div>
         </div>
 
@@ -268,9 +268,9 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
 
       {/* Modals are kept the same but will align with their internal Zen styling */}
       <ProductAddModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSubmit={saveProduct} submitting={submitting} />
-      <ProductPriceModal state={priceEditModal} onClose={() => setPriceEditModal(null)} onSubmit={async (id, cp, sp) => { try { await updateProduct({ id, costPrice: cp, sellingPrice: sp } as any); setPriceEditModal(null); await refreshProducts(); } catch {} }} submitting={submitting} currencyCode={currencyCode} />
-      <ProductBarcodeModal state={barcodeEditModal} onClose={() => setBarcodeEditModal(null)} onSubmit={async (id, b) => { try { await updateProduct({ id, barcode: b } as any); setBarcodeEditModal(null); await refreshProducts(); } catch {} }} submitting={submitting} />
-      <ProductDeleteModal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onSubmit={async () => { try { if (deleteTarget) await deleteProduct(deleteTarget.id); setDeleteTarget(null); await refreshProducts(); } catch {} }} productName={deleteTarget?.name || ''} submitting={submitting} />
+      <ProductPriceModal state={priceEditModal} onClose={() => setPriceEditModal(null)} onSubmit={async (id, cp, sp) => { try { await updateProduct({ id, costPrice: cp, sellingPrice: sp } as any); setPriceEditModal(null); await refreshProducts(); } catch { } }} submitting={submitting} currencyCode={currencyCode} />
+      <ProductBarcodeModal state={barcodeEditModal} onClose={() => setBarcodeEditModal(null)} onSubmit={async (id, b) => { try { await updateProduct({ id, barcode: b } as any); setBarcodeEditModal(null); await refreshProducts(); } catch { } }} submitting={submitting} />
+      <ProductDeleteModal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onSubmit={async () => { try { if (deleteTarget) await deleteProduct(deleteTarget.id); setDeleteTarget(null); await refreshProducts(); } catch { } }} productName={deleteTarget?.name || ''} submitting={submitting} />
       <ProductBatchHistoryModal product={batchHistoryProduct} onClose={() => setBatchHistoryProduct(null)} onRestock={openRestockModal} currencyCode={currencyCode} />
       <ProductRestockModal state={restockModal} onClose={() => setRestockModal(p => ({ ...p, open: false }))} onSubmit={async (st) => { try { await restockInventory({ productId: st.productId, batchNumber: st.batchNumber, quantity: Number(st.quantity), unit: st.unit, costBasis: Number(st.costBasis), expiryDate: new Date(st.expiryDate), manufacturedDate: new Date() }); setRestockModal(p => ({ ...p, open: false })); await refreshProducts(); } catch (err: any) { setRestockModal(p => ({ ...p, error: err.message })); } }} products={products} submitting={submitting} currencyCode={currencyCode} />
 

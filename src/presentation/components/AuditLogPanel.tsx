@@ -13,7 +13,8 @@ import {
   Search,
   FileSpreadsheet,
   X,
-  History
+  History,
+  Package
 } from 'lucide-react';
 import { buildApiHeaders } from '../../infrastructure/api';
 

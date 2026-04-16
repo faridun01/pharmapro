@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('pharmaproDesktop', {
   },
   authHeaders: () => ipcRenderer.invoke('desktop:get-auth-headers'),
   saveDatabaseConfig: (url) => ipcRenderer.invoke('desktop:save-db-config', url),
+  performBackup: () => ipcRenderer.invoke('desktop:perform-backup'),
+  checkSystemStatus: () => ipcRenderer.invoke('desktop:check-system-status'),
   markRuntime: (name, details = {}) => ipcRenderer.send('runtime:mark', {
     name,
     details,

@@ -1,5 +1,19 @@
 export type ReportRangePreset = 'month' | 'q1' | 'q2' | 'q3' | 'q4' | 'year' | 'all';
-export type ReportViewMode = 'summary' | 'detailed';
+export type ReportViewMode = 'summary' | 'detailed' | 'expiry';
+
+export type ExpiryItem = {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  category: string;
+  batchNumber: string;
+  quantity: number;
+  expiryDate: string;
+  daysLeft: number | null;
+  severity: 'expired' | 'critical' | 'warning' | 'normal';
+};
+
 
 export type AgingBuckets = {
   current: number;

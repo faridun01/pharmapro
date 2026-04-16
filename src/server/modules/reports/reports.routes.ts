@@ -506,3 +506,67 @@ reportsRouter.get('/metrics/inventory-status', authenticate, asyncHandler(async 
   reportCache.set(cacheKey, result, CACHE_TTL.inventoryStatus);
   res.json(result);
 }));
+
+reportsRouter.get('/expiry', authenticate, asyncHandler(async (req, res) => {
+  const { status = 'all' } = req.query;
+  const now = new Date();
+  const warningThreshold = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 days
+  const criticalThreshold = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+  const where: any = {
+    quantity: { gt: 0 },
+  };
+
+  if (status === 'expired') {
+    where.expiryDate = { lt: now };
+  } else if (status === 'critical') {
+    where.expiryDate = { gte: now, lte: criticalThreshold };
+  } else if (status === 'warning') {
+    where.expiryDate = { gte: criticalThreshold, lte: warningThreshold };
+  }
+
+  const batches = await prisma.batch.findMany({
+    where,
+    include: {
+      product: {
+        select: {
+          name: true,
+          sku: true,
+          category: true,
+        },
+      },
+    },
+    orderBy: {
+      expiryDate: 'asc',
+    },
+  });
+
+  const result = batches.map(b => {
+    const expiryDate = b.expiryDate ? new Date(b.expiryDate) : null;
+    const daysLeft = expiryDate 
+      ? Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    let severity: 'expired' | 'critical' | 'warning' | 'normal' = 'normal';
+    if (daysLeft !== null) {
+      if (daysLeft < 0) severity = 'expired';
+      else if (daysLeft <= 30) severity = 'critical';
+      else if (daysLeft <= 90) severity = 'warning';
+    }
+
+    return {
+      id: b.id,
+      productId: b.productId,
+      productName: b.product.name,
+      sku: b.product.sku,
+      category: b.product.category,
+      batchNumber: b.batchNumber,
+      quantity: b.quantity,
+      expiryDate: b.expiryDate,
+      daysLeft,
+      severity,
+    };
+  });
+
+  res.json(result);
+}));

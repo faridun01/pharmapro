@@ -21,11 +21,11 @@ export const ReportDetailedView: React.FC<Props> = ({ data, currencyCode }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-          <p className="text-xs uppercase font-semibold text-slate-400 mb-1">{t('reports.totalSales')}</p>
+          <p className="text-xs uppercase font-semibold text-slate-400 mb-1">{t('Отчет о продажах')}</p>
           <p className="text-xl font-bold text-slate-900">{sales.saleDetails?.length || 0}</p>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-          <p className="text-xs uppercase font-semibold text-slate-400 mb-1">{t('reports.revenue')}</p>
+          <p className="text-xs uppercase font-semibold text-slate-400 mb-1">{t('Выручка')}</p>
           <p className="text-xl font-bold text-slate-900">
             {formatMoney((sales.saleDetails || []).reduce((sum, s) => sum + s.totalAmount, 0), currencyCode)}
           </p>

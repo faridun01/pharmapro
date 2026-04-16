@@ -629,3 +629,128 @@ ipcMain.handle('desktop:save-db-config', async (_event, databaseUrl) => {
 ipcMain.on('runtime:mark', (_event, payload) => {
   writeRuntimeLog('runtime-mark', payload || {});
 });
+
+// --- Backup Management (Step 12) ---
+ipcMain.handle('desktop:perform-backup', async () => {
+  writeRuntimeLog('backup-request', { ts: Date.now() });
+  
+  try {
+    const envFile = resolveRuntimeEnvPath();
+    let dbUrl = process.env.DATABASE_URL;
+    
+    if (envFile && fs.existsSync(envFile)) {
+      const content = fs.readFileSync(envFile, 'utf8');
+      const match = content.match(/DATABASE_URL=["']?([^"'\n]+)["']?/);
+      if (match) dbUrl = match[1];
+    }
+
+    if (!dbUrl) throw new Error('DATABASE_URL not found');
+
+    // Parse postgresql://user:pass@host:port/dbname
+    const urlPattern = /postgresql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/([^?]+)/;
+    const parts = dbUrl.match(urlPattern);
+    if (!parts) throw new Error('Invalid DATABASE_URL format');
+
+    const [, user, password, host, port, dbname] = parts;
+
+    // Resolve Target Directory
+    const backupDir = 'D:\\pharmapro_backups';
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const fileName = `backup_${timestamp}.sql`;
+    const fullPath = path.join(backupDir, fileName);
+
+    // Prepare pg_dump command
+    // Note: We try 'pg_dump' from PATH first, then common Windows paths
+    let pgDumpPath = 'pg_dump';
+    const commonPaths = [
+       'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\14\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\13\\bin\\pg_dump.exe'
+    ];
+
+    for (const cp of commonPaths) {
+      if (fs.existsSync(cp)) {
+        pgDumpPath = `"${cp}"`;
+        break;
+      }
+    }
+
+    writeRuntimeLog('backup-executing', { pgDumpPath, target: fullPath });
+
+    return new Promise((resolve, reject) => {
+      // Use PGPASSWORD env var to avoid prompt
+      const child = spawn(pgDumpPath, [
+        '-h', host,
+        '-p', port,
+        '-U', user,
+        '-f', fullPath,
+        dbname
+      ], {
+        env: { ...process.env, PGPASSWORD: password },
+        shell: true
+      });
+
+      let stderr = '';
+      child.stderr.on('data', (data) => { stderr += data.toString(); });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          writeRuntimeLog('backup-success', { path: fullPath });
+          resolve({ success: true, path: fullPath });
+        } else {
+          writeRuntimeLog('backup-failed', { code, stderr });
+          reject(new Error(`pg_dump failed (code ${code}): ${stderr}`));
+        }
+      });
+    });
+  } catch (error) {
+    writeRuntimeLog('backup-error', { message: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// --- System Diagnostics (Step 15) ---
+ipcMain.handle('desktop:check-system-status', async () => {
+  const status = {
+    pgDumpFound: false,
+    pgDumpPath: '',
+    diskDReady: false,
+    backupDirExists: false,
+    backupDir: 'D:\\pharmapro_backups'
+  };
+
+  const commonPaths = [
+    'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\14\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\13\\bin\\pg_dump.exe'
+  ];
+
+  for (const cp of commonPaths) {
+    if (fs.existsSync(cp)) {
+      status.pgDumpFound = true;
+      status.pgDumpPath = cp;
+      break;
+    }
+  }
+
+  try {
+    if (fs.existsSync('D:\\')) {
+      status.diskDReady = true;
+      if (fs.existsSync(status.backupDir)) {
+        status.backupDirExists = true;
+      }
+    }
+  } catch (e) {
+    status.diskDReady = false;
+  }
+
+  return status;
+});

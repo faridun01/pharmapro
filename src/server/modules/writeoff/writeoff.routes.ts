@@ -10,6 +10,7 @@ export const writeoffRouter = Router();
 const VALID_REASONS = ['EXPIRED', 'DAMAGED', 'LOST', 'INTERNAL_USE', 'MISMATCH', 'BROKEN_PACKAGING', 'OTHER'] as const;
 type WriteOffReasonStr = (typeof VALID_REASONS)[number];
 
+// GET / — All authenticated users can see write-offs
 writeoffRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   const parseDate = (val: any) => {
     if (!val) return undefined;
@@ -39,8 +40,8 @@ writeoffRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   res.json(writeOffs);
 }));
 
-// POST / — PHARMACIST, ADMIN, OWNER
-writeoffRouter.post('/', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+// POST / — Allowed for all roles (Service will decide if it is DRAFT or POSTED)
+writeoffRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const { items, ...data } = req.body ?? {};
 
