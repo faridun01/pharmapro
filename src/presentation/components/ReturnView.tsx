@@ -5,9 +5,13 @@ import { buildApiHeaders } from '../../infrastructure/api';
 import { formatProductDisplayName } from '../../lib/productDisplay';
 import { useCurrencyCode } from '../../lib/useCurrencyCode';
 import { runRefreshTasks } from '../../lib/utils';
-import { Plus, CheckCircle2, XCircle, Clock, RefreshCw, ChevronDown, ChevronUp, Package, Printer } from 'lucide-react';
+import { 
+  Plus, CheckCircle2, XCircle, Clock, RefreshCw, ChevronDown, ChevronUp, Package, Printer,
+  Store, Truck, ClipboardList, Filter, CalendarDays
+} from 'lucide-react';
 import { AppModal } from './AppModal';
 import { DateRangeFilter, ReportRangePreset } from './common/DateRangeFilter';
+import { getPresetDates } from './common/dateUtils';
 
 interface ReturnItem {
   id: string;
@@ -51,10 +55,10 @@ const formatPackQuantity = (quantity: number) => {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  DRAFT: 'bg-amber-100 text-amber-700',
-  APPROVED: 'bg-blue-100 text-blue-700',
-  COMPLETED: 'bg-emerald-100 text-emerald-700',
-  REJECTED: 'bg-red-100 text-red-700',
+  DRAFT: 'bg-amber-50 text-amber-600 border-amber-100',
+  APPROVED: 'bg-blue-50 text-blue-600 border-blue-100',
+  COMPLETED: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+  REJECTED: 'bg-red-50 text-red-600 border-red-100',
 };
 
 const getReturnItemTotal = (item: ReturnItem) => Number(item.quantity || 0) * Number(item.unitPrice || 0);
@@ -109,18 +113,12 @@ function CreateReturnModal({
   }, [open]);
 
   useEffect(() => {
-    if (!open || suppliers.length > 0) {
-      return;
-    }
-
+    if (!open || suppliers.length > 0) return;
     void refreshSuppliers();
   }, [open, refreshSuppliers, suppliers.length]);
 
   useEffect(() => {
-    if (!open || products.length > 0) {
-      return;
-    }
-
+    if (!open || products.length > 0) return;
     void refreshProducts();
   }, [open, products.length, refreshProducts]);
 
@@ -220,14 +218,14 @@ function CreateReturnModal({
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-2xl border border-[#5A5A40]/20 text-[#5A5A40] text-sm font-semibold hover:bg-[#f5f5f0] transition-all"
+            className="flex-1 py-3 rounded-2xl border border-[#5A5A40]/20 text-[#5A5A40] text-sm font-normal hover:bg-[#f5f5f0] transition-all"
           >
             {t('Cancel')}
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex-1 py-3 rounded-2xl bg-[#5A5A40] text-white text-sm font-semibold hover:bg-[#4A4A30] transition-all disabled:opacity-50"
+            className="flex-1 py-3 rounded-2xl bg-[#5A5A40] text-white text-sm font-normal hover:bg-[#4A4A30] transition-all disabled:opacity-50"
           >
             {submitting ? t('Saving...') : t('Create Return')}
           </button>
@@ -235,13 +233,12 @@ function CreateReturnModal({
       }
     >
       <div className="space-y-5">
-          {/* Type */}
           <div className="flex gap-3">
             {(['RETAIL', 'SUPPLIER'] as const).map((t_) => (
               <button
                 key={t_}
                 onClick={() => setType(t_)}
-                className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-all ${
+                className={`flex-1 py-3 rounded-2xl text-sm font-normal border transition-all ${
                   type === t_ ? 'bg-[#5A5A40] text-white border-[#5A5A40]' : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/20 hover:bg-[#f5f5f0]'
                 }`}
               >
@@ -253,9 +250,9 @@ function CreateReturnModal({
           {type === 'RETAIL' && (
             <div className="grid grid-cols-1 gap-4">
               <div>
-                <label className="text-xs font-semibold text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">{t('Refund Method')}</label>
+                <label className="text-[10px] font-normal text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">{t('Refund Method')}</label>
                 <select
-                  className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 bg-white"
+                  className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 bg-white font-normal"
                   value={refundMethod}
                   onChange={(e) => setRefundMethod(e.target.value)}
                 >
@@ -269,9 +266,9 @@ function CreateReturnModal({
 
           {type === 'SUPPLIER' && (
             <div>
-              <label className="text-xs font-semibold text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">Поставщик</label>
+              <label className="text-[10px] font-normal text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">Поставщик</label>
               <select
-                className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 bg-white"
+                className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 bg-white font-normal"
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
               >
@@ -284,20 +281,19 @@ function CreateReturnModal({
           )}
 
           <div>
-            <label className="text-xs font-semibold text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">{t('Reason')}</label>
+            <label className="text-[10px] font-normal text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">{t('Reason')}</label>
             <input
-              className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
+              className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 font-normal"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder={t('Describe the return reason')}
             />
           </div>
 
-          {/* Items */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className="text-xs font-semibold text-[#5A5A40]/60 uppercase tracking-widest">{t('Items')}</label>
-              <button onClick={addItem} className="text-xs text-[#5A5A40] font-semibold flex items-center gap-1 hover:underline">
+              <label className="text-[10px] font-normal text-[#5A5A40]/60 uppercase tracking-widest">{t('Items')}</label>
+              <button onClick={addItem} className="text-xs text-[#5A5A40] font-normal flex items-center gap-1 hover:underline">
                 <Plus size={14} /> {t('Add Item')}
               </button>
             </div>
@@ -308,7 +304,7 @@ function CreateReturnModal({
                   <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-[#f5f5f0] rounded-xl p-3">
                     <div className="col-span-4">
                       <select
-                        className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none"
+                        className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none font-normal"
                         value={item.productId}
                         onChange={(e) => updateItem(idx, 'productId', e.target.value)}
                       >
@@ -320,7 +316,7 @@ function CreateReturnModal({
                     </div>
                     <div className="col-span-3">
                       <select
-                        className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none"
+                        className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none font-normal"
                         value={item.batchId}
                         onChange={(e) => updateItem(idx, 'batchId', e.target.value)}
                         disabled={!selProd}
@@ -335,18 +331,18 @@ function CreateReturnModal({
                       <input
                         type="number"
                         min={1}
-                        className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none"
+                        className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none font-normal"
                         value={item.quantity}
                         onChange={(e) => updateItemPackaging(idx, '0', e.target.value)}
                         placeholder={t('Qty')}
                       />
-                      <p className="text-[10px] text-[#5A5A40]/55 leading-tight">Кол-во в ед.</p>
+                      <p className="text-[10px] text-[#5A5A40]/55 leading-tight font-normal">Кол-во в ед.</p>
                     </div>
                     <div className="col-span-2">
                       <input
                         type="number"
                         min={0}
-                        className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none"
+                        className="w-full px-3 py-2 border border-[#5A5A40]/10 rounded-lg text-sm bg-white outline-none font-normal"
                         value={item.unitPrice || ''}
                         onChange={(e) => updateItem(idx, 'unitPrice', Number(e.target.value))}
                         placeholder={t('Price')}
@@ -367,23 +363,23 @@ function CreateReturnModal({
 
           <div className="rounded-2xl bg-[#f5f5f0] px-4 py-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-[#5A5A40]">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Тип операции</p>
-              <p className="font-bold mt-1">{type === 'RETAIL' ? 'Розничный возврат' : 'Возврат поставщику'}</p>
+              <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-normal">Тип операции</p>
+              <p className="font-normal mt-1">{type === 'RETAIL' ? 'Розничный возврат' : 'Возврат поставщику'}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Позиции</p>
-              <p className="font-bold mt-1">{formItems.length}</p>
+              <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-normal">Позиции</p>
+              <p className="font-normal mt-1">{formItems.length}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Автоитог</p>
-              <p className="font-bold mt-1">{formTotal.toFixed(2)} {currencyCode}</p>
+              <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-normal">Автоитог</p>
+              <p className="font-normal mt-1">{formTotal.toFixed(2)} {currencyCode}</p>
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">{t('Note')}</label>
+            <label className="text-[10px] font-normal text-[#5A5A40]/60 uppercase tracking-widest mb-1 block">{t('Note')}</label>
             <textarea
-              className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 resize-none"
+              className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 resize-none font-normal"
               rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -391,7 +387,7 @@ function CreateReturnModal({
             />
           </div>
 
-          {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
+          {error && <p className="text-red-500 text-sm font-normal">{error}</p>}
         </div>
     </AppModal>
   );
@@ -409,8 +405,10 @@ export const ReturnView: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'RETAIL' | 'SUPPLIER'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'COMPLETED' | 'REJECTED'>('ALL');
   const [preset, setPreset] = useState<ReportRangePreset>('month');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  
+  const initialDates = getPresetDates('month');
+  const [fromDate, setFromDate] = useState(initialDates.from);
+  const [toDate, setToDate] = useState(initialDates.to);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -426,26 +424,10 @@ export const ReturnView: React.FC = () => {
   }, [fromDate, toDate]);
 
   useEffect(() => {
-    const today = new Date();
-    if (preset === 'today') {
-      const start = new Date(today); start.setHours(0,0,0,0);
-      const end = new Date(today); end.setHours(23,59,59,999);
-      setFromDate(start.toISOString());
-      setToDate(end.toISOString());
-    } else if (preset === 'month') {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-      setFromDate(start.toISOString());
-      setToDate(end.toISOString());
-    } else if (preset === 'lastMonth') {
-      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const end = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
-      setFromDate(start.toISOString());
-      setToDate(end.toISOString());
-    } else if (preset === 'all') {
-      setFromDate('');
-      setToDate('');
-    }
+    if (preset === 'custom') return;
+    const { from, to } = getPresetDates(preset);
+    setFromDate(from);
+    setToDate(to);
   }, [preset]);
 
   useEffect(() => { load(); }, [load]);
@@ -582,10 +564,10 @@ export const ReturnView: React.FC = () => {
       <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
+            <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-normal uppercase tracking-[0.2em] text-[#5A5A40]/55">
               Корректировка остатков
             </span>
-            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
+            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-normal uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
               Покупатели и поставщики
             </span>
           </div>
@@ -596,7 +578,7 @@ export const ReturnView: React.FC = () => {
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-[#5A5A40] text-white px-6 py-3 rounded-2xl font-medium shadow-lg hover:bg-[#4A4A30] transition-all flex items-center gap-2"
+            className="bg-[#5A5A40] text-white px-6 py-3 rounded-2xl font-normal shadow-lg hover:bg-[#4A4A30] transition-all flex items-center gap-2"
           >
             <Plus size={20} /> {t('New Return')}
           </button>
@@ -605,22 +587,22 @@ export const ReturnView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all">
-          <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Общая сумма</p>
-          <p className="text-2xl font-bold text-[#5A5A40] mt-2">{overallAmount.toFixed(2)} {currencyCode}</p>
+        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm hover:-translate-y-0.5 transition-all group">
+          <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-normal">Общая сумма</p>
+          <p className="text-2xl font-normal text-[#5A5A40] mt-1 group-hover:tracking-tight transition-all">{overallAmount.toFixed(2)} {currencyCode}</p>
         </div>
-        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all">
-          <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Итого возвратов</p>
-          <p className="text-2xl font-bold text-[#5A5A40] mt-2">{filteredReturns.length}</p>
+        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm hover:-translate-y-0.5 transition-all group">
+          <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-normal">Итого возвратов</p>
+          <p className="text-2xl font-normal text-[#5A5A40] mt-1 group-hover:tracking-tight transition-all">{filteredReturns.length}</p>
         </div>
-        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all">
-          <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Итого единиц</p>
-          <p className="text-2xl font-bold text-[#5A5A40] mt-2">{overallQuantity}</p>
+        <div className="bg-white rounded-2xl border border-[#5A5A40]/10 px-5 py-4 shadow-sm hover:-translate-y-0.5 transition-all group">
+          <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-normal">Итого единиц</p>
+          <p className="text-2xl font-normal text-[#5A5A40] mt-1 group-hover:tracking-tight transition-all">{overallQuantity}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-6">
           <DateRangeFilter
             preset={preset}
             setPreset={setPreset}
@@ -630,63 +612,82 @@ export const ReturnView: React.FC = () => {
             setToDate={(d) => { setToDate(d); setPreset('custom'); }}
             onRefresh={load}
           />
-          <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 px-4 py-4 shadow-sm min-w-0">
-            <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold mb-2">Тип возврата</p>
-            <div className="flex gap-2 flex-wrap">
-              {[
-                { value: 'ALL', label: 'Все' },
-                { value: 'RETAIL', label: 'Розничный' },
-                { value: 'SUPPLIER', label: 'Поставщику' },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setTypeFilter(option.value as typeof typeFilter)}
-                  className={`px-4 py-2 rounded-xl text-xs font-medium border transition-all ${
-                    typeFilter === option.value
-                      ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
-                      : 'bg-[#f5f5f0] text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#ecebe5]'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 px-2">
+              <Filter size={14} className="text-[#5A5A40]/40" />
+              <span className="text-[10px] uppercase tracking-[0.2em] text-[#5A5A40]/40 font-normal">Параметры фильтрации</span>
             </div>
-          </div>
-          <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 px-4 py-4 shadow-sm min-w-0">
-            <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold mb-2">Статус</p>
-            <div className="flex gap-2 flex-wrap">
-              {[
-                { value: 'ALL', label: 'Все' },
-                { value: 'DRAFT', label: 'Черновик' },
-                { value: 'COMPLETED', label: 'Завершен' },
-                { value: 'REJECTED', label: 'Отклонен' },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setStatusFilter(option.value as typeof statusFilter)}
-                  className={`px-4 py-2 rounded-xl text-xs font-medium border transition-all ${
-                    statusFilter === option.value
-                      ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
-                      : 'bg-[#f5f5f0] text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#ecebe5]'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
+            
+            <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 p-4 shadow-sm space-y-6">
+              {/* Type Filter */}
+              <div className="space-y-3">
+                <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-normal px-1">Тип возврата</p>
+                <div className="flex flex-col gap-1.5">
+                  {[
+                    { value: 'ALL', label: 'Все операции', icon: <ClipboardList size={14} /> },
+                    { value: 'RETAIL', label: 'Розничный', icon: <Store size={14} /> },
+                    { value: 'SUPPLIER', label: 'Поставщику', icon: <Truck size={14} /> },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setTypeFilter(option.value as typeof typeFilter)}
+                      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all border ${
+                        typeFilter === option.value
+                          ? 'bg-[#5A5A40] text-white border-transparent shadow-md'
+                          : 'bg-[#f5f5f0]/50 text-[#5A5A40]/60 border-transparent hover:bg-white hover:border-[#5A5A40]/10'
+                      }`}
+                    >
+                      <span className={typeFilter === option.value ? 'text-white' : 'text-[#5A5A40]/40'}>
+                        {option.icon}
+                      </span>
+                      <span className="font-normal">{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status Filter */}
+              <div className="space-y-3">
+                <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-normal px-1">Статус документа</p>
+                <div className="flex flex-col gap-1.5">
+                  {[
+                    { value: 'ALL', label: 'Любой статус', icon: <RefreshCw size={14} /> },
+                    { value: 'DRAFT', label: 'Черновик', icon: <Clock size={14} /> },
+                    { value: 'COMPLETED', label: 'Завершен', icon: <CheckCircle2 size={14} /> },
+                    { value: 'REJECTED', label: 'Отклонен', icon: <XCircle size={14} /> },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setStatusFilter(option.value as typeof statusFilter)}
+                      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all border ${
+                        statusFilter === option.value
+                          ? 'bg-[#5A5A40] text-white border-transparent shadow-md'
+                          : 'bg-[#f5f5f0]/50 text-[#5A5A40]/60 border-transparent hover:bg-white hover:border-[#5A5A40]/10'
+                      }`}
+                    >
+                      <span className={statusFilter === option.value ? 'text-white' : 'text-[#5A5A40]/40'}>
+                        {option.icon}
+                      </span>
+                      <span className="font-normal">{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="lg:col-span-9">
           {loading ? (
-             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm">
-                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40] mb-4" />
-                <p className="text-sm text-[#5A5A40]/40 font-medium">Загружаем возвраты...</p>
+             <div className="flex flex-col items-center justify-center py-24 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#5A5A40]/30 mb-4" />
+                <p className="text-xs text-[#5A5A40]/40 font-normal">Загружаем список возвратов...</p>
              </div>
           ) : filteredReturns.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm text-[#5A5A40]/40">
-              <Package size={48} className="mx-auto mb-4 opacity-30" />
-              <p className="text-lg font-medium">Нет возвратов по выбранным фильтрам</p>
+            <div className="text-center py-24 bg-white rounded-[32px] border border-[#5A5A40]/5 shadow-sm text-[#5A5A40]/40">
+              <Package size={40} className="mx-auto mb-4 opacity-10" />
+              <p className="text-sm font-normal">Нет данных за выбранный период</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -695,99 +696,124 @@ export const ReturnView: React.FC = () => {
             const returnQuantity = ret.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
             return (
-            <div key={ret.id} className="bg-white rounded-2xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
+            <div key={ret.id} className="bg-white/60 hover:bg-white rounded-3xl shadow-sm hover:shadow-xl hover:shadow-[#5A5A40]/5 border border-[#5A5A40]/5 overflow-hidden transition-all">
               <div
-                className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-[#f5f5f0]/50 transition-colors"
+                className="flex items-center justify-between px-6 py-4 cursor-pointer"
                 onClick={() => setExpandedId(expandedId === ret.id ? null : ret.id)}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-2xl bg-[#f5f5f0] flex items-center justify-center">
-                    <Package size={18} className="text-[#5A5A40]/50" />
+                <div className="flex items-center gap-5">
+                  <div className="w-11 h-11 rounded-2xl bg-[#f5f5f0] flex items-center justify-center text-[#5A5A40]/40">
+                    {ret.type === 'RETAIL' ? <Store size={20} /> : <Truck size={20} />}
                   </div>
                   <div>
-                    <p className="font-semibold text-[#151619]">{ret.returnNo}</p>
-                      <p className="text-xs text-[#5A5A40]/50 mt-0.5">
-                      {ret.type === 'RETAIL' ? 'Розничный возврат' : t('Supplier Return')}
+                    <p className="font-normal text-[#151619] tracking-tight">{ret.returnNo}</p>
+                      <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">
+                      {ret.type === 'RETAIL' ? 'Розничная операция' : 'Возврат поставщику'}
                       {ret.supplier?.name && ` · ${ret.supplier.name}`}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/40 font-bold">Сумма</p>
-                    <p className="text-sm font-bold text-[#5A5A40]">{returnTotal.toFixed(2)} {currencyCode}</p>
+                    <p className="text-[9px] uppercase tracking-widest text-[#5A5A40]/30 font-normal">Сумма</p>
+                    <p className="text-sm font-normal text-[#5A5A40] mt-0.5">{returnTotal.toFixed(2)} {currencyCode}</p>
                   </div>
-                  <div className="text-right min-w-16">
-                    <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/40 font-bold">Итого</p>
-                    <p className="text-sm font-bold text-[#5A5A40]">{returnQuantity}</p>
+                  <div className="text-right min-w-[70px]">
+                    <p className="text-[9px] uppercase tracking-widest text-[#5A5A40]/30 font-normal">Позиций</p>
+                    <p className="text-sm font-normal text-[#5A5A40] mt-0.5">{ret.items.length}</p>
                   </div>
-                  <span className="text-xs text-[#5A5A40]/40">{new Date(ret.createdAt).toLocaleDateString()}</span>
-                  <span className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${STATUS_STYLES[ret.status] ?? ''}`}>
+                  <div className="text-right min-w-[80px]">
+                    <p className="text-[9px] uppercase tracking-widest text-[#5A5A40]/30 font-normal">Дата</p>
+                    <p className="text-xs text-[#5A5A40]/40 mt-0.5 font-normal">{new Date(ret.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  
+                  <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-[11px] font-normal border transition-all ${STATUS_STYLES[ret.status] ?? ''}`}>
                     {statusIcon(ret.status)} {t(ret.status)}
                   </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      printReturn(ret);
-                    }}
-                    className="p-2 rounded-xl border border-[#5A5A40]/10 text-[#5A5A40]/60 hover:text-[#5A5A40] hover:bg-[#f5f5f0] transition-all"
-                    title="Печать возврата"
-                  >
-                    <Printer size={16} />
-                  </button>
-                  {ret.status === 'DRAFT' && (
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => approve(ret.id)}
-                        disabled={!!actionPending}
-                        className="px-4 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-xl hover:bg-emerald-600 transition-all disabled:opacity-50"
-                      >
-                        {t('Approve')}
-                      </button>
-                      <button
-                        onClick={() => reject(ret.id)}
-                        disabled={!!actionPending}
-                        className="px-4 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-xl hover:bg-red-600 transition-all disabled:opacity-50"
-                      >
-                        {t('Reject')}
-                      </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        printReturn(ret);
+                      }}
+                      className="p-2.5 rounded-xl border border-[#5A5A40]/5 text-[#5A5A40]/40 hover:text-[#5A5A40] hover:bg-white hover:border-[#5A5A40]/20 transition-all shadow-sm group/btn"
+                      title="Печать возврата"
+                    >
+                      <Printer size={16} className="group-hover/btn:scale-110 transition-transform" />
+                    </button>
+                    
+                    {ret.status === 'DRAFT' && (
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => approve(ret.id)}
+                          disabled={!!actionPending}
+                          className="h-10 px-4 bg-emerald-500 text-white text-xs font-normal rounded-xl hover:bg-emerald-600 transition-all disabled:opacity-50 shadow-sm"
+                        >
+                          Одобрить
+                        </button>
+                        <button
+                          onClick={() => reject(ret.id)}
+                          disabled={!!actionPending}
+                          className="h-10 px-4 bg-red-400 text-white text-xs font-normal rounded-xl hover:bg-red-500 transition-all disabled:opacity-50 shadow-sm"
+                        >
+                          Отказ
+                        </button>
+                      </div>
+                    )}
+                    
+                    <div className={`p-2 transition-transform duration-300 ${expandedId === ret.id ? 'rotate-180 text-[#5A5A40]' : 'text-[#5A5A40]/30'}`}>
+                      <ChevronDown size={18} />
                     </div>
-                  )}
-                  {expandedId === ret.id ? <ChevronUp size={16} className="text-[#5A5A40]/40" /> : <ChevronDown size={16} className="text-[#5A5A40]/40" />}
+                  </div>
                 </div>
               </div>
 
               {expandedId === ret.id && (
-                <div className="px-6 pb-4 border-t border-[#5A5A40]/5">
-                  {ret.reason && <p className="text-sm text-[#5A5A40]/60 py-3">{t('Reason')}: {ret.reason}</p>}
-                  <table className="w-full mt-2 text-sm">
+                <div className="px-6 pb-6 border-t border-[#5A5A40]/5 bg-[#f5f5f0]/20 animate-in slide-in-from-top-2 duration-300">
+                  {ret.reason && (
+                    <div className="flex items-start gap-2 py-4 px-1">
+                      <ClipboardList size={14} className="text-[#5A5A40]/30 mt-0.5" />
+                      <p className="text-xs text-[#5A5A40]/60 italic font-normal leading-relaxed overflow-hidden">
+                        Причина: {ret.reason}
+                      </p>
+                    </div>
+                  )}
+                  <div className="rounded-2xl border border-[#5A5A40]/10 overflow-hidden bg-white shadow-inner">
+                    <table className="w-full text-xs">
                     <thead>
-                      <tr className="text-xs text-[#5A5A40]/40 uppercase tracking-widest">
-                        <th className="text-left py-2">{t('Product')}</th>
-                        <th className="text-left py-2">{t('Batch')}</th>
-                        <th className="text-right py-2">{t('Qty')}</th>
-                        <th className="text-right py-2">{moneyLabel(t('Unit Price'))}</th>
-                        <th className="text-right py-2">{moneyLabel('Сумма')}</th>
+                      <tr className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest bg-[#f5f5f0]/50 border-b border-[#5A5A40]/5">
+                        <th className="text-left px-4 py-3 font-normal">Товар / Описание</th>
+                        <th className="text-left px-4 py-3 font-normal">Партия</th>
+                        <th className="text-right px-4 py-3 font-normal">Количество</th>
+                        <th className="text-right px-4 py-3 font-normal">Цена ед.</th>
+                        <th className="text-right px-4 py-3 font-normal">Сумма</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-[#5A5A40]/5">
                       {ret.items.map((item) => (
-                        <tr key={item.id} className="border-t border-[#5A5A40]/5">
-                          <td className="py-2 font-medium">{getProductDisplayLabel(item.productId, item.product?.name ?? t('Unknown'))}</td>
-                          <td className="py-2 text-[#5A5A40]/60">{item.batch?.batchNumber ?? '—'}</td>
-                          <td className="py-2 text-right">{formatPackQuantity(item.quantity)}</td>
-                          <td className="py-2 text-right">{item.unitPrice ? item.unitPrice.toFixed(2) : '—'}</td>
-                          <td className="py-2 text-right font-semibold text-[#5A5A40]">{getReturnItemTotal(item).toFixed(2)}</td>
+                        <tr key={item.id} className="hover:bg-[#f5f5f0]/20 transition-colors">
+                          <td className="px-4 py-3 font-normal text-[#151619]">{getProductDisplayLabel(item.productId, item.product?.name ?? t('Unknown'))}</td>
+                          <td className="px-4 py-3 text-[#5A5A40]/60 font-normal">{item.batch?.batchNumber ?? '—'}</td>
+                          <td className="px-4 py-3 text-right text-[#5A5A40]/70 font-normal">{formatPackQuantity(item.quantity)}</td>
+                          <td className="px-4 py-3 text-right text-[#5A5A40]/70 font-normal">{item.unitPrice ? item.unitPrice.toFixed(2) : '—'}</td>
+                          <td className="px-4 py-3 text-right font-normal text-[#151619]">{getReturnItemTotal(item).toFixed(2)}</td>
                         </tr>
                       ))}
-                      <tr className="border-t border-[#5A5A40]/10 bg-[#f5f5f0]/35">
-                        <td colSpan={2} className="py-3 text-xs uppercase tracking-widest font-bold text-[#5A5A40]/55">Итого</td>
-                        <td className="py-3 text-right font-bold text-[#5A5A40]">{returnQuantity}</td>
-                        <td className="py-3 text-right text-[#5A5A40]/50">—</td>
-                        <td className="py-3 text-right font-bold text-[#5A5A40]">{returnTotal.toFixed(2)} {currencyCode}</td>
+                      <tr className="bg-[#f5f5f0]/35 transition-colors">
+                        <td colSpan={2} className="px-4 py-3.5 text-[10px] uppercase font-normal tracking-widest text-[#5A5A40]/55">Итого по документу</td>
+                        <td className="px-4 py-3.5 text-right font-normal text-[#5A5A40]">
+                          <span className="text-[10px] text-[#5A5A40]/40 mr-1.5 uppercase font-normal italic tracking-tighter">Всего ед:</span>
+                          {returnQuantity}
+                        </td>
+                        <td className="px-4 py-3.5 text-right text-[#5A5A40]/50">—</td>
+                        <td className="px-4 py-3.5 text-right font-normal text-[#151619] text-sm">
+                          {returnTotal.toFixed(2)} <span className="text-[10px] text-[#5A5A40]/50 ml-1 font-normal tracking-wide uppercase">{currencyCode}</span>
+                        </td>
                       </tr>
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

@@ -8,8 +8,14 @@ import { returnsService } from './returns.service';
 export const returnsRouter = Router();
 
 returnsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const parseDate = (val: any) => {
+    if (!val) return undefined;
+    const d = new Date(String(val));
+    return isNaN(d.getTime()) ? undefined : d;
+  };
+
+  const from = parseDate(req.query.from);
+  const to = parseDate(req.query.to);
 
   const where: any = {};
   if (from || to) {

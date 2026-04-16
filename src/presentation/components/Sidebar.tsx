@@ -54,8 +54,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         {isSidebarOpen && (
           <div className="flex flex-col pharma-fade-in">
-            <h1 className="font-black text-xl tracking-tight leading-none text-white">PharmaPro</h1>
-            <span className="text-[10px] text-[#5A5A40] font-black uppercase tracking-[0.2em] mt-1.5">ITFORCE System</span>
+            <h1 className="font-normal text-xl tracking-tight leading-none text-white">PharmaPro</h1>
+            <span className="text-[10px] text-[#5A5A40] font-normal uppercase tracking-[0.2em] mt-1.5">ITFORCE System</span>
           </div>
         )}
       </div>
@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {menuItems.map((group) => (
           <div key={group.group} className="mb-6 last:mb-0">
             {isSidebarOpen && (
-              <h3 className="px-4 mb-3 text-[10px] font-black text-white/20 uppercase tracking-[0.25em] pharma-fade-in">
+              <h3 className="px-4 mb-3 text-[10px] font-normal text-white/20 uppercase tracking-[0.25em] pharma-fade-in">
                 {group.group}
               </h3>
             )}
@@ -85,10 +85,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <item.icon size={22} className={`${isActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
                     {isSidebarOpen && (
-                      <span className="font-bold text-sm tracking-tight flex-1 flex items-center gap-2">
+                      <span className="font-normal text-sm tracking-tight flex-1 flex items-center gap-2">
                         {item.label}
                         {item.id === 'notifications' && notificationsCount > 0 && (
-                          <span className="inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-black shadow-lg">
+                          <span className="inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-normal shadow-lg">
                             {notificationsCount}
                           </span>
                         )}
@@ -107,12 +107,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="mt-auto p-4 border-t border-white/5 bg-black/10">
         {isSidebarOpen && (
           <div className="flex items-center gap-3 p-3 mb-4 rounded-2xl bg-white/5 border border-white/5 pharma-fade-in">
-            <div className="w-10 h-10 bg-[#5A5A40] rounded-xl flex items-center justify-center text-white font-black shadow-lg shadow-[#5A5A40]/10">
+            <div className="w-10 h-10 bg-[#5A5A40] rounded-xl flex items-center justify-center text-white font-normal shadow-lg shadow-[#5A5A40]/10">
               {user.name.charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold truncate leading-none mb-1 text-white">{user.name}</p>
-              <p className="text-[10px] text-white/30 font-black uppercase tracking-widest truncate">{user.role}</p>
+              <p className="text-sm font-normal truncate leading-none mb-1 text-white">{user.name}</p>
+              <p className="text-[10px] text-white/30 font-normal uppercase tracking-widest truncate">{user.role}</p>
             </div>
           </div>
         )}
@@ -122,7 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="w-full flex items-center justify-center sm:justify-start gap-4 px-4 py-4 text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-2xl transition-all group"
         >
           <LogOut size={22} className="shrink-0 group-hover:-translate-x-1 transition-transform" />
-          {isSidebarOpen && <span className="font-bold text-xs uppercase tracking-[0.2em]">Выход</span>}
+          {isSidebarOpen && <span className="font-normal text-xs uppercase tracking-[0.2em]">Выход</span>}
         </button>
       </div>
 

@@ -6,6 +6,7 @@ import { defaultCompanyReportProfile, type CompanyReportProfile } from '../../li
 import { UsersAdminPanel } from './UsersAdminPanel';
 import { AuditLogPanel } from './AuditLogPanel';
 import { ExportPanel } from './ExportPanel';
+import { AnimatePresence, motion } from 'motion/react';
 import i18n from '../../lib/i18n';
 import {
   defaultUserSettingsPreferences,
@@ -20,8 +21,6 @@ import {
   Save,
   ShieldCheck,
   User,
-  Globe,
-  DollarSign,
   Bell,
   Database,
   Moon,
@@ -277,6 +276,10 @@ export const SettingsView: React.FC = () => {
       setPreferences(body as UserSettingsPreferences);
       document.documentElement.dataset.theme = body.appearance?.theme === 'dark' ? 'dark' : 'light';
       await applyLanguage('ru');
+      
+      // Trigger global metrics refresh to update notification badges
+      window.dispatchEvent(new CustomEvent('refresh-app-metrics'));
+      
       setNotice(t('Preferences saved'));
     } catch (e: any) {
       setError(e?.message || t('Failed to save preferences'));
@@ -383,16 +386,26 @@ export const SettingsView: React.FC = () => {
         </button>
       </div>
 
-      {(message || errorMessage) && (
-        <div className={`rounded-xl px-4 py-3 text-sm border ${errorMessage ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
-          {errorMessage || message}
-        </div>
-      )}
+      <AnimatePresence>
+        {(message || errorMessage) && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, x: '-50%' }}
+            animate={{ opacity: 1, y: 20, x: '-50%' }}
+            exit={{ opacity: 0, y: -50, x: '-50%' }}
+            className={`fixed top-0 left-1/2 z-[100] min-w-[300px] text-center rounded-2xl px-6 py-4 text-sm font-bold shadow-2xl border backdrop-blur-md ${
+              errorMessage 
+                ? 'bg-rose-50/90 border-rose-200 text-rose-700' 
+                : 'bg-emerald-50/90 border-emerald-200 text-emerald-700'
+            }`}
+          >
+            {errorMessage || message}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {[
           { title: 'Профиль', subtitle: 'Имя, email и вход', icon: User },
-          { title: 'Касса и валюта', subtitle: `Валюта: ${preferences.currency.code || 'TJS'} · Налог: ${Number(preferences.currency.taxRate || 0).toFixed(1)}%`, icon: DollarSign },
           { title: 'Уведомления', subtitle: `Остатки: ${preferences.notifications.lowStockThreshold} · Сроки: ${preferences.notifications.expiryThresholdDays} дн.`, icon: Bell },
           { title: 'Резерв и контроль', subtitle: isAdmin ? 'Проверка остатков и backup доступны' : 'Доступны личные настройки', icon: Database },
         ].map((item) => (
@@ -440,99 +453,107 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl border border-[#5A5A40]/10 space-y-5">
-        <div className="flex items-center gap-2 text-[#5A5A40]">
-          <Globe size={18} />
-          <h3 className="text-lg font-bold">{t('Localization')}</h3>
-        </div>
-        <p className="text-sm text-[#5A5A40]/55">Эти параметры определяют язык интерфейса, дату и локальное время во всех документах и отчетах.</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-[#5A5A40]/50 mb-1">{t('Language')}</p>
-            <select
-              value={preferences.localization.language}
-              onChange={() => setPreferences((s) => ({ ...s, localization: { ...s.localization, language: 'ru' } }))}
-              className="w-full px-3 py-2.5 border border-[#5A5A40]/10 rounded-xl bg-white"
-            >
-              <option value="ru">RU</option>
-            </select>
+      <div className="bg-white p-8 rounded-[32px] border border-[#5A5A40]/5 space-y-8 shadow-sm relative overflow-hidden">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 text-[#5A5A40]">
+            <div className="w-10 h-10 rounded-2xl bg-[#f5f5f0] flex items-center justify-center">
+              <Bell size={20} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold tracking-tight">{t('Notifications')}</h3>
+              <p className="text-xs text-[#5A5A40]/50 mt-0.5">Контролируйте, как и когда система оповещает вас о важных событиях</p>
+            </div>
           </div>
+          <button
+            onClick={() => { void savePreferences(); }}
+            disabled={savingPreferences}
+            className="flex items-center gap-2 px-6 py-2.5 bg-[#5A5A40] text-white rounded-2xl font-bold text-sm hover:bg-[#4A4A30] transition-all shadow-md shadow-[#5A5A40]/10 disabled:opacity-50"
+          >
+            {savingPreferences ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+            {savingPreferences ? t('Saving...') : 'Сохранить уведомления'}
+          </button>
+        </div>
 
-          <div>
-            <p className="text-xs uppercase tracking-wider text-[#5A5A40]/50 mb-1">{t('Timezone')}</p>
-            <select
-              value={preferences.localization.timezone}
-              onChange={(e) => setPreferences((s) => ({ ...s, localization: { ...s.localization, timezone: e.target.value } }))}
-              className="w-full px-3 py-2.5 border border-[#5A5A40]/10 rounded-xl bg-white"
-            >
-              {timezoneOptions.map((zone) => (
-                <option key={zone} value={zone}>{zone}</option>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+          {/* ... keeping the contents same as previous step but nested here ... */}
+          <div className="space-y-4">
+            <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#5A5A40]/40">Основные оповещения</h4>
+            <div className="space-y-3">
+              {[
+                { key: 'lowStockAlerts', label: t('Low stock alerts'), desc: 'Предупреждать, когда товар заканчивается' },
+                { key: 'expiryAlerts', label: t('Expiry alerts'), desc: 'Уведомлять о товарах с истекающим сроком' },
+                { key: 'dailySummary', label: t('Daily summary'), desc: 'Короткий отчет о продажах в конце дня' },
+                { key: 'soundEnabled', label: t('Sound notifications'), desc: 'Звуковое сопровождение при уведомлениях' },
+              ].map((item) => (
+                <label key={item.key} className="flex items-center justify-between group cursor-pointer">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-[#5A5A40] group-hover:text-[#151619] transition-colors">{item.label}</span>
+                    <span className="text-[11px] text-[#5A5A40]/50">{item.desc}</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={Boolean((preferences.notifications as any)[item.key])}
+                      onChange={(e) => setPreferences((s) => ({
+                        ...s,
+                        notifications: {
+                          ...s.notifications,
+                          [item.key]: e.target.checked,
+                        },
+                      }))}
+                    />
+                    <div className="w-10 h-5 bg-[#f5f5f0] rounded-full peer peer-checked:bg-[#5A5A40] transition-all duration-300"></div>
+                    <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 peer-checked:left-6 shadow-sm"></div>
+                  </div>
+                </label>
               ))}
-            </select>
+            </div>
           </div>
 
-          <div>
-            <p className="text-xs uppercase tracking-wider text-[#5A5A40]/50 mb-1">{t('Date format')}</p>
-            <select
-              value={preferences.localization.dateFormat}
-              onChange={() => setPreferences((s) => ({ ...s, localization: { ...s.localization, dateFormat: 'ru-RU' } }))}
-              className="w-full px-3 py-2.5 border border-[#5A5A40]/10 rounded-xl bg-white"
-            >
-              <option value="ru-RU">DD.MM.YYYY</option>
-            </select>
+          <div className="space-y-6">
+            <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#5A5A40]/40">Пороги уведомлений</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#5A5A40]/70 flex items-center gap-1.5 ml-1">
+                  Минимум на складе
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full pl-4 pr-12 py-3 bg-[#fcfbf7] border border-[#5A5A40]/10 rounded-2xl text-sm font-semibold outline-none focus:ring-2 focus:ring-[#5A5A40]/10 transition-all placeholder:font-normal"
+                    placeholder="5"
+                    value={preferences.notifications.lowStockThreshold}
+                    onChange={(e) => setPreferences((s) => ({ ...s, notifications: { ...s.notifications, lowStockThreshold: Number(e.target.value || 0) } }))}
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-[#5A5A40]/30 uppercase">Шт</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#5A5A40]/70 flex items-center gap-1.5 ml-1">
+                  Срок годности
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full pl-4 pr-12 py-3 bg-[#fcfbf7] border border-[#5A5A40]/10 rounded-2xl text-sm font-semibold outline-none focus:ring-2 focus:ring-[#5A5A40]/10 transition-all placeholder:font-normal"
+                    placeholder="30"
+                    value={preferences.notifications.expiryThresholdDays}
+                    onChange={(e) => setPreferences((s) => ({ ...s, notifications: { ...s.notifications, expiryThresholdDays: Number(e.target.value || 0) } }))}
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-[#5A5A40]/30 uppercase">Дн</span>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 rounded-2xl bg-[#5A5A40]/[0.02] border border-[#5A5A40]/5">
+              <p className="text-[11px] leading-relaxed text-[#5A5A40]/60 italic">
+                * Система будет автоматически помечать товары как «Критический остаток», если их количество упадет ниже указанного порога, и предупреждать об истечении срока за выбранное количество дней.
+              </p>
+            </div>
           </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-2xl border border-[#5A5A40]/10 space-y-5">
-        <div className="flex items-center gap-2 text-[#5A5A40]">
-          <DollarSign size={18} />
-          <h3 className="text-lg font-bold">{t('Currency & Tax')}</h3>
-        </div>
-        <p className="text-sm text-[#5A5A40]/55">Для обычной работы оставьте TJS и задайте актуальную ставку налога. Эти данные влияют на суммы в интерфейсе и отчетах.</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <input className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl" placeholder={t('Currency code')} value={preferences.currency.code} onChange={(e) => setPreferences((s) => ({ ...s, currency: { ...s.currency, code: e.target.value.toUpperCase() } }))} />
-          <input className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl" placeholder={t('Currency symbol')} value={preferences.currency.symbol} onChange={(e) => setPreferences((s) => ({ ...s, currency: { ...s.currency, symbol: e.target.value } }))} />
-          <input type="number" min={0} max={100} step={0.1} className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl" placeholder={t('Tax rate %')} value={preferences.currency.taxRate} onChange={(e) => setPreferences((s) => ({ ...s, currency: { ...s.currency, taxRate: Number(e.target.value || 0) } }))} />
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-2xl border border-[#5A5A40]/10 space-y-5">
-        <div className="flex items-center gap-2 text-[#5A5A40]">
-          <Bell size={18} />
-          <h3 className="text-lg font-bold">{t('Notifications')}</h3>
-        </div>
-        <p className="text-sm text-[#5A5A40]/55">Настройте, когда система должна предупреждать о низком остатке, сроках годности и ежедневной сводке.</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          {[
-            { key: 'lowStockAlerts', label: t('Low stock alerts') },
-            { key: 'expiryAlerts', label: t('Expiry alerts') },
-            { key: 'dailySummary', label: t('Daily summary') },
-            { key: 'soundEnabled', label: t('Sound notifications') },
-          ].map((item) => (
-            <label key={item.key} className="flex items-center justify-between rounded-xl border border-[#5A5A40]/10 px-4 py-3">
-              <span className="text-[#5A5A40] font-semibold">{item.label}</span>
-              <input
-                type="checkbox"
-                checked={Boolean((preferences.notifications as any)[item.key])}
-                onChange={(e) => setPreferences((s) => ({
-                  ...s,
-                  notifications: {
-                    ...s.notifications,
-                    [item.key]: e.target.checked,
-                  },
-                }))}
-              />
-            </label>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input type="number" min={0} className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl" placeholder={t('Low stock threshold')} value={preferences.notifications.lowStockThreshold} onChange={(e) => setPreferences((s) => ({ ...s, notifications: { ...s.notifications, lowStockThreshold: Number(e.target.value || 0) } }))} />
-          <input type="number" min={0} className="w-full px-4 py-2.5 border border-[#5A5A40]/10 rounded-xl" placeholder={t('Expiry threshold days')} value={preferences.notifications.expiryThresholdDays} onChange={(e) => setPreferences((s) => ({ ...s, notifications: { ...s.notifications, expiryThresholdDays: Number(e.target.value || 0) } }))} />
         </div>
       </div>
 
@@ -547,17 +568,18 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-1 rounded-xl border border-[#5A5A40]/10 flex">
-          <button onClick={() => setPreferences((s) => ({ ...s, appearance: { theme: 'light' } }))} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 ${appearanceMode === 'light' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/50'}`}>
-            <Sun size={14} /> {t('Light')}
+        <div className="bg-white p-1 rounded-xl border border-[#5A5A40]/10 flex gap-1">
+          <button onClick={() => setPreferences((s) => ({ ...s, appearance: { theme: 'light' } }))} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${appearanceMode === 'light' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/50 hover:bg-[#5A5A40]/5'}`}>
+            <Sun size={12} /> {t('Light')}
           </button>
-          <button onClick={() => setPreferences((s) => ({ ...s, appearance: { theme: 'dark' } }))} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 ${appearanceMode === 'dark' ? 'bg-[#151619] text-white' : 'text-[#5A5A40]/50'}`}>
-            <Moon size={14} /> {t('Dark')}
+          <button onClick={() => setPreferences((s) => ({ ...s, appearance: { theme: 'dark' } }))} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${appearanceMode === 'dark' ? 'bg-[#151619] text-white' : 'text-[#5A5A40]/50 hover:bg-[#5A5A40]/5'}`}>
+            <Moon size={12} /> {t('Dark')}
           </button>
         </div>
 
-        <button onClick={() => { void savePreferences(); }} disabled={savingPreferences} className="px-4 py-2 rounded-xl bg-[#5A5A40] text-white text-sm font-semibold disabled:opacity-50">
-          {savingPreferences ? t('Saving...') : t('Save preferences')}
+        <button onClick={() => { void savePreferences(); }} disabled={savingPreferences} className="px-6 py-2.5 rounded-2xl bg-[#5A5A40] text-white text-sm font-bold disabled:opacity-50 flex items-center gap-2">
+          {savingPreferences ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+          {savingPreferences ? t('Saving...') : 'Сохранить тему'}
         </button>
       </div>
 

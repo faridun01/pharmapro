@@ -36,11 +36,22 @@
 }
 
 @layer base {
+  * {
+    font-weight: 400 !important;
+  }
+  
   body {
     @apply font-inter bg-surface text-on-surface;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-manrope;
+    font-weight: 400 !important;
+  }
+  
+  b, strong {
+    font-weight: 500 !important;
   }
 }
 

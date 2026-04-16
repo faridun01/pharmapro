@@ -5,6 +5,7 @@ import { runRefreshTasks } from '../../lib/utils';
 import { AppModal } from './AppModal';
 import { useCurrencyCode } from '../../lib/useCurrencyCode';
 import { DateRangeFilter, ReportRangePreset } from './common/DateRangeFilter';
+import { getPresetDates } from './common/dateUtils';
 
 const REASONS = ['EXPIRED', 'DAMAGED', 'LOST', 'INTERNAL_USE', 'MISMATCH', 'BROKEN_PACKAGING', 'OTHER'] as const;
 type Reason = (typeof REASONS)[number];
@@ -481,8 +482,10 @@ export const WriteOffView: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [preset, setPreset] = useState<ReportRangePreset>('month');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  
+  const initialDates = getPresetDates('month');
+  const [fromDate, setFromDate] = useState(initialDates.from);
+  const [toDate, setToDate] = useState(initialDates.to);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -498,26 +501,10 @@ export const WriteOffView: React.FC = () => {
   }, [fromDate, toDate]);
 
   useEffect(() => {
-    const today = new Date();
-    if (preset === 'today') {
-      const start = new Date(today); start.setHours(0,0,0,0);
-      const end = new Date(today); end.setHours(23,59,59,999);
-      setFromDate(start.toISOString());
-      setToDate(end.toISOString());
-    } else if (preset === 'month') {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-      setFromDate(start.toISOString());
-      setToDate(end.toISOString());
-    } else if (preset === 'lastMonth') {
-      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const end = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
-      setFromDate(start.toISOString());
-      setToDate(end.toISOString());
-    } else if (preset === 'all') {
-      setFromDate('');
-      setToDate('');
-    }
+    if (preset === 'custom') return;
+    const { from, to } = getPresetDates(preset);
+    setFromDate(from);
+    setToDate(to);
   }, [preset]);
 
   useEffect(() => { load(); }, [load]);

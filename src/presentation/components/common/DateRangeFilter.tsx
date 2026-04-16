@@ -1,4 +1,5 @@
 import React from 'react';
+import { RefreshCw, Calendar, Clock, Infinity, CalendarSearch, Milestone } from 'lucide-react';
 
 export type ReportRangePreset = 'today' | 'yesterday' | 'week' | 'month' | 'lastMonth' | 'year' | 'all' | 'custom';
 
@@ -11,6 +12,14 @@ export const presetLabels: Record<ReportRangePreset, string> = {
   year: 'Весь год',
   all: 'Весь период',
   custom: 'Свой период',
+};
+
+const PRESET_ICONS: Record<string, React.ReactNode> = {
+  today: <Clock size={14} />,
+  month: <Calendar size={14} />,
+  lastMonth: <Milestone size={14} />,
+  all: <Infinity size={14} />,
+  custom: <CalendarSearch size={14} />,
 };
 
 interface DateRangeFilterProps {
@@ -33,55 +42,76 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   onRefresh
 }) => {
   return (
-    <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 px-4 py-4 shadow-sm min-w-0">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
-         <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-bold">Период</p>
+    <div className="bg-white rounded-[26px] border border-[#5A5A40]/10 p-4 shadow-sm space-y-4">
+      <div className="flex items-center justify-between px-1">
+         <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/45 font-normal">Период отчета</p>
          {onRefresh && (
-           <button onClick={onRefresh} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-[#5A5A40]/40">
-              {/* Refresh icon placeholder or use directly in parent */}
+           <button onClick={onRefresh} className="p-1.5 hover:bg-[#5A5A40]/5 rounded-xl transition-all text-[#5A5A40]/40 hover:text-[#5A5A40]">
+              <RefreshCw size={14} />
            </button>
          )}
       </div>
-      <div className="flex flex-col gap-4">
-        <div className="flex gap-2 flex-wrap">
-          {(['today', 'month', 'lastMonth', 'all', 'custom'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPreset(p)}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                preset === p
-                  ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
-                  : 'bg-[#f5f5f0] text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#ecebe5]'
-              }`}
-            >
-              {presetLabels[p]}
-            </button>
-          ))}
-        </div>
 
-        {preset === 'custom' && (
-          <div className="flex flex-wrap gap-2 animate-in slide-in-from-top-1 duration-200">
-            <div className="flex-1 min-w-[140px]">
-              <label className="text-[10px] font-bold text-[#5A5A40]/40 uppercase mb-1 block">С даты</label>
+      <div className="flex flex-col gap-1.5">
+        {(['today', 'month', 'lastMonth', 'all', 'custom'] as const).map((p) => (
+          <button
+            key={p}
+            onClick={() => setPreset(p)}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all border ${
+              preset === p
+                ? 'bg-[#5A5A40] text-white border-transparent shadow-md'
+                : 'bg-[#f5f5f0]/50 text-[#5A5A40]/60 border-transparent hover:bg-white hover:border-[#5A5A40]/10'
+            }`}
+          >
+            <span className={preset === p ? 'text-white' : 'text-[#5A5A40]/40'}>
+              {PRESET_ICONS[p] || <Calendar size={14} />}
+            </span>
+            <span className="font-normal">{presetLabels[p]}</span>
+          </button>
+        ))}
+      </div>
+
+      {preset === 'custom' && (
+        <div className="pt-2 space-y-3 animate-in slide-in-from-top-2 duration-300">
+          <div className="w-full h-px bg-[#5A5A40]/5" />
+          <div className="grid grid-cols-1 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-normal text-[#5A5A40]/40 uppercase tracking-widest px-1">С даты</label>
               <input
                 type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/15"
+                value={fromDate ? fromDate.split('T')[0] : ''}
+                onChange={(e) => {
+                   const d = e.target.value;
+                   if (d) {
+                     const date = new Date(d);
+                     setFromDate(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0).toISOString());
+                   } else {
+                     setFromDate('');
+                   }
+                }}
+                className="w-full px-4 py-2.5 bg-[#f5f5f0]/50 border border-transparent rounded-xl text-xs font-normal text-[#5A5A40] outline-none focus:bg-white focus:border-[#5A5A40]/20 transition-all cursor-pointer"
               />
             </div>
-            <div className="flex-1 min-w-[140px]">
-              <label className="text-[10px] font-bold text-[#5A5A40]/40 uppercase mb-1 block">По дату</label>
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-normal text-[#5A5A40]/40 uppercase tracking-widest px-1">По дату</label>
               <input
                 type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/15"
+                value={toDate ? toDate.split('T')[0] : ''}
+                onChange={(e) => {
+                   const d = e.target.value;
+                   if (d) {
+                     const date = new Date(d);
+                     setToDate(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999).toISOString());
+                   } else {
+                     setToDate('');
+                   }
+                }}
+                className="w-full px-4 py-2.5 bg-[#f5f5f0]/50 border border-transparent rounded-xl text-xs font-normal text-[#5A5A40] outline-none focus:bg-white focus:border-[#5A5A40]/20 transition-all cursor-pointer"
               />
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

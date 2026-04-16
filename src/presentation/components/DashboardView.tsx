@@ -321,7 +321,7 @@ export const DashboardView: React.FC = () => {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-[#5A5A40] tracking-tight">{t('Pharmacy Overview')}</h2>
+          <h2 className="text-2xl font-normal text-[#5A5A40] tracking-tight">{t('Pharmacy Overview')}</h2>
           <p className="text-[#5A5A40]/60 mt-0.5 text-xs italic">{t('Real-time analytics and inventory status')}</p>
         </div>
       </div>
@@ -333,12 +333,12 @@ export const DashboardView: React.FC = () => {
               <div className={`p-3 rounded-2xl ${stat.color} text-white shadow-lg`}>
                 <stat.icon size={24} />
               </div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-full ${stat.trend.startsWith('+') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              <span className={`text-xs font-normal px-2 py-1 rounded-full ${stat.trend.startsWith('+') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                 {stat.trend}
               </span>
             </div>
-            <h3 className="text-[#5A5A40]/60 text-[10px] font-bold uppercase tracking-wider">{stat.label}</h3>
-            <p className="text-xl font-black text-[#5A5A40] mt-1">{stat.value}</p>
+            <h3 className="text-[#5A5A40]/60 text-[10px] font-normal uppercase tracking-wider">{stat.label}</h3>
+            <p className="text-xl font-normal text-[#5A5A40] mt-1">{stat.value}</p>
           </div>
         ))}
       </div>
@@ -347,19 +347,19 @@ export const DashboardView: React.FC = () => {
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-[#5A5A40]">{t('Admin Risk & Finance')}</h3>
+              <h3 className="text-lg font-normal text-[#5A5A40]">{t('Admin Risk & Finance')}</h3>
               <p className="text-[11px] text-[#5A5A40]/60">{t('Live operational controls')}</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {adminCards.map((card) => (
                 <div key={card.label} className="rounded-2xl border border-[#5A5A40]/10 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs uppercase tracking-wider text-[#5A5A40]/60 font-bold">{card.label}</p>
+                    <p className="text-xs uppercase tracking-wider text-[#5A5A40]/60 font-normal">{card.label}</p>
                     <div className={`p-2 rounded-xl ${card.tone}`}>
                       <card.icon size={16} />
                     </div>
                   </div>
-                  <p className="text-xl font-bold text-[#5A5A40] mt-3">{card.value}</p>
+                  <p className="text-xl font-normal text-[#5A5A40] mt-3">{card.value}</p>
                 </div>
               ))}
             </div>
@@ -370,7 +370,7 @@ export const DashboardView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
           <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-[#5A5A40]">{t('Sales Performance')}</h3>
+            <h3 className="text-xl font-normal text-[#5A5A40]">{t('Sales Performance')}</h3>
             <select
               className="bg-[#f5f5f0] border-none rounded-xl px-4 py-2 text-sm text-[#5A5A40] outline-none"
               value={selectedPeriodPreset}
@@ -396,7 +396,7 @@ export const DashboardView: React.FC = () => {
         </div>
 
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
-          <h3 className="text-xl font-bold text-[#5A5A40] mb-6">Последняя активность</h3>
+          <h3 className="text-xl font-normal text-[#5A5A40] mb-6">Последняя активность</h3>
           <div className="space-y-6">
             {recentActivity.length === 0 && (
               <p className="text-sm text-[#5A5A40]/60">Пока нет свежих продаж, долгов или складских событий</p>
@@ -415,12 +415,12 @@ export const DashboardView: React.FC = () => {
                    <AlertTriangle size={20} />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-[#5A5A40] truncate">{t(activity.title)}</p>
+                  <p className="text-sm font-normal text-[#5A5A40] truncate">{t(activity.title)}</p>
                   <p className="text-xs text-[#5A5A40]/60 mt-0.5">{activity.subtitle}</p>
                   <p className="text-xs text-[#5A5A40]/45 mt-1">{activity.time}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-bold text-[#5A5A40]">{formatMoney(activity.amount)}</p>
+                  <p className="text-sm font-normal text-[#5A5A40]">{formatMoney(activity.amount)}</p>
                 </div>
               </div>
             ))}
@@ -430,7 +430,7 @@ export const DashboardView: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
-          <h3 className="text-xl font-bold text-[#5A5A40] mb-6">Товары с низким остатком</h3>
+          <h3 className="text-xl font-normal text-[#5A5A40] mb-6">Товары с низким остатком</h3>
           <div className="space-y-4">
             {lowStockWidgetItems.length === 0 && (
               <p className="text-sm text-[#5A5A40]/60">Критически низких остатков нет</p>
@@ -438,20 +438,20 @@ export const DashboardView: React.FC = () => {
             {lowStockWidgetItems.map((product, index) => (
               <div key={product.productId} className="flex items-center justify-between gap-4 border-b border-[#5A5A40]/10 pb-4 last:border-b-0 last:pb-0">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">{index + 1}</div>
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-normal shrink-0">{index + 1}</div>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-[#5A5A40] truncate">{getProductDisplayLabel(product.productId, product.name)}</p>
+                    <p className="text-sm font-normal text-[#5A5A40] truncate">{getProductDisplayLabel(product.productId, product.name)}</p>
                     <p className="text-xs text-[#5A5A40]/60">Минимум: {product.minStock || 10}</p>
                   </div>
                 </div>
-                <span className="text-sm font-bold text-amber-700">{product.currentStock}</span>
+                <span className="text-sm font-normal text-amber-700">{product.currentStock}</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
-          <h3 className="text-xl font-bold text-[#5A5A40] mb-6">Скоро просроченные товары</h3>
+          <h3 className="text-xl font-normal text-[#5A5A40] mb-6">Скоро просроченные товары</h3>
           <div className="space-y-4">
             {expiringWidgetItems.length === 0 && (
               <p className="text-sm text-[#5A5A40]/60">Товаров с близким сроком годности нет</p>
@@ -459,13 +459,13 @@ export const DashboardView: React.FC = () => {
             {expiringWidgetItems.map((item, index) => (
               <div key={item.id} className="flex items-center justify-between gap-4 border-b border-[#5A5A40]/10 pb-4 last:border-b-0 last:pb-0">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${item.severityRank === 0 ? 'bg-red-100 text-red-700' : item.severityRank === 1 ? 'bg-orange-100 text-orange-700' : 'bg-amber-100 text-amber-700'}`}>{index + 1}</div>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-normal shrink-0 ${item.severityRank === 0 ? 'bg-red-100 text-red-700' : item.severityRank === 1 ? 'bg-orange-100 text-orange-700' : 'bg-amber-100 text-amber-700'}`}>{index + 1}</div>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-[#5A5A40] truncate">{getProductDisplayLabel(undefined, item.name)}</p>
+                    <p className="text-sm font-normal text-[#5A5A40] truncate">{getProductDisplayLabel(undefined, item.name)}</p>
                     <p className="text-xs text-[#5A5A40]/60">Партия {item.batchNumber} • {item.severityLabel}</p>
                   </div>
                 </div>
-                <span className={`text-sm font-bold ${item.severityRank === 0 ? 'text-red-700' : item.severityRank === 1 ? 'text-orange-700' : 'text-amber-700'}`}>{item.daysLeft <= 0 ? 'Просрочен' : `${item.daysLeft} дн.`}</span>
+                <span className={`text-sm font-normal ${item.severityRank === 0 ? 'text-red-700' : item.severityRank === 1 ? 'text-orange-700' : 'text-amber-700'}`}>{item.daysLeft <= 0 ? 'Просрочен' : `${item.daysLeft} дн.`}</span>
               </div>
             ))}
           </div>

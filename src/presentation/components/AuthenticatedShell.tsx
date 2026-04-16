@@ -151,16 +151,20 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
     return () => window.removeEventListener(getShiftClosedEventName(), refreshShiftNotice as EventListener);
   }, []);
 
-  useEffect(() => {
+  const loadMetrics = React.useCallback(async () => {
     if (!user) return;
-    void (async () => {
-      try {
-        const response = await fetch('/api/reports/metrics/dashboard?preset=month', { headers: await buildApiHeaders() });
-        const payload = await response.json().catch(() => null);
-        if (response.ok) setNotificationMetrics(payload);
-      } catch { }
-    })();
+    try {
+      const response = await fetch('/api/reports/metrics/dashboard?preset=month', { headers: await buildApiHeaders() });
+      const payload = await response.json().catch(() => null);
+      if (response.ok) setNotificationMetrics(payload);
+    } catch { }
   }, [user]);
+
+  useEffect(() => {
+    void loadMetrics();
+    window.addEventListener('refresh-app-metrics', loadMetrics);
+    return () => window.removeEventListener('refresh-app-metrics', loadMetrics);
+  }, [loadMetrics]);
 
   const menuItems = [
     {
@@ -297,15 +301,15 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
 
         <header className="h-24 bg-white/80 backdrop-blur-md border-b border-[#5A5A40]/5 flex items-center justify-between px-10 shrink-0 z-20">
           <div className="flex flex-col">
-            <h2 className="text-2xl font-black text-[#151619] tracking-tight">
+            <h2 className="text-2xl font-normal text-[#151619] tracking-tight">
               {menuItems.flatMap(g => g.items).find((m: any) => m.id === currentView)?.label || 'PharmaPro'}
             </h2>
-            <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-[0.2em] font-black">{new Date().toLocaleDateString('ru-RU', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+            <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-[0.2em] font-normal">{new Date().toLocaleDateString('ru-RU', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
           </div>
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 px-4 py-2 bg-[#f5f5f0]/50 rounded-2xl border border-[#5A5A40]/10">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-              <span className="text-[10px] font-black text-[#5A5A40]/60 uppercase tracking-widest">{t('Server Connected')}</span>
+              <span className="text-[10px] font-normal text-[#5A5A40]/60 uppercase tracking-widest">{t('Server Connected')}</span>
             </div>
           </div>
         </header>
@@ -320,7 +324,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
           </div>
         </div>
 
-        <footer className="h-10 bg-[#151619]/5 border-t border-[#5A5A40]/5 flex items-center justify-between px-10 text-[9px] text-[#5A5A40]/40 font-black uppercase tracking-[0.25em] shrink-0">
+        <footer className="h-10 bg-[#151619]/5 border-t border-[#5A5A40]/5 flex items-center justify-between px-10 text-[9px] text-[#5A5A40]/40 font-normal uppercase tracking-[0.25em] shrink-0">
           <div className="flex items-center gap-4">
             <span className="text-[#5A5A40]/60">v2.4.0 ITFORCE</span>
             <span className="w-1 h-1 bg-[#5A5A40]/20 rounded-full"></span>

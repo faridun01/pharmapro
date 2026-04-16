@@ -4,6 +4,7 @@ import { asyncHandler } from '../../common/http';
 import { prisma } from '../../infrastructure/prisma';
 import { ValidationError } from '../../common/errors';
 import { readReportSettings, writeReportSettings } from './reportSettings.storage';
+import { readSystemSettings, getDefaultUserPreferences } from '../system/systemSettings.storage';
 import { reportCache, CACHE_KEYS, CACHE_TTL } from '../../common/cache';
 import { reportService, ReportParamsSchema } from './report.service';
 
@@ -208,14 +209,22 @@ reportsRouter.get('/debts', authenticate, asyncHandler(async (req, res) => {
 }));
 
 reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const sysSettings = await readSystemSettings();
+  const userPrefs = sysSettings.userPreferences[authedReq.user.id] || getDefaultUserPreferences();
+
   const presetRaw = String(req.query.preset || 'month').toLowerCase();
   const preset: PeriodPreset = ['month', 'q1', 'q2', 'q3', 'q4', 'year', 'all'].includes(presetRaw)
     ? (presetRaw as PeriodPreset)
     : 'month';
   const { from, to } = resolveRange(preset, req.query.from, req.query.to);
 
-  // Debug logging
-  console.log(`[DashboardMetrics] Fetching for range: ${from.toISOString()} - ${to.toISOString()}, Preset: ${preset}`);
+  // Use user-defined thresholds
+  const lowStockThreshold = userPrefs.notifications.lowStockThreshold;
+  const expiryThresholdDays = userPrefs.notifications.expiryThresholdDays;
+  
+  const now = new Date();
+  const expiryThresholdDate = new Date(now.getTime() + expiryThresholdDays * 24 * 60 * 60 * 1000);
   
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
@@ -350,28 +359,26 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     }),
   ]);
 
-  const now = new Date();
-  const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const tomorrowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
-
   const getInvoiceOutstanding = (invoice: { totalAmount?: number | null; receivables?: Array<{ remainingAmount?: number | null }>; payments?: Array<{ amount?: number | null }> }) => getInvoiceOutstandingAmount(invoice);
 
   const lowStockProducts = products
-    .filter((p) => p.totalStock < (p.minStock || 10))
-    .map((p) => ({
-      productId: p.id,
-      name: p.name,
-      currentStock: p.totalStock,
-      minStock: p.minStock || 10,
-    }))
+    .filter((p) => p.totalStock < Math.max(p.minStock ?? 0, lowStockThreshold))
+    .map((p) => {
+      const effectiveMin = Math.max(p.minStock ?? 0, lowStockThreshold);
+      return {
+        productId: p.id,
+        name: p.name,
+        currentStock: p.totalStock,
+        minStock: effectiveMin,
+      };
+    })
     .sort((left, right) => (left.currentStock - left.minStock) - (right.currentStock - right.minStock));
 
   const expiredBatchesCount = batches.filter(b => Number(b.quantity || 0) > 0 && b.expiryDate && new Date(b.expiryDate) < now).length;
   const expiringBatchesCount = batches.filter(b => {
     if (!b.expiryDate) return false;
     const expDate = new Date(b.expiryDate);
-    return Number(b.quantity || 0) > 0 && expDate >= now && expDate <= thirtyDaysLater;
+    return Number(b.quantity || 0) > 0 && expDate >= now && expDate <= expiryThresholdDate;
   }).length;
   
   const expiringItems = batches
@@ -379,14 +386,15 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
       if (!batch.expiryDate) return null;
       const expiryDate = new Date(batch.expiryDate);
       const daysLeft = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysLeft > 90) return null;
+      // Only show items within user threshold
+      if (daysLeft > expiryThresholdDays) return null;
       return {
         id: batch.id,
         name: batch.product?.name || 'Товар',
         batchNumber: batch.batchNumber,
         daysLeft,
-        severityRank: daysLeft <= 0 ? 0 : daysLeft <= 30 ? 1 : 2,
-        severityLabel: daysLeft <= 0 ? 'Просрочено' : daysLeft <= 30 ? 'Критично' : 'Скоро истекает',
+        severityRank: daysLeft <= 0 ? 0 : daysLeft <= (expiryThresholdDays / 2) ? 1 : 2,
+        severityLabel: daysLeft <= 0 ? 'Просрочено' : daysLeft <= (expiryThresholdDays / 2) ? 'Критично' : 'Скоро истекает',
       };
     })
     .filter(Boolean)
@@ -397,8 +405,6 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const unpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + getInvoiceOutstanding(inv), 0);
 
   const totalDebtorOutstanding = receivables.reduce((sum, r) => sum + Number(r.remainingAmount || 0), 0);
-  const totalDebtorCustomersCount = new Set(receivables.map((r) => String(r.id))).size;
-
   const revenueInRange = salesInvoicesInRange
     .filter((invoice) => invoice.status !== 'CANCELLED')
     .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0);
@@ -455,15 +461,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     writeoff.items.reduce((itemSum, item) => itemSum + Number(item.lineTotal || (Number(item.unitCost || 0) * Number(item.quantity || 0))), 0),
   ), 0);
 
-  console.log(`[DashboardMetrics] Results: InvoicesInRange=${salesInvoicesInRange.length}, RevenueInRange=${revenueInRange}, MonthlyInvoices=${monthlySalesInvoices.length}, NetRevenue=${monthlyNetRevenue}, COGS=${monthlyCogs}, Writeoffs=${writeoffsMonth.length}`);
-
-  const overdueItems: any[] = [];
-  const dueTomorrowItems: any[] = [];
-
   const totalReceivableOutstanding = receivables.reduce((sum, receivable) => sum + getReceivableRemainingAmount(receivable), 0);
-  const overdueAmountTotal = overdueItems.reduce((sum, item) => sum + Number(item?.remainingAmount || 0), 0);
-  const overdueCustomersCount = new Set(overdueItems.map((item) => String(item?.customerName || '').toLocaleLowerCase('ru-RU'))).size;
-  const dueTomorrowAmountTotal = dueTomorrowItems.reduce((sum, item) => sum + Number(item?.remainingAmount || 0), 0);
   const payableTotal = purchasePayables.reduce((sum, payable) => sum + Number(payable.remainingAmount || 0), 0);
 
   const result = {
@@ -474,7 +472,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     revenue: { total: revenueInRange, averageDaily: avgDailyRevenue, recognizedInvoiceCount: salesInvoicesInRange.length },
     revenueTrend: { mode: chartMode, items: revenueTrend },
     finance: { outstandingOrdinarySales: unpaidAmount, totalDebtorOutstanding, writeOffAmountMonth, grossMarginMonth, payableTotal },
-    summary: { totalProducts: products.length, totalBatches: batches.length, alertCount: lowStockProducts.length + expiredBatchesCount + expiringBatchesCount + overdueItems.length },
+    summary: { totalProducts: products.length, totalBatches: batches.length, alertCount: lowStockProducts.length + expiredBatchesCount + expiringBatchesCount },
     inventoryHighlights: { totalInventoryUnits: products.reduce((sum, p) => sum + Number(p.totalStock || 0), 0), lowStockItems: lowStockProducts.slice(0, 5), expiringItems }
   };
 

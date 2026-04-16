@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   ClipboardList,
   RefreshCw,
@@ -10,6 +11,7 @@ import {
   Clock,
   Info,
   Search,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { buildApiHeaders } from '../../infrastructure/api';
 
@@ -194,16 +196,17 @@ const DetailModal: React.FC<DetailModalProps> = ({ entry, onClose }) => {
 export const AuditLogPanel: React.FC = () => {
   const [entries, setEntries]       = useState<AuditEntry[]>([]);
   const [users, setUsers]           = useState<AuditUser[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, limit: 50, totalPages: 1 });
+  const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, limit: 15, totalPages: 1 });
   const [loading, setLoading]       = useState(true);
   const [detail, setDetail]         = useState<AuditEntry | null>(null);
 
   // Filters
+  const today = new Date().toISOString().split('T')[0];
   const [fModule,  setFModule]  = useState('');
   const [fUser,    setFUser]    = useState('');
   const [fAction,  setFAction]  = useState('');
-  const [fFrom,    setFFrom]    = useState('');
-  const [fTo,      setFTo]      = useState('');
+  const [fFrom,    setFFrom]    = useState(today);
+  const [fTo,      setFTo]      = useState(today);
   const [page,     setPage]     = useState(1);
 
   const load = useCallback(async (p = page) => {
@@ -211,7 +214,7 @@ export const AuditLogPanel: React.FC = () => {
     try {
       const params = new URLSearchParams();
       params.set('page', String(p));
-      params.set('limit', '50');
+      params.set('limit', '15');
       if (fModule) params.set('module', fModule);
       if (fUser)   params.set('userId', fUser);
       if (fAction) params.set('action', fAction);
@@ -219,13 +222,45 @@ export const AuditLogPanel: React.FC = () => {
       if (fTo)     params.set('to', fTo);
 
       const res = await fetch(`/api/audit?${params.toString()}`, { headers: await buildApiHeaders(false) });
-      const body = await res.json().catch(() => ({ items: [], pagination: { total: 0, page: 1, limit: 50, totalPages: 1 } }));
+      const body = await res.json().catch(() => ({ items: [], pagination: { total: 0, page: 1, limit: 15, totalPages: 1 } }));
       setEntries(body.items ?? []);
-      setPagination(body.pagination ?? { total: 0, page: 1, limit: 50, totalPages: 1 });
+      setPagination(body.pagination ?? { total: 0, page: 1, limit: 15, totalPages: 1 });
     } finally {
       setLoading(false);
     }
   }, [fModule, fUser, fAction, fFrom, fTo, page]);
+
+  const handleExportExcel = () => {
+    const data = entries.map(e => ({
+      'Дата и время': formatDate(e.createdAt),
+      'Модуль': MODULE_LABELS[e.module || ''] || e.module || '-',
+      'Действие': formatAction(e.action),
+      'Объект': e.entity,
+      'ID Объекта': e.entityId || '-',
+      'Сотрудник': e.user.name,
+      'Роль': e.userRole || '-',
+      'Email': e.user.email
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Auto-calculate column widths
+    const colWidths = [
+      { wch: 22 },
+      { wch: 15 },
+      { wch: 30 },
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 30 },
+      { wch: 15 },
+      { wch: 30 },
+    ];
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Audit Log');
+    XLSX.writeFile(wb, `Audit_Log_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   useEffect(() => {
     buildApiHeaders(false).then(headers => {
@@ -236,7 +271,7 @@ export const AuditLogPanel: React.FC = () => {
     });
   }, []);
 
-  useEffect(() => { void load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(page); }, [load, page]);
 
   const handleSearch = () => { setPage(1); void load(1); };
   const handleReset  = () => { setFModule(''); setFUser(''); setFAction(''); setFFrom(''); setFTo(''); setPage(1); setTimeout(() => void load(1), 0); };
@@ -250,17 +285,26 @@ export const AuditLogPanel: React.FC = () => {
             <ClipboardList size={20} />
           </div>
           <div>
-            <h3 className="text-lg font-bold">Журнал аудита</h3>
+            <h3 className="text-lg font-normal">Журнал аудита</h3>
             <p className="text-xs text-[#5A5A40]/55">{pagination.total} записей</p>
           </div>
         </div>
-        <button
-          onClick={() => void load(page)}
-          className="p-2 rounded-xl border border-[#5A5A40]/15 text-[#5A5A40]/60 hover:bg-[#f5f5f0] transition-colors"
-          title="Обновить"
-        >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportExcel}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-semibold hover:bg-emerald-100 transition-all shadow-sm"
+            title="Экспорт в Excel"
+          >
+            <FileSpreadsheet size={16} /> Экспорт Excel
+          </button>
+          <button
+            onClick={() => void load(page)}
+            className="p-2 rounded-xl border border-[#5A5A40]/15 text-[#5A5A40]/60 hover:bg-[#f5f5f0] transition-colors"
+            title="Обновить"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -337,18 +381,18 @@ export const AuditLogPanel: React.FC = () => {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#5A5A40]/8 bg-[#f5f5f0]/50">
-                <th className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider text-[#5A5A40]/50 w-40">
+              <tr className="border-b border-[#5A5A40]/8 bg-[#f5f5f0]/50 text-on-surface">
+                <th className="text-left px-5 py-3 text-xs font-normal uppercase tracking-wider text-[#5A5A40]/50 w-40">
                   <div className="flex items-center gap-1"><Clock size={11} /> Время</div>
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-[#5A5A40]/50 w-28">
+                <th className="text-left px-4 py-3 text-xs font-normal uppercase tracking-wider text-[#5A5A40]/50 w-28">
                   <div className="flex items-center gap-1"><Layers size={11} /> Модуль</div>
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-[#5A5A40]/50">Действие</th>
-                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-[#5A5A40]/50 w-40">
+                <th className="text-left px-4 py-3 text-xs font-normal uppercase tracking-wider text-[#5A5A40]/50">Действие</th>
+                <th className="text-left px-4 py-3 text-xs font-normal uppercase tracking-wider text-[#5A5A40]/50 w-40">
                   <div className="flex items-center gap-1"><User size={11} /> Сотрудник</div>
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-[#5A5A40]/50 w-24">Детали</th>
+                <th className="px-4 py-3 text-right text-xs font-normal uppercase tracking-wider text-[#5A5A40]/50 w-24">Детали</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#5A5A40]/5">
@@ -362,7 +406,7 @@ export const AuditLogPanel: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">
                       {entry.module ? (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${modColor}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-normal border ${modColor}`}>
                           {MODULE_LABELS[entry.module] ?? entry.module}
                         </span>
                       ) : (
@@ -370,18 +414,18 @@ export const AuditLogPanel: React.FC = () => {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-xs font-semibold text-[#151619]">{formatAction(entry.action)}</p>
-                      <p className="text-[10px] text-[#5A5A40]/45 mt-0.5">{entry.entity}{entry.entityId ? ` · ${entry.entityId.slice(0, 8)}…` : ''}</p>
+                      <p className="text-xs font-normal text-[#151619]">{formatAction(entry.action)}</p>
+                      <p className="text-[10px] text-[#5A5A40]/45 mt-0.5 font-normal italic">{entry.entity}{entry.entityId ? ` · ${entry.entityId.slice(0, 8)}…` : ''}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-xs font-semibold text-[#151619] truncate max-w-36">{entry.user.name}</p>
-                      <p className="text-[10px] text-[#5A5A40]/45 truncate max-w-36">{entry.userRole ?? ''}</p>
+                      <p className="text-xs font-normal text-[#151619] truncate max-w-36">{entry.user.name}</p>
+                      <p className="text-[10px] text-[#5A5A40]/45 truncate max-w-36 font-normal uppercase tracking-tighter">{entry.userRole ?? ''}</p>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {hasDiff && (
                         <button
                           onClick={() => setDetail(entry)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#5A5A40]/10 text-[#5A5A40]/60 hover:text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors text-[11px] font-semibold"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#5A5A40]/10 text-[#5A5A40]/60 hover:text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors text-[11px] font-normal"
                         >
                           <Info size={12} /> Открыть
                         </button>
@@ -397,23 +441,47 @@ export const AuditLogPanel: React.FC = () => {
 
       {/* Pagination */}
       {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-[#5A5A40]/50">
-            Стр. {pagination.page} из {pagination.totalPages} · {pagination.total} записей
+        <div className="flex items-center justify-between bg-[#f5f5f0]/30 p-4 rounded-2xl border border-[#5A5A40]/5">
+          <p className="text-xs text-[#5A5A40]/50 font-normal">
+            Страница {pagination.page} из {pagination.totalPages} · Всего {pagination.total} записей
           </p>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={pagination.page <= 1}
-              className="p-2 rounded-xl border border-[#5A5A40]/15 text-[#5A5A40]/60 hover:bg-[#f5f5f0] disabled:opacity-30 transition-colors"
+              className="p-2 rounded-xl border border-[#5A5A40]/15 text-[#5A5A40]/60 hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all active:scale-95"
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="text-xs font-semibold text-[#5A5A40] min-w-8 text-center">{pagination.page}</span>
+            <div className="flex items-center gap-1">
+              {[...Array(pagination.totalPages)].map((_, i) => {
+                const p = i + 1;
+                // Show first, last, and current+neighbor pages
+                if (p === 1 || p === pagination.totalPages || Math.abs(p - pagination.page) <= 1) {
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`w-8 h-8 rounded-lg text-xs font-normal transition-all ${
+                        pagination.page === p
+                          ? 'bg-[#5A5A40] text-white shadow-md'
+                          : 'text-[#5A5A40]/60 hover:bg-white hover:shadow-sm'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                }
+                if (p === 2 || p === pagination.totalPages - 1) {
+                  return <span key={p} className="text-[#5A5A40]/30 text-[10px]">...</span>;
+                }
+                return null;
+              })}
+            </div>
             <button
               onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
               disabled={pagination.page >= pagination.totalPages}
-              className="p-2 rounded-xl border border-[#5A5A40]/15 text-[#5A5A40]/60 hover:bg-[#f5f5f0] disabled:opacity-30 transition-colors"
+              className="p-2 rounded-xl border border-[#5A5A40]/15 text-[#5A5A40]/60 hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all active:scale-95"
             >
               <ChevronRight size={16} />
             </button>

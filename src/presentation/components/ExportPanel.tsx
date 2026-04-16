@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, FileSpreadsheet, RefreshCw, Calendar } from 'lucide-react';
+import { Download, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import { buildApiHeaders } from '../../infrastructure/api';
 
 type ExportTarget = {
@@ -7,7 +7,7 @@ type ExportTarget = {
   label: string;
   description: string;
   endpoint: string;
-  roles: string[];       // which roles can see this button
+  roles: string[];
   hasDateRange?: boolean;
 };
 
@@ -15,51 +15,52 @@ const EXPORTS: ExportTarget[] = [
   {
     id: 'products',
     label: 'Каталог товаров',
-    description: 'Все товары с остатками, ценами и датами годности',
+    description: 'Полный перечень товаров с остатками, ценами и характеристиками',
     endpoint: '/api/export/products',
     roles: ['ADMIN', 'OWNER', 'PHARMACIST', 'WAREHOUSE_STAFF'],
   },
   {
     id: 'inventory',
     label: 'Остатки по партиям',
-    description: 'Партии с датами производства, годности и статусом срока',
+    description: 'Детальные остатки с учетом сроков годности и номеров партий',
     endpoint: '/api/export/inventory',
     roles: ['ADMIN', 'OWNER', 'PHARMACIST', 'WAREHOUSE_STAFF'],
   },
   {
     id: 'sales',
-    label: 'Продажи',
-    description: 'Чеки (сводка) и позиции (детали) — два листа в одном файле',
+    label: 'Журнал продаж',
+    description: 'Сводные данные по чекам и детализация проданных позиций',
     endpoint: '/api/export/sales',
     roles: ['ADMIN', 'OWNER'],
     hasDateRange: true,
   },
   {
     id: 'returns',
-    label: 'Возвраты',
-    description: 'Все возвраты с позициями и статусами одобрения',
+    label: 'Журнал возвратов',
+    description: 'Все возвраты от покупателей и поставщиков с причинами',
     endpoint: '/api/export/returns',
     roles: ['ADMIN', 'OWNER'],
     hasDateRange: true,
   },
   {
     id: 'writeoffs',
-    label: 'Списания',
-    description: 'Списанные позиции с причинами и данными партий',
+    label: 'Журнал списаний',
+    description: 'История списаний товара с указанием ответственных и причин',
     endpoint: '/api/export/writeoffs',
     roles: ['ADMIN', 'OWNER'],
   },
 ];
 
-type ExportCardProps = {
+type ExportRowProps = {
   target: ExportTarget;
 };
 
-const ExportCard: React.FC<ExportCardProps> = ({ target }) => {
+const ExportRow: React.FC<ExportRowProps> = ({ target }) => {
+  const today = new Date().toISOString().split('T')[0];
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [from, setFrom] = useState('');
-  const [to, setTo]     = useState('');
+  const [from, setFrom] = useState(today);
+  const [to, setTo]     = useState(today);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -69,88 +70,80 @@ const ExportCard: React.FC<ExportCardProps> = ({ target }) => {
       if (target.hasDateRange && from) params.set('from', from);
       if (target.hasDateRange && to)   params.set('to', to);
       const url = `${target.endpoint}${params.toString() ? `?${params}` : ''}`;
-
+      
       const res = await fetch(url, { headers: await buildApiHeaders(false) });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Ошибка экспорта');
-      }
-
-      // Trigger browser download
+      if (!res.ok) throw new Error('Ошибка генерации');
+      
       const blob = await res.blob();
-      const disposition = res.headers.get('Content-Disposition') ?? '';
-      const nameMatch = disposition.match(/filename="([^"]+)"/);
-      const filename = nameMatch ? decodeURIComponent(nameMatch[1]) : `${target.id}.xlsx`;
-
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objectUrl;
-      a.download = filename;
+      a.download = `${target.label.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
     } catch (e: any) {
-      setError(e?.message || 'Ошибка');
-      setTimeout(() => setError(null), 4000);
+      setError('Ошибка');
+      setTimeout(() => setError(null), 3000);
     } finally {
       setDownloading(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-[#5A5A40]/10 p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-          <FileSpreadsheet size={20} />
+    <div className="group bg-white/40 hover:bg-white rounded-[2rem] border border-[#5A5A40]/5 p-4 flex flex-col lg:flex-row lg:items-center gap-6 transition-all hover:shadow-xl hover:shadow-[#5A5A40]/5">
+      <div className="flex items-center gap-4 flex-1">
+        <div className="w-12 h-12 rounded-2xl bg-[#f5f5f0] flex items-center justify-center text-[#5A5A40]/30 group-hover:bg-[#5A5A40] group-hover:text-white transition-all">
+          <FileSpreadsheet size={22} />
         </div>
         <div className="min-w-0">
-          <h4 className="text-sm font-bold text-[#151619]">{target.label}</h4>
-          <p className="text-xs text-[#5A5A40]/55 mt-1 leading-relaxed">{target.description}</p>
+          <h4 className="text-sm font-normal text-[#151619] tracking-tight">{target.label}</h4>
+          <p className="text-[11px] text-[#5A5A40]/50 mt-0.5 line-clamp-1">{target.description}</p>
         </div>
       </div>
 
-      {target.hasDateRange && (
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-[#5A5A40]/50 mb-1">
-              <Calendar size={10} className="inline mr-1" />С даты
-            </label>
-            <input
-              type="date"
-              value={from}
-              onChange={e => setFrom(e.target.value)}
-              className="w-full px-3 py-2 border border-[#5A5A40]/15 rounded-xl text-xs bg-[#f5f5f0]/50 focus:outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-            />
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+        {target.hasDateRange && (
+          <div className="flex items-center bg-[#f5f5f0]/50 rounded-2xl border border-[#5A5A40]/5 p-1">
+            <div className="flex items-center gap-2 px-3">
+              <span className="text-[9px] uppercase font-normal text-[#5A5A40]/40">C</span>
+              <input
+                type="date"
+                value={from}
+                onChange={e => setFrom(e.target.value)}
+                className="bg-transparent border-none text-xs text-[#5A5A40] outline-none w-28 cursor-pointer"
+              />
+            </div>
+            <div className="w-px h-4 bg-[#5A5A40]/10" />
+            <div className="flex items-center gap-2 px-3">
+              <span className="text-[9px] uppercase font-normal text-[#5A5A40]/40">ПО</span>
+              <input
+                type="date"
+                value={to}
+                onChange={e => setTo(e.target.value)}
+                className="bg-transparent border-none text-xs text-[#5A5A40] outline-none w-28 cursor-pointer"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-[#5A5A40]/50 mb-1">
-              <Calendar size={10} className="inline mr-1" />По дату
-            </label>
-            <input
-              type="date"
-              value={to}
-              onChange={e => setTo(e.target.value)}
-              className="w-full px-3 py-2 border border-[#5A5A40]/15 rounded-xl text-xs bg-[#f5f5f0]/50 focus:outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-            />
-          </div>
-        </div>
-      )}
+        )}
 
-      {error && (
-        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>
-      )}
-
-      <button
-        onClick={() => void handleDownload()}
-        disabled={downloading}
-        className="flex items-center justify-center gap-2 w-full py-2.5 bg-[#5A5A40] text-white rounded-xl text-sm font-bold hover:bg-[#4a4a30] disabled:opacity-50 transition-colors"
-      >
-        {downloading
-          ? <><RefreshCw size={15} className="animate-spin" /> Подготовка...</>
-          : <><Download size={15} /> Скачать .xlsx</>
-        }
-      </button>
+        <button
+          onClick={() => void handleDownload()}
+          disabled={downloading}
+          className="h-11 px-6 bg-[#151619]/5 hover:bg-[#5A5A40] text-[#5A5A40] hover:text-white rounded-2xl border border-[#5A5A40]/10 hover:border-transparent text-xs font-normal transition-all flex items-center justify-center gap-2 min-w-[150px]"
+        >
+          {downloading ? (
+            <RefreshCw size={14} className="animate-spin" />
+          ) : (
+            <>
+              <Download size={14} />
+              <span>Скачать .xlsx</span>
+            </>
+          )}
+        </button>
+      </div>
+      {error && <span className="absolute -top-2 right-4 bg-red-500 text-white text-[9px] px-2 py-0.5 rounded-full">{error}</span>}
     </div>
   );
 };
@@ -161,30 +154,35 @@ type ExportPanelProps = {
 
 export const ExportPanel: React.FC<ExportPanelProps> = ({ currentUserRole }) => {
   const visibleExports = EXPORTS.filter((e) => e.roles.includes(currentUserRole));
+  const catalog = visibleExports.filter(e => ['products', 'inventory'].includes(e.id));
+  const journals = visibleExports.filter(e => !['products', 'inventory'].includes(e.id));
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3 text-[#5A5A40]">
-        <div className="w-10 h-10 rounded-2xl bg-[#f5f5f0] flex items-center justify-center">
-          <Download size={20} />
-        </div>
-        <div>
-          <h3 className="text-lg font-bold">Экспорт в Excel</h3>
-          <p className="text-xs text-[#5A5A40]/55">Скачивание данных в формате .xlsx</p>
-        </div>
+    <div className="max-w-5xl space-y-12 pb-20">
+      <div className="space-y-1">
+        <h3 className="text-2xl font-normal text-[#151619] tracking-tight">Центр экспорта</h3>
+        <p className="text-sm text-[#5A5A40]/50 font-normal">Выберите нужный формат и период для выгрузки аналитических данных</p>
       </div>
 
-      {visibleExports.length === 0 ? (
-        <div className="bg-[#f5f5f0]/50 rounded-2xl p-6 text-center text-sm text-[#5A5A40]/50">
-          Экспорт недоступен для вашей роли
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibleExports.map((target) => (
-            <ExportCard key={target.id} target={target} />
-          ))}
-        </div>
-      )}
+      <div className="space-y-12">
+        {catalog.length > 0 && (
+          <div className="space-y-5">
+            <h5 className="text-[10px] uppercase tracking-[0.3em] text-[#5A5A40]/30 font-normal px-2">Реестры и Склад</h5>
+            <div className="grid gap-3">
+              {catalog.map(t => <ExportRow key={t.id} target={t} />)}
+            </div>
+          </div>
+        )}
+
+        {journals.length > 0 && (
+          <div className="space-y-5">
+            <h5 className="text-[10px] uppercase tracking-[0.3em] text-[#5A5A40]/30 font-normal px-2">Операционные журналы</h5>
+            <div className="grid gap-3">
+              {journals.map(t => <ExportRow key={t.id} target={t} />)}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

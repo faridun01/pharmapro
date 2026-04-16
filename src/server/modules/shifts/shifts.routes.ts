@@ -146,8 +146,15 @@ function calculateShiftSummary(shift: ShiftWithReportData) {
 shiftsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 25));
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+
+  const parseDate = (val: any) => {
+    if (!val) return undefined;
+    const d = new Date(String(val));
+    return isNaN(d.getTime()) ? undefined : d;
+  };
+
+  const from = parseDate(req.query.from);
+  const to = parseDate(req.query.to);
 
   const where: any = {};
   if (from || to) {

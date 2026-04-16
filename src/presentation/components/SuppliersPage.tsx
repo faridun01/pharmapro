@@ -1,6 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, Truck, Phone, Mail, MapPin, Edit3, Trash2, Package, DollarSign, X, CalendarClock, AlertTriangle, ChevronRight } from 'lucide-react';
+import { 
+  Search, Plus, Truck, Phone, Mail, MapPin, Edit3, Trash2, 
+  Package, X, CalendarClock, ChevronRight, LayoutGrid, Info, CreditCard,
+  AlertTriangle, RefreshCw
+} from 'lucide-react';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { useDebounce } from '../../lib/useDebounce';
 import { SupplierPaymentModal } from './suppliers/SupplierPaymentModal';
@@ -79,7 +83,7 @@ const INITIAL_FORM: SupplierForm = {
   address: '',
 };
 
-const formatMoney = (value: number) => `${Number(value || 0).toFixed(2)} TJS`;
+const formatMoney = (value: number) => `${Number(value || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TJS`;
 
 export const SuppliersPage: React.FC = () => {
   const { t } = useTranslation();
@@ -101,7 +105,7 @@ export const SuppliersPage: React.FC = () => {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 250);
 
-  const request = async (url: string, init?: RequestInit) => {
+  const request = useCallback(async (url: string, init?: RequestInit) => {
     const response = await fetch(url, {
       ...init,
       headers: {
@@ -112,12 +116,12 @@ export const SuppliersPage: React.FC = () => {
 
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(payload?.error || payload?.message || 'Request failed');
+      throw new Error(payload?.error || payload?.message || 'Ошибка запроса');
     }
     return payload;
-  };
+  }, []);
 
-  const loadSuppliers = async () => {
+  const loadSuppliers = useCallback(async () => {
     setInitialLoadPending(true);
     try {
       const data = await request('/api/suppliers/full');
@@ -125,35 +129,38 @@ export const SuppliersPage: React.FC = () => {
         setSuppliers(data.map(s => ({ id: s.id, name: s.name, contact: s.contact, email: s.email, address: s.address })));
         const statsMap: Record<string, any> = {};
         for (const s of data) {
-          if (s.summary) {
-            statsMap[s.id] = { summary: s.summary };
-          }
+          if (s.summary) statsMap[s.id] = { summary: s.summary };
         }
         setSupplierStats(statsMap);
       }
-      setError('');
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch suppliers');
+      setError(err.message || 'Ошибка загрузки партнеров');
     } finally {
       setInitialLoadPending(false);
     }
-  };
+  }, [request]);
 
-  const loadSupplierDetails = async (supplierId: string, force = false) => {
-    if (!force && supplierStats[supplierId]?.invoices) return supplierStats[supplierId];
+  const loadSupplierDetails = useCallback(async (supplierId: string, force = false) => {
+    if (!force && supplierStats[supplierId]?.invoices) return;
     setDetailLoading(supplierId);
     try {
       const overview = await request(`/api/suppliers/${supplierId}/summary`);
       setSupplierStats((prev) => ({ ...prev, [supplierId]: overview }));
-      return overview as SupplierOverview;
+    } catch (err: any) {
+      console.error('Failed to load supplier details:', err);
     } finally {
-      setDetailLoading((current) => (current === supplierId ? null : current));
+      setDetailLoading(null);
     }
-  };
+  }, [request, supplierStats]);
 
+  useEffect(() => { loadSuppliers(); }, [loadSuppliers]);
+
+  // Automatic data fetch when modal opens
   useEffect(() => {
-    void loadSuppliers();
-  }, []);
+    if (openSupplierId) {
+      void loadSupplierDetails(openSupplierId);
+    }
+  }, [openSupplierId, loadSupplierDetails]);
 
   const filteredSuppliers = useMemo(() => suppliers.filter((supplier) => {
     const query = debouncedSearchTerm.trim().toLocaleLowerCase('ru-RU');
@@ -162,36 +169,16 @@ export const SuppliersPage: React.FC = () => {
       .some((value) => String(value || '').toLocaleLowerCase('ru-RU').includes(query));
   }), [suppliers, debouncedSearchTerm]);
 
-  const selectedSupplier = openSupplierId ? suppliers.find((supplier) => supplier.id === openSupplierId) || null : null;
+  const selectedSupplier = openSupplierId ? suppliers.find((s) => s.id === openSupplierId) || null : null;
   const selectedStats = openSupplierId ? supplierStats[openSupplierId] : null;
 
-  const openAdd = () => {
-    setForm(INITIAL_FORM);
-    setEditingSupplierId(null);
-    setError('');
-    setIsAddOpen(true);
-  };
-
-  const openEdit = (supplier: SupplierRecord) => {
-    setForm({
-      name: supplier.name || '',
-      contact: supplier.contact || '',
-      email: supplier.email || '',
-      address: supplier.address || '',
-    });
-    setEditingSupplierId(supplier.id);
-    setError('');
-    setIsAddOpen(true);
-  };
+  const totalTurnover = Object.values(supplierStats).reduce((sum, s) => sum + (s.summary?.totalAmount || 0), 0);
+  const totalDebt = Object.values(supplierStats).reduce((sum, s) => sum + (s.summary?.totalDebt || 0), 0);
+  const totalOverdue = Object.values(supplierStats).reduce((sum, s) => sum + (s.summary?.overdueDebt || 0), 0);
 
   const saveSupplier = async () => {
-    if (!form.name.trim()) {
-      setError(t('Supplier name is required'));
-      return;
-    }
-
+    if (!form.name.trim()) return setError(t('Supplier name is required'));
     setSubmitting(true);
-    setError('');
     try {
       await request(editingSupplierId ? `/api/suppliers/${editingSupplierId}` : '/api/suppliers', {
         method: editingSupplierId ? 'PUT' : 'POST',
@@ -203,13 +190,8 @@ export const SuppliersPage: React.FC = () => {
           address: form.address.trim() || null,
         }),
       });
-
       await loadSuppliers();
-      if (editingSupplierId) {
-        await loadSupplierDetails(editingSupplierId, true);
-      }
       setIsAddOpen(false);
-      setEditingSupplierId(null);
     } catch (err: any) {
       setError(err.message || t('Failed to save supplier'));
     } finally {
@@ -219,27 +201,10 @@ export const SuppliersPage: React.FC = () => {
 
   const deleteSupplier = async (supplierId: string) => {
     setSubmitting(true);
-    setError('');
     try {
-      const headers = await buildApiHeaders();
-      const response = await fetch(`/api/suppliers/${supplierId}`, {
-        method: 'DELETE',
-        headers,
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        throw new Error(payload?.error || payload?.message || t('Failed to delete supplier'));
-      }
-
-      setSupplierStats((prev) => {
-        const next = { ...prev };
-        delete next[supplierId];
-        return next;
-      });
-      if (openSupplierId === supplierId) {
-        setOpenSupplierId(null);
-      }
+      await request(`/api/suppliers/${supplierId}`, { method: 'DELETE' });
+      setSupplierStats((p) => { const n = {...p}; delete n[supplierId]; return n; });
+      if (openSupplierId === supplierId) setOpenSupplierId(null);
       await loadSuppliers();
     } catch (err: any) {
       setError(err.message || t('Failed to delete supplier'));
@@ -248,379 +213,369 @@ export const SuppliersPage: React.FC = () => {
     }
   };
 
-  const handleOpenDetails = async (supplierId: string) => {
-    setOpenSupplierId(supplierId);
-    try {
-      await loadSupplierDetails(supplierId);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load supplier details');
-    }
-  };
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="rounded-[30px] border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-md">
-          <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-2">Всего поставщиков</p>
-          <p className="text-3xl font-black text-[#5A5A40]">{suppliers.length}</p>
-        </div>
-        <div className="rounded-[30px] border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-md">
-          <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest mb-2">Общий оборот</p>
-          <p className="text-3xl font-black text-[#5A5A40]">
-            {formatMoney(Object.values(supplierStats).reduce((sum, s) => sum + (s.summary?.totalAmount || 0), 0))}
-          </p>
-        </div>
-        <div className="rounded-[30px] border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-md">
-          <p className="text-[10px] font-bold text-red-400/60 uppercase tracking-widest mb-2">Общий долг</p>
-          <p className="text-3xl font-black text-red-600">
-            {formatMoney(Object.values(supplierStats).reduce((sum, s) => sum + (s.summary?.totalDebt || 0), 0))}
-          </p>
-        </div>
-        <div className="rounded-[30px] border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur-md">
-          <p className="text-[10px] font-bold text-amber-400/60 uppercase tracking-widest mb-2">Просрочено</p>
-          <p className="text-3xl font-black text-amber-600">
-            {formatMoney(Object.values(supplierStats).reduce((sum, s) => sum + (s.summary?.overdueDebt || 0), 0))}
-          </p>
-        </div>
+    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 pb-20">
+      {/* Header Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Всего партнеров', val: suppliers.length, sub: 'Активных компаний', color: 'text-[#5A5A40]' },
+          { label: 'Общий оборот', val: formatMoney(totalTurnover), sub: 'За весь период', color: 'text-[#5A5A40]' },
+          { label: 'Текущий долг', val: formatMoney(totalDebt), sub: 'Сумма к оплате', color: 'text-red-500' },
+          { label: 'Просрочено', val: formatMoney(totalOverdue), sub: 'Критические задолж.', color: 'text-amber-600' },
+        ].map((card, idx) => (
+          <div key={idx} className="bg-white/40 border border-[#5A5A40]/5 rounded-[2rem] p-6 shadow-sm hover:shadow-xl hover:shadow-[#5A5A40]/5 transition-all group">
+            <p className="text-[10px] font-normal text-[#5A5A40]/40 uppercase tracking-[0.2em] mb-1">{card.label}</p>
+            <p className={`text-2xl font-normal ${card.color} tracking-tight group-hover:tracking-tighter transition-all`}>{card.val}</p>
+            <p className="text-[10px] font-normal text-[#5A5A40]/30 mt-2 italic">{card.sub}</p>
+          </div>
+        ))}
       </div>
 
-      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-[#f1eee3] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/55">
-              Найдено: {filteredSuppliers.length}
-            </span>
+      <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] border border-white/70 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-10 h-10 rounded-2xl bg-[#5A5A40]/5 flex items-center justify-center text-[#5A5A40]/40">
+            <Truck size={20} />
           </div>
+          <div>
+            <h4 className="text-sm font-normal text-[#151619]">База поставщиков</h4>
+            <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-widest">Управление закупками и долгами</p>
+          </div>
+        </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder={t('Search suppliers...')}
-                className="w-full min-w-0 pl-12 pr-4 py-3 bg-white border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20 shadow-sm sm:w-72"
-              />
-            </div>
-            <button onClick={openAdd} className="bg-[#5A5A40] text-white px-6 py-3 rounded-2xl font-medium shadow-lg hover:bg-[#4A4A30] transition-all flex items-center gap-2">
-              <Plus size={20} />
-              Бизнес-партнер
-            </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={16} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Поиск по названию или контактам..."
+              className="w-full sm:w-72 pl-11 pr-4 py-3 bg-white/50 border border-[#5A5A40]/10 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-[#5A5A40]/10 focus:bg-white transition-all font-normal placeholder:text-[#5A5A40]/30"
+            />
           </div>
+          <button onClick={() => { setForm(INITIAL_FORM); setEditingSupplierId(null); setIsAddOpen(true); }} className="bg-[#5A5A40] text-white px-6 py-3 rounded-2xl font-normal shadow-lg shadow-[#5A5A40]/10 hover:bg-[#4A4A30] active:scale-95 transition-all flex items-center justify-center gap-2">
+            <Plus size={18} />
+            <span>Новый партнер</span>
+          </button>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs flex items-center gap-3">
+          <Info size={14} /> {error}
         </div>
       )}
 
+      {/* Grid of Supplier Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {initialLoadPending && suppliers.length === 0 && Array.from({ length: 6 }).map((_, index) => (
-          <div key={`supplier-skeleton-${index}`} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 animate-pulse">
-            <div className="h-14 w-14 rounded-2xl bg-[#f5f5f0]" />
-            <div className="mt-6 h-6 w-2/3 rounded-full bg-[#f5f5f0]" />
-            <div className="mt-5 space-y-3">
-              <div className="h-4 rounded-full bg-[#f5f5f0]" />
-              <div className="h-4 rounded-full bg-[#f5f5f0]" />
-              <div className="h-4 rounded-full bg-[#f5f5f0]" />
+        {initialLoadPending ? (
+          Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-64 bg-white/40 border border-[#5A5A40]/5 rounded-[2rem] animate-pulse" />
+          ))
+        ) : filteredSuppliers.length === 0 ? (
+          <div className="col-span-full py-24 text-center">
+            <div className="w-20 h-20 bg-[#5A5A40]/5 rounded-[2rem] mx-auto flex items-center justify-center text-[#5A5A40]/20 mb-4">
+              <Truck size={40} />
             </div>
+            <p className="text-sm text-[#5A5A40]/40 font-normal italic">Список пуст</p>
           </div>
-        ))}
+        ) : (
+          filteredSuppliers.map((s) => {
+            const stats = supplierStats[s.id]?.summary;
+            const hasDebt = (stats?.totalDebt || 0) > 0;
+            return (
+              <div
+                key={s.id}
+                onClick={() => setOpenSupplierId(s.id)}
+                className="group bg-white/40 hover:bg-white border border-[#5A5A40]/5 rounded-[2rem] p-6 transition-all hover:shadow-2xl hover:shadow-[#5A5A40]/5 cursor-pointer flex flex-col h-full"
+              >
+                <div className="flex justify-between items-start mb-6">
+                  <div className="w-14 h-14 rounded-3xl bg-[#f5f5f0] flex items-center justify-center text-[#5A5A40]/30 group-hover:bg-[#5A5A40] group-hover:text-white transition-all shadow-inner">
+                    <Truck size={28} />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setForm({ name: s.name, contact: s.contact || '', email: s.email || '', address: s.address || '' }); setEditingSupplierId(s.id); setIsAddOpen(true); }}
+                      className="p-2.5 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-xl transition-all"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: s.id, name: s.name }); }}
+                      className="p-2.5 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
 
-        {!initialLoadPending && filteredSuppliers.length === 0 && (
-          <div className="md:col-span-2 xl:col-span-3 rounded-3xl border border-[#5A5A40]/10 bg-white px-6 py-12 text-center text-[#5A5A40]/50">
-            Поставщики не найдены.
-          </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-normal text-[#151619] tracking-tight group-hover:text-[#5A5A40] transition-colors">{s.name}</h3>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <MapPin size={12} className="text-[#5A5A40]/30" />
+                    <p className="text-[10px] text-[#5A5A40]/50 font-normal truncate uppercase tracking-widest">
+                      {s.address || 'Адрес не указан'}
+                    </p>
+                  </div>
+
+                  <div className="mt-6 space-y-2.5">
+                    <div className="flex items-center gap-3 p-2.5 bg-white/50 rounded-2xl border border-[#5A5A40]/5 group-hover:border-[#5A5A40]/10 transition-all font-normal">
+                      <Phone size={14} className="text-[#5A5A40]/20" />
+                      <span className="text-xs text-[#5A5A40]/70">{s.contact || '—'}</span>
+                    </div>
+                    <div className="flex items-center gap-3 p-2.5 bg-white/50 rounded-2xl border border-[#5A5A40]/5 group-hover:border-[#5A5A40]/10 transition-all font-normal">
+                      <Mail size={14} className="text-[#5A5A40]/20" />
+                      <span className="text-xs text-[#5A5A40]/70 truncate">{s.email || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-[#5A5A40]/5 grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[9px] uppercase tracking-widest text-[#5A5A40]/30 font-normal">Приходов</p>
+                    <p className="text-sm font-normal text-[#151619]">{stats?.invoiceCount || 0}</p>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <p className="text-[9px] uppercase tracking-widest text-[#5A5A40]/30 font-normal">Долг</p>
+                    <p className={`text-sm font-normal ${hasDebt ? 'text-red-500' : 'text-emerald-600'}`}>
+                      {formatMoney(stats?.totalDebt || 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })
         )}
-
-        {filteredSuppliers.map((supplier) => {
-          const stats = supplierStats[supplier.id];
-          const summary = stats?.summary;
-          const nearestBatch = stats?.batchList?.[0];
-
-          return (
-            <div
-              key={supplier.id}
-              className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 hover:-translate-y-1 hover:shadow-xl transition-all group cursor-pointer"
-              onClick={() => void handleOpenDetails(supplier.id)}
-            >
-              <div className="flex justify-between items-start mb-6">
-                <div className="w-14 h-14 bg-[#f5f5f0] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors">
-                  <Truck size={28} />
-                </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <div className="flex items-center gap-1">
-                      {(summary?.totalDebt || 0) > 0 ? (
-                        <span className="bg-red-50 text-red-600 px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border border-red-100 animate-pulse">
-                          Есть долг
-                        </span>
-                      ) : (
-                        <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border border-emerald-100">
-                          Оплачено
-                        </span>
-                      )}
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEdit(supplier);
-                        }}
-                        disabled={submitting}
-                        className="p-2 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-xl transition-all disabled:opacity-50"
-                        title={t('Edit Supplier')}
-                      >
-                        <Edit3 size={18} />
-                      </button>
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setDeleteTarget({ id: supplier.id, name: supplier.name });
-                        }}
-                        disabled={submitting}
-                        className="p-2 text-[#5A5A40]/30 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
-                        title={t('Delete Supplier')}
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                    {summary?.lastInvoiceDate && (
-                      <span className="text-[9px] uppercase font-bold text-[#5A5A40]/30 tracking-widest">
-                        Last: {new Date(summary.lastInvoiceDate).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
-              </div>
-
-              <h3 className="text-lg font-bold text-[#5A5A40] mb-2">{supplier.name}</h3>
-              <p className="text-xs text-[#5A5A40]/40 mb-4 truncate">{supplier.address || t('No address provided')}</p>
-
-              <div className="space-y-2 mb-6">
-                <div className="flex items-center gap-3 text-sm text-[#5A5A40]/60">
-                  <Phone size={14} className="text-[#5A5A40]/20" />
-                  <span className="text-xs">{supplier.contact || '—'}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-[#5A5A40]/60">
-                  <Mail size={14} className="text-[#5A5A40]/20" />
-                  <span className="text-xs truncate">{supplier.email || '—'}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pt-6 border-t border-[#5A5A40]/5">
-                <div className="bg-[#f5f5f0]/50 p-4 rounded-2xl">
-                  <p className="text-[9px] font-bold text-[#5A5A40]/30 uppercase tracking-widest mb-2">Активно</p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex flex-col">
-                       <span className="text-sm font-black text-[#5A5A40]">{summary?.invoiceCount || 0}</span>
-                       <span className="text-[8px] text-[#5A5A40]/40 uppercase font-black">Закупок</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-[#5A5A40]/5 p-4 rounded-2xl">
-                  <p className="text-[9px] font-bold text-[#5A5A40]/30 uppercase tracking-widest mb-2">Баланс</p>
-                  <div className="flex flex-col">
-                     <span className={`text-sm font-black ${(summary?.totalDebt || 0) > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                       {summary ? formatMoney(summary.totalDebt) : '0.00 TJS'}
-                     </span>
-                     <span className="text-[8px] text-[#5A5A40]/40 uppercase font-black">Долг</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
       </div>
 
+      {/* Details Modal */}
       {openSupplierId && selectedSupplier && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-[#5A5A40]/10 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-[#5A5A40]">{selectedSupplier.name}</h3>
-                <p className="text-sm text-[#5A5A40]/55 mt-1">История закупок, задолженности и партий поставщика</p>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#151619]/60 backdrop-blur-xl p-4 animate-in fade-in zoom-in duration-300">
+          <div className="bg-[#f8f7f2] rounded-[3rem] shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden border border-white/20 relative">
+            
+            {/* Modal Header */}
+            <div className="p-8 pb-4 flex items-center justify-between z-20">
+              <div className="flex items-center gap-5">
+                <div className="w-16 h-16 rounded-[2rem] bg-[#5A5A40] text-white flex items-center justify-center shadow-lg shadow-[#5A5A40]/20 transition-transform active:scale-95 cursor-pointer" onClick={() => void loadSupplierDetails(openSupplierId, true)}>
+                  {detailLoading ? <RefreshCw size={28} className="animate-spin" /> : <Truck size={32} />}
+                </div>
+                <div>
+                  <h3 className="text-2xl font-normal text-[#151619] tracking-tight">{selectedSupplier.name}</h3>
+                  <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/50 mt-1 font-normal">Карточка делового партнера</p>
+                </div>
               </div>
-              <button onClick={() => setOpenSupplierId(null)} className="p-2 rounded-xl hover:bg-[#f5f5f0]">
-                <X size={18} />
+              <button onClick={() => setOpenSupplierId(null)} className="w-12 h-12 rounded-full border border-[#5A5A40]/10 flex items-center justify-center text-[#5A5A40]/40 hover:bg-white hover:text-[#5A5A40] transition-all">
+                <X size={20} />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {detailLoading === openSupplierId && !selectedStats ? (
-                <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#f8f7f2] px-4 py-8 text-center text-[#5A5A40]/50">
-                  Загружаю данные поставщика…
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-8 pt-4 space-y-10 relative z-10 custom-scrollbar">
+              
+              {/* Internal Loader overlay */}
+              {detailLoading && !selectedStats?.invoices && (
+                <div className="absolute inset-0 bg-[#f8f7f2]/50 backdrop-blur-[2px] z-[30] flex flex-col items-center justify-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40]/30 mb-4" />
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#5A5A40]/40 font-normal">Синхронизация данных...</p>
                 </div>
-              ) : selectedStats ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#f8f7f2] p-4">
-                      <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Закупок</p>
-                      <p className="mt-2 text-2xl font-bold text-[#5A5A40]">{selectedStats.summary.invoiceCount}</p>
-                    </div>
-                    <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#f8f7f2] p-4">
-                      <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Общая сумма</p>
-                      <p className="mt-2 text-2xl font-bold text-[#5A5A40]">{formatMoney(selectedStats.summary.totalAmount)}</p>
-                    </div>
-                    <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#fff5f5] p-4">
-                      <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Текущий долг</p>
-                      <p className="mt-2 text-2xl font-bold text-red-700">{formatMoney(selectedStats.summary.totalDebt)}</p>
-                    </div>
-                    <div className="rounded-2xl border border-[#5A5A40]/10 bg-[#fffaf0] p-4">
-                      <p className="text-xs uppercase tracking-widest text-[#5A5A40]/45 font-bold">Просроченный долг</p>
-                      <p className="mt-2 text-2xl font-bold text-amber-700">{formatMoney(selectedStats.summary.overdueDebt)}</p>
-                    </div>
-                  </div>
+              )}
 
-                  <div>
-                    <div className="flex justify-between items-end mb-3">
-                      <h4 className="text-sm font-bold">Приходы и оплаты</h4>
-                      <span className="text-[10px] font-medium text-[#5A5A40]/40 uppercase tracking-widest italic flex items-center gap-1">
-                        <Plus size={10} /> Нажмите на строку для деталей
-                      </span>
+              {/* Stats Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  { label: 'Приходов', val: selectedStats?.summary?.invoiceCount || 0, icon: <Package size={16}/>, color: 'text-[#5A5A40]' },
+                  { label: 'Оборот', val: formatMoney(selectedStats?.summary?.totalAmount || 0), icon: <LayoutGrid size={16}/>, color: 'text-[#5A5A40]' },
+                  { label: 'Долг', val: formatMoney(selectedStats?.summary?.totalDebt || 0), icon: <CreditCard size={16}/>, color: 'text-red-500' },
+                  { label: 'На проверке', val: formatMoney(selectedStats?.summary?.overdueDebt || 0), icon: <AlertTriangle size={16}/>, color: 'text-amber-600' },
+                ].map((s, i) => (
+                  <div key={i} className="bg-white border border-[#5A5A40]/5 rounded-[2rem] p-5 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3 opacity-30">
+                      {s.icon} <span className="text-[9px] uppercase tracking-widest font-normal">{s.label}</span>
                     </div>
-                    <div className="overflow-x-auto rounded-2xl border border-[#5A5A40]/10">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-[#f8f7f2] text-[#5A5A40]/60">
-                          <tr>
-                            <th className="px-4 py-3 text-left">Номер</th>
-                            <th className="px-4 py-3 text-left">Дата</th>
-                            <th className="px-4 py-3 text-right">Товаров</th>
-                            <th className="px-4 py-3 text-right">Сумма</th>
-                            <th className="px-4 py-3 text-right">Оплачено</th>
-                            <th className="px-4 py-3 text-right">Долг</th>
-                            <th className="px-4 py-3 text-center">Статус</th>
-                            <th className="px-4 py-3 text-center">Действие</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#5A5A40]/10">
-                          {(selectedStats?.invoices || []).map((invoice) => {
-                            const isExpanded = expandedInvoiceId === invoice.id;
-                            return (
-                              <React.Fragment key={invoice.id}>
-                                <tr 
-                                  className={`group cursor-pointer hover:bg-[#f8f7f2] transition-all ${isExpanded ? 'bg-[#f8f7f2]/50' : ''}`}
-                                  onClick={() => setExpandedInvoiceId(isExpanded ? null : invoice.id)}
-                                >
-                                  <td className="px-4 py-4 font-bold text-[#5A5A40] flex items-center gap-2">
-                                    <div className={`transition-all duration-300 ${isExpanded ? 'rotate-90 text-emerald-600' : 'group-hover:translate-x-1 group-hover:text-emerald-600'}`}>
-                                      <ChevronRight size={14} />
-                                    </div>
-                                    <span className="group-hover:text-emerald-700 transition-colors">{invoice.invoiceNumber}</span>
-                                  </td>
-                                  <td className="px-4 py-4 text-[#5A5A40]/70">{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : '—'}</td>
-                                  <td className="px-4 py-4 text-right text-[#5A5A40]/70">{invoice.itemCount}</td>
-                                  <td className="px-4 py-4 text-right font-medium">{formatMoney(invoice.totalAmount)}</td>
-                                  <td className="px-4 py-4 text-right text-emerald-700 font-medium">{formatMoney(invoice.paidAmount)}</td>
-                                  <td className="px-4 py-4 text-right font-bold text-red-700">{formatMoney(invoice.debtAmount)}</td>
-                                  <td className="px-4 py-4 text-center">
-                                    <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${invoice.paymentStatus === 'PAID' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                                      {invoice.paymentStatus}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3 text-center">
-                                    {invoice.debtAmount > 0 ? (
-                                      <button
-                                        className="inline-flex items-center gap-1 px-4 py-2 rounded-xl bg-[#5A5A40] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#4A4A30] transition-all"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setPaymentModal({ invoice, supplierId: openSupplierId });
-                                        }}
-                                        disabled={busyId === invoice.id}
-                                      >
-                                        Оплата
-                                      </button>
-                                    ) : (
-                                      <span className="text-[10px] font-black uppercase tracking-widest text-[#5A5A40]/20">Закрыт</span>
-                                    )}
-                                  </td>
-                                </tr>
-                                {isExpanded && (
-                                  <tr className="bg-[#f8f7f2]/30">
-                                    <td colSpan={8} className="px-8 py-6">
-                                      <div className="bg-white rounded-2xl border border-[#5A5A40]/5 p-4 shadow-inner">
-                                        <h5 className="text-[10px] font-black uppercase tracking-widest text-[#5A5A40]/40 mb-4 ml-1">Детализация прихода:</h5>
-                                        <table className="w-full text-xs">
-                                          <thead>
-                                            <tr className="text-[#5A5A40]/40 border-b border-[#5A5A40]/5">
-                                              <th className="pb-3 text-left font-black uppercase tracking-widest">Товар</th>
-                                              <th className="pb-3 text-right font-black uppercase tracking-widest">Кол-во</th>
-                                              <th className="pb-3 text-right font-black uppercase tracking-widest">Цена зак.</th>
-                                              <th className="pb-3 text-right font-black uppercase tracking-widest">Итог</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody className="divide-y divide-[#5A5A40]/5">
-                                            {(invoice.items || []).map((item: any, idx: number) => (
-                                              <tr key={idx}>
-                                                <td className="py-3">
-                                                  <div className="font-bold text-[#5A5A40]">{item.productName}</div>
-                                                  <div className="text-[10px] text-[#5A5A40]/40">{item.sku}</div>
-                                                </td>
-                                                <td className="py-3 text-right font-medium">{item.quantity}</td>
-                                                <td className="py-3 text-right text-[#5A5A40]/60">{formatMoney(item.unitCost)}</td>
-                                                <td className="py-3 text-right font-bold text-[#5A5A40]">{formatMoney(item.lineTotal)}</td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                          {(!selectedStats?.invoices || selectedStats.invoices.length === 0) && (
-                            <tr>
-                              <td colSpan={8} className="px-4 py-8 text-center text-[#5A5A40]/45">По поставщику еще нет приходов</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                    <p className={`text-xl font-normal ${s.color} tracking-tight`}>{s.val}</p>
                   </div>
+                ))}
+              </div>
 
-                  <div>
-                    <h4 className="text-sm font-bold mb-3">Последние оплаты</h4>
-                    <div className="overflow-x-auto rounded-2xl border border-[#5A5A40]/10">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-[#f8f7f2] text-[#5A5A40]/60">
-                          <tr>
-                            <th className="px-4 py-3 text-left">Дата</th>
-                            <th className="px-4 py-3 text-left">Метод</th>
-                            <th className="px-4 py-3 text-right">Сумма</th>
-                            <th className="px-4 py-3 text-left">Комментарий</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(selectedStats?.payments || []).map((payment) => (
-                            <tr key={payment.id} className="border-t border-[#5A5A40]/10">
-                              <td className="px-4 py-3">
-                                <div className="inline-flex items-center gap-2 text-[#5A5A40]/70">
-                                  <CalendarClock size={14} />
-                                  {payment.paymentDate ? new Date(payment.paymentDate).toLocaleString() : '—'}
+              {/* Invoices Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <h4 className="text-sm font-normal text-[#151619] tracking-tight">История накладных</h4>
+                  <span className="text-[9px] uppercase tracking-widest text-[#5A5A40]/30 font-normal italic">Всего записей: {(selectedStats?.invoices || []).length}</span>
+                </div>
+                <div className="bg-white rounded-[2rem] border border-[#5A5A40]/10 overflow-hidden shadow-sm">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/40 border-b border-[#5A5A40]/5">
+                        <th className="px-6 py-4 text-left font-normal">Номер</th>
+                        <th className="px-6 py-4 text-left font-normal">Дата</th>
+                        <th className="px-6 py-4 text-right font-normal">Сумма</th>
+                        <th className="px-6 py-4 text-right font-normal text-emerald-600">Оплачено</th>
+                        <th className="px-6 py-4 text-right font-normal text-red-400">Остаток</th>
+                        <th className="px-6 py-4 text-center font-normal">Статус</th>
+                        <th className="px-6 py-4 text-right font-normal">Действие</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#5A5A40]/5">
+                      {(selectedStats?.invoices || []).map((inv) => {
+                        const isExp = expandedInvoiceId === inv.id;
+                        return (
+                          <React.Fragment key={inv.id}>
+                            <tr className={`group hover:bg-[#f5f5f0]/30 transition-all cursor-pointer ${isExp ? 'bg-[#f5f5f0]/50' : ''}`} onClick={() => setExpandedInvoiceId(isExp ? null : inv.id)}>
+                              <td className="px-6 py-5 font-normal text-[#151619]">
+                                <div className="flex items-center gap-3">
+                                  <ChevronRight size={16} className={`transition-transform duration-300 ${isExp ? 'rotate-90 text-[#5A5A40]' : 'text-[#5A5A40]/20'}`} />
+                                  <span>{inv.invoiceNumber}</span>
                                 </div>
                               </td>
-                              <td className="px-4 py-3">{payment.method}</td>
-                              <td className="px-4 py-3 text-right font-semibold text-emerald-700">{formatMoney(payment.amount)}</td>
-                              <td className="px-4 py-3 text-[#5A5A40]/70">{payment.comment || '—'}</td>
+                              <td className="px-6 py-5 text-[#5A5A40]/60 font-normal">{new Date(inv.invoiceDate).toLocaleDateString()}</td>
+                              <td className="px-6 py-5 text-right font-normal">{formatMoney(inv.totalAmount)}</td>
+                              <td className="px-6 py-5 text-right text-emerald-600 font-normal">{formatMoney(inv.paidAmount)}</td>
+                              <td className="px-6 py-5 text-right text-red-500 font-normal">{formatMoney(inv.debtAmount)}</td>
+                              <td className="px-6 py-5 text-center">
+                                <span className={`px-2.5 py-1 rounded-full text-[9px] uppercase tracking-widest font-normal border ${inv.paymentStatus === 'PAID' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                                  {inv.paymentStatus === 'PAID' ? 'Закрыта' : 'Долг'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-5 text-right">
+                                {inv.debtAmount > 0 && (
+                                  <button onClick={(e) => { e.stopPropagation(); setPaymentModal({ invoice: inv, supplierId: openSupplierId }); }} className="bg-[#5A5A40] text-white text-[9px] uppercase tracking-widest px-4 py-2 rounded-xl scale-95 hover:scale-100 hover:bg-[#4A4A30] transition-all font-normal">К оплате</button>
+                                )}
+                              </td>
                             </tr>
-                          ))}
-                          {(!selectedStats?.payments || selectedStats.payments.length === 0) && (
-                            <tr>
-                              <td colSpan={4} className="px-4 py-8 text-center text-[#5A5A40]/45">Оплат по поставщику пока нет</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </>
-              ) : null}
+                            {isExp && (
+                              <tr className="bg-[#f5f5f0]/20 animate-in slide-in-from-top-2 duration-300">
+                                <td colSpan={7} className="px-12 py-6">
+                                  <div className="bg-white rounded-2xl border border-[#5A5A40]/5 overflow-hidden shadow-inner p-4">
+                                    <table className="w-full text-[11px] font-normal">
+                                      <thead>
+                                        <tr className="text-[#5A5A40]/40 uppercase tracking-widest border-b border-[#5A5A40]/5">
+                                          <th className="pb-3 text-left font-normal italic">Товар</th>
+                                          <th className="pb-3 text-right font-normal italic">Кол-во</th>
+                                          <th className="pb-3 text-right font-normal italic">Цена</th>
+                                          <th className="pb-3 text-right font-normal italic">Итого</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-[#5A5A40]/5">
+                                        {(inv.items || []).map((item, i) => (
+                                          <tr key={i}>
+                                            <td className="py-2.5 text-[#151619]">{item.productName}</td>
+                                            <td className="py-2.5 text-right">{item.quantity}</td>
+                                            <td className="py-2.5 text-right text-[#5A5A40]/50">{formatMoney(item.unitCost)}</td>
+                                            <td className="py-2.5 text-right text-[#151619]">{formatMoney(item.lineTotal)}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                      {(!selectedStats?.invoices || selectedStats.invoices.length === 0) && (
+                        <tr><td colSpan={7} className="py-12 text-center text-[#5A5A40]/30 font-normal italic uppercase tracking-tighter">Накладные не найдены</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Payments Section */}
+              <div className="space-y-4 pb-12">
+                <div className="flex items-center justify-between px-2">
+                  <h4 className="text-sm font-normal text-[#151619] tracking-tight">История платежей</h4>
+                  <span className="text-[9px] uppercase tracking-widest text-[#5A5A40]/30 font-normal italic">Транзакций: {(selectedStats?.payments || []).length}</span>
+                </div>
+                <div className="bg-white rounded-[2rem] border border-[#5A5A40]/10 overflow-hidden shadow-sm">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/40 border-b border-[#5A5A40]/5">
+                        <th className="px-6 py-4 text-left font-normal">Дата</th>
+                        <th className="px-6 py-4 text-left font-normal">Тип</th>
+                        <th className="px-6 py-4 text-right font-normal">Сумма</th>
+                        <th className="px-6 py-4 text-left font-normal">Комментарий</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#5A5A40]/5">
+                      {(selectedStats?.payments || []).map((p) => (
+                        <tr key={p.id} className="hover:bg-[#f5f5f0]/20 transition-all font-normal">
+                          <td className="px-6 py-4 text-[#5A5A40]/70 flex items-center gap-2"><CalendarClock size={14} className="opacity-30" /> {new Date(p.paymentDate).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-[#5A5A40]/80 lowercase tracking-tight italic">{p.method}</td>
+                          <td className="px-6 py-4 text-right text-emerald-600 font-normal tracking-tight">{formatMoney(p.amount)}</td>
+                          <td className="px-6 py-4 text-[#5A5A40]/40 text-xs truncate max-w-xs">{p.comment || '—'}</td>
+                        </tr>
+                      ))}
+                      {(!selectedStats?.payments || selectedStats.payments.length === 0) && (
+                        <tr><td colSpan={4} className="py-12 text-center text-[#5A5A40]/30 font-normal italic uppercase tracking-tighter">Платежи отсутствуют</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* Add/Edit Modal */}
+      {isAddOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#151619]/60 backdrop-blur-xl p-4 animate-in fade-in zoom-in duration-300">
+          <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-lg overflow-hidden border border-[#5A5A40]/10">
+            <div className="p-8 border-b border-[#5A5A40]/5 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-normal text-[#151619] tracking-tight">{editingSupplierId ? 'Данные партнера' : 'Новый партнер'}</h3>
+                <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/50 mt-1 font-normal">Заполнение профиля поставщика</p>
+              </div>
+              <button onClick={() => setIsAddOpen(false)} className="w-10 h-10 rounded-full border border-[#5A5A40]/10 flex items-center justify-center text-[#5A5A40]/40 hover:bg-[#f5f5f0] transition-all">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-8 space-y-5">
+              {[
+                { label: 'Название компании', val: form.name, key: 'name' },
+                { label: 'Контактный телефон', val: form.contact, key: 'contact' },
+                { label: 'E-mail адрес', val: form.email, key: 'email' },
+                { label: 'Юридический адрес', val: form.address, key: 'address' },
+              ].map((f) => (
+                <div key={f.key} className="space-y-1.5 focus-within:translate-x-1 transition-transform">
+                  <label className="text-[9px] uppercase tracking-widest text-[#5A5A40]/40 font-normal px-1">{f.label}</label>
+                  <input
+                    className="w-full px-4 py-3.5 bg-[#f8f7f2] border border-transparent rounded-2xl text-sm font-normal outline-none focus:bg-white focus:border-[#5A5A40]/20 transition-all"
+                    value={f.val}
+                    onChange={(e) => setForm({...form, [f.key as keyof SupplierForm]: e.target.value})}
+                  />
+                </div>
+              ))}
+              {error && <p className="text-[10px] text-red-500 font-normal px-1">{error}</p>}
+            </div>
+            <div className="p-8 pt-0 flex gap-3">
+              <button onClick={() => setIsAddOpen(false)} className="flex-1 py-4 border border-[#5A5A40]/10 rounded-2xl text-sm font-normal text-[#5A5A40]/40 hover:bg-[#f5f5f0] transition-all">Отмена</button>
+              <button onClick={saveSupplier} disabled={submitting} className="flex-[2] py-4 bg-[#5A5A40] text-white rounded-2xl text-sm font-normal hover:bg-[#4A4A30] active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-[#5A5A40]/20">{submitting ? '...' : 'Сохранить изменения'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#151619]/40 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden border border-red-50">
+            <div className="p-8 text-center space-y-4">
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto mb-2 animate-bounce"><Trash2 size={30} /></div>
+              <h3 className="text-xl font-normal text-[#151619] tracking-tight">Удалить партнера?</h3>
+              <p className="text-xs text-[#5A5A40]/60 font-normal leading-relaxed">Вы уверены, что хотите удалить <span className="text-[#151619] font-normal underline decoration-red-200 underline-offset-4">{deleteTarget.name}</span>?</p>
+              <div className="flex gap-3 pt-4 font-normal">
+                <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 text-sm text-[#5A5A40]/50 hover:bg-[#f5f5f0] rounded-2xl transition-all">Отмена</button>
+                <button onClick={async () => { await deleteSupplier(deleteTarget.id); setDeleteTarget(null); }} className="flex-1 py-3 bg-red-500 text-white text-sm rounded-2xl hover:bg-red-600 transition-all shadow-lg shadow-red-200">Удалить</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shared Modals */}
       {paymentModal && (
         <SupplierPaymentModal
           isOpen={!!paymentModal}
@@ -631,72 +586,18 @@ export const SuppliersPage: React.FC = () => {
           setBusyId={setBusyId}
           getInvoiceOutstandingAmount={(invoice) => Number(invoice?.debtAmount || 0)}
           onPaymentSuccess={() => {
-            const supplierId = paymentModal.supplierId;
+            const sid = paymentModal.supplierId;
             setPaymentModal(null);
-            void loadSupplierDetails(supplierId, true);
+            void loadSupplierDetails(sid, true);
           }}
         />
-      )}
-
-      {isAddOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg">
-            <div className="p-6 border-b border-[#5A5A40]/10">
-              <h3 className="text-xl font-bold text-[#5A5A40]">{editingSupplierId ? t('Edit Supplier') : t('Add Supplier')}</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <input className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl" placeholder={t('Name')} value={form.name} onChange={(event) => setForm((state) => ({ ...state, name: event.target.value }))} />
-              <input className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl" placeholder={t('Contact')} value={form.contact} onChange={(event) => setForm((state) => ({ ...state, contact: event.target.value }))} />
-              <input className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl" placeholder="Email" value={form.email} onChange={(event) => setForm((state) => ({ ...state, email: event.target.value }))} />
-              <input className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl" placeholder={t('Address')} value={form.address} onChange={(event) => setForm((state) => ({ ...state, address: event.target.value }))} />
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-            </div>
-            <div className="p-6 border-t border-[#5A5A40]/10 flex justify-end gap-3">
-              <button onClick={() => { setIsAddOpen(false); setEditingSupplierId(null); }} className="px-5 py-2.5 border border-[#5A5A40]/20 rounded-xl">{t('Cancel')}</button>
-              <button onClick={saveSupplier} disabled={submitting} className="px-5 py-2.5 bg-[#5A5A40] text-white rounded-xl disabled:opacity-50">
-                {submitting ? t('Saving...') : (editingSupplierId ? t('Update Supplier') : t('Save Supplier'))}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-[#5A5A40]/10">
-            <div className="p-5 bg-red-600 text-white flex items-center justify-between">
-              <h3 className="text-lg font-bold">{t('Delete Supplier')}</h3>
-              <button onClick={() => setDeleteTarget(null)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-6 space-y-5">
-              <p className="text-sm text-[#5A5A40]/80">
-                {t('Delete supplier')}: <span className="font-semibold">{deleteTarget.name}</span>?
-              </p>
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setDeleteTarget(null)} className="px-5 py-2.5 border border-[#5A5A40]/20 rounded-xl">
-                  {t('Cancel')}
-                </button>
-                <button
-                  onClick={async () => {
-                    const target = deleteTarget;
-                    if (!target) return;
-                    await deleteSupplier(target.id);
-                    setDeleteTarget(null);
-                  }}
-                  disabled={submitting}
-                  className="px-5 py-2.5 bg-red-600 text-white rounded-xl disabled:opacity-50"
-                >
-                  {submitting ? t('Deleting...') : t('Delete Supplier')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
 };
+
+const CheckCircle2 = ({ size }: { size: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+);
 
 export default SuppliersPage;

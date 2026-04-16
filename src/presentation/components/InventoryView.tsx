@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from
 import { useTranslation } from 'react-i18next';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
-import { Search, Plus, Package, X, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Package, X, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Product } from '../../core/domain';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { lazyNamedImport } from '../../lib/lazyLoadComponents';
@@ -64,24 +64,52 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
   const catalogPageSize = 10;
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  useEffect(() => {
-    if (products.length === 0) {
-      void refreshProducts();
-    }
-  }, [products.length, refreshProducts]);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+    key: 'name',
+    direction: 'asc'
+  });
 
-  const filteredProducts = useMemo(() => products.filter((p) => {
-    const searchValue = debouncedSearchTerm.toLowerCase();
-    const matchesSearch = p.name.toLowerCase().includes(searchValue)
-      || p.sku.toLowerCase().includes(searchValue)
-      || String(p.manufacturer || '').toLowerCase().includes(searchValue)
-      || String(p.countryOfOrigin || '').toLowerCase().includes(searchValue);
-    const matchesFilter =
-      filter === 'all' ||
-      (filter === 'low' && p.totalStock < (p.minStock || 10)) ||
-      (filter === 'prescription' && p.prescription);
-    return matchesSearch && matchesFilter;
-  }), [products, debouncedSearchTerm, filter]);
+  const toggleSort = (key: string) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const filteredProducts = useMemo(() => {
+    let result = products.filter((p) => {
+      const searchValue = debouncedSearchTerm.toLowerCase();
+      const matchesSearch = p.name.toLowerCase().includes(searchValue)
+        || p.sku.toLowerCase().includes(searchValue)
+        || String(p.manufacturer || '').toLowerCase().includes(searchValue)
+        || String(p.countryOfOrigin || '').toLowerCase().includes(searchValue);
+      const matchesFilter =
+        filter === 'all' ||
+        (filter === 'low' && p.totalStock < (p.minStock || 10)) ||
+        (filter === 'prescription' && p.prescription);
+      return matchesSearch && matchesFilter;
+    });
+
+    // Apply sorting
+    result.sort((a, b) => {
+      let valA: any = a[sortConfig.key as keyof Product];
+      let valB: any = b[sortConfig.key as keyof Product];
+
+      // Handle nulls/undefined
+      if (valA === undefined || valA === null) valA = '';
+      if (valB === undefined || valB === null) valB = '';
+
+      if (typeof valA === 'string') {
+        const cmp = valA.localeCompare(valB as string);
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
+      }
+
+      const cmp = (valA as number) - (valB as number);
+      return sortConfig.direction === 'asc' ? cmp : -cmp;
+    });
+
+    return result;
+  }, [products, debouncedSearchTerm, filter, sortConfig]);
 
   const totalCatalogPages = Math.max(1, Math.ceil(filteredProducts.length / catalogPageSize));
   const safeCatalogPage = Math.min(catalogPage, totalCatalogPages);
@@ -89,6 +117,17 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
     const startIndex = (safeCatalogPage - 1) * catalogPageSize;
     return filteredProducts.slice(startIndex, startIndex + catalogPageSize);
   }, [filteredProducts, safeCatalogPage]);
+
+  useEffect(() => {
+    if (products.length === 0) {
+      void refreshProducts();
+    }
+  }, [products.length, refreshProducts]);
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig.key !== column) return <ArrowUpDown size={12} className="opacity-30" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
+  };
 
   const saveProduct = async (form: NewProductForm) => {
     setSubmitting(true);
@@ -246,12 +285,40 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#f5f5f0]/95 text-[9px] uppercase tracking-[0.2em] text-[#5A5A40]/45 font-bold">
+              <tr className="bg-[#f5f5f0]/95 text-[9px] uppercase tracking-[0.2em] text-[#5A5A40]/45 font-normal">
                 <th className="px-4 py-3.5">№</th>
-                <th className="px-6 py-3.5">{t('Product')}</th>
-                <th className="px-6 py-3.5">{t('Stock status')}</th>
-                <th className="px-6 py-3.5">{t('Price')}</th>
-                <th className="px-6 py-3.5">{t('Category')}</th>
+                <th 
+                  className="px-6 py-3.5 cursor-pointer hover:text-[#5A5A40] transition-colors"
+                  onClick={() => toggleSort('name')}
+                >
+                  <div className="flex items-center gap-2">
+                    {t('Product')} <SortIcon column="name" />
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-3.5 cursor-pointer hover:text-[#5A5A40] transition-colors"
+                  onClick={() => toggleSort('totalStock')}
+                >
+                  <div className="flex items-center gap-2">
+                    {t('Stock status')} <SortIcon column="totalStock" />
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-3.5 cursor-pointer hover:text-[#5A5A40] transition-colors"
+                  onClick={() => toggleSort('sellingPrice')}
+                >
+                  <div className="flex items-center gap-2">
+                    {t('Price')} <SortIcon column="sellingPrice" />
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-3.5 cursor-pointer hover:text-[#5A5A40] transition-colors"
+                  onClick={() => toggleSort('category')}
+                >
+                  <div className="flex items-center gap-2">
+                    {t('Category')} <SortIcon column="category" />
+                  </div>
+                </th>
                 <th className="px-6 py-3.5 text-right">Действия</th>
               </tr>
             </thead>
