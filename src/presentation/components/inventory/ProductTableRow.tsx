@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Product } from '../../../core/domain';
-import { AlertTriangle, Layers, Barcode, BadgeDollarSign, Trash2, Plus } from 'lucide-react';
+import { AlertTriangle, Layers, Barcode, BadgeDollarSign, Trash2, Plus, Info } from 'lucide-react';
 
 interface ProductTableRowProps {
   index: number;
@@ -29,111 +29,106 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = React.memo(({
   const { t } = useTranslation();
   const isLowStock = product.totalStock < (product.minStock || 10);
   const batches = Array.isArray(product.batches) ? product.batches : [];
-  const orderedBatches = [...batches].sort((left, right) => new Date(left.expiryDate).getTime() - new Date(right.expiryDate).getTime());
+  const orderedBatches = [...batches].sort((l, r) => new Date(l.expiryDate).getTime() - new Date(r.expiryDate).getTime());
   const primaryBatch = orderedBatches[0];
-  const riskyBatchCount = batches.filter((batch) => batch.status !== 'STABLE').length;
+  const riskyBatchCount = batches.filter((b) => b.status !== 'STABLE').length;
 
   return (
-    <tr className="hover:bg-[#f5f5f0]/30 transition-colors group">
-      <td className="px-4 py-3.5 text-xs font-bold text-[#5A5A40]/70">{index}</td>
-      <td className="px-6 py-3.5">
+    <tr className="hover:bg-[#fcfbf7] transition-all group font-normal">
+      <td className="px-8 py-4 text-[10px] text-[#5A5A40]/20 font-normal">{index < 10 ? `0${index}` : index}</td>
+      <td className="px-6 py-4 min-w-[280px]">
         <div>
-          <p className="text-sm font-bold leading-tight text-[#5A5A40]">{product.name}</p>
-          <p className="mt-0.5 text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{product.sku}</p>
-          {(product.manufacturer || product.countryOfOrigin) && (
-            <p className="mt-1 text-[10px] text-[#5A5A40]/45">
-              {[product.manufacturer, product.countryOfOrigin].filter(Boolean).join(' • ')}
-            </p>
-          )}
-          <p className="mt-1 text-[10px] text-[#5A5A40]/45">
-            {batches.length > 0
-              ? `Партий: ${batches.length}${primaryBatch ? ` • Ближайший срок: ${new Date(primaryBatch.expiryDate).toLocaleDateString('ru-RU')}` : ''}`
-              : 'Партий пока нет'}
-          </p>
-          {riskyBatchCount > 0 && (
-            <span className="inline-flex mt-1.5 items-center rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-rose-700 border border-rose-100">
-              Требует внимания: {riskyBatchCount}
-            </span>
-          )}
-          {!product.barcode && (
-            <span className="inline-flex mt-1.5 items-center rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-amber-700 border border-amber-100">
-              Без штрихкода
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="px-6 py-3.5">
-        <div className="flex items-center gap-2.5">
-          <div className="flex-1 min-w-25">
-            <div className="h-1.5 bg-[#f5f5f0] rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                style={{ width: `${Math.min(100, (product.totalStock / (product.minStock || 10) * 50))}%` }}
-              />
-            </div>
-            <p className={`text-[9px] font-bold mt-1 uppercase tracking-wider ${isLowStock ? 'text-amber-600' : 'text-emerald-600'}`}>
-              {stockLabel}
-            </p>
+          <h4 className="text-[14px] font-normal text-[#151619] tracking-tight leading-tight mb-1">{product.name}</h4>
+          <div className="flex items-center gap-3">
+            <span className="text-[9px] text-[#5A5A40]/30 uppercase tracking-widest">{product.sku}</span>
+            {product.countryOfOrigin && (
+              <span className="text-[9px] text-sky-600/40 italic font-normal">{product.countryOfOrigin}</span>
+            )}
           </div>
-          {isLowStock && <AlertTriangle size={14} className="text-amber-500 animate-pulse" />}
+          <div className="flex flex-wrap gap-1.5 mt-2">
+             {riskyBatchCount > 0 && (
+               <span className="inline-flex px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-600 text-[8px] uppercase tracking-tighter border border-rose-100/50">Риски: {riskyBatchCount}</span>
+             )}
+             {!product.barcode && (
+               <span className="inline-flex px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-600 text-[8px] uppercase tracking-tighter border border-amber-100/50">Нет штрихкода</span>
+             )}
+             {primaryBatch && (
+               <span className="inline-flex px-1.5 py-0.5 rounded-md bg-[#f5f5f0] text-[#5A5A40]/40 text-[8px] uppercase tracking-tighter">Срок: {new Date(primaryBatch.expiryDate).toLocaleDateString('ru-RU')}</span>
+             )}
+          </div>
         </div>
       </td>
-      <td className="px-6 py-3.5">
-        <p className="text-sm font-bold text-[#5A5A40]">{product.sellingPrice.toFixed(2)} TJS</p>
-        <p className="text-[9px] text-[#5A5A40]/40 mt-0.5">{t('Cost')}: {product.costPrice.toFixed(2)} TJS</p>
+      <td className="px-6 py-4">
+        <div className="max-w-[120px]">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={`text-[10px] uppercase tracking-widest ${isLowStock ? 'text-rose-600' : 'text-emerald-600'}`}>
+              {stockLabel} <span className="opacity-40 lowercase">ед.</span>
+            </span>
+            {isLowStock && <AlertTriangle size={10} className="text-rose-500 animate-pulse" />}
+          </div>
+          <div className="h-1 bg-[#f5f5f0] rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${isLowStock ? 'bg-rose-500' : 'bg-emerald-500'}`}
+              style={{ width: `${Math.min(100, (product.totalStock / (product.minStock || 10) * 50))}%` }}
+            />
+          </div>
+        </div>
       </td>
-      <td className="px-6 py-3.5">
-        {product.prescription ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-600 text-[9px] font-bold uppercase tracking-widest border border-red-100">
-            {t('Required')}
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[9px] font-bold uppercase tracking-widest border border-emerald-100">
-            {t('OTC')}
-          </span>
-        )}
+      <td className="px-6 py-4">
+        <p className="text-[14px] text-[#151619] font-normal tabular-nums">{product.sellingPrice.toFixed(2)}</p>
+        <p className="text-[9px] text-[#5A5A40]/30 uppercase tracking-tighter mt-0.5">Себест: {product.costPrice.toFixed(0)}</p>
       </td>
-      <td className="px-6 py-3.5 text-right">
-        <div className="ml-auto grid w-fit grid-cols-3 gap-2">
+      <td className="px-6 py-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] text-[#5A5A40]/50 lowercase">{product.category || 'Без категории'}</span>
+          {product.prescription ? (
+            <span className="w-fit px-1.5 py-0.5 bg-rose-50 text-rose-600 text-[8px] uppercase tracking-widest rounded-md">Рецепт</span>
+          ) : (
+             <span className="w-fit px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] uppercase tracking-widest rounded-md">Без рецепта</span>
+          )}
+        </div>
+      </td>
+      <td className="px-8 py-4 text-right">
+        <div className="flex items-center justify-end gap-1 px-1">
           <button
             onClick={() => onRestock(product)}
             disabled={submitting}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#5A5A40] text-white transition-all hover:bg-[#4A4A30] disabled:opacity-50"
-            title="Добавить партию"
+            className="p-2 text-[#5A5A40]/20 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+            title="Приход"
           >
-            <Plus size={14} />
+            <Plus size={16} />
           </button>
           <button
             onClick={() => onOpenBatchHistory(product)}
             disabled={submitting}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#eef2e6] text-[#5A5A40] transition-all hover:bg-[#e2e8d6] disabled:opacity-50"
-            title="История партий"
+            className="p-2 text-[#5A5A40]/20 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all"
+            title="Партии"
           >
-            <Layers size={14} />
+            <Layers size={16} />
           </button>
           <button
             onClick={() => onEditPrices(product)}
             disabled={submitting}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#f5f5f0] text-[#5A5A40] transition-all hover:bg-[#ebeade] disabled:opacity-50"
-            title="Изменить цены"
+            className="p-2 text-[#5A5A40]/20 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+            title="Цены"
           >
-            <BadgeDollarSign size={14} />
+            <BadgeDollarSign size={16} />
           </button>
           {!product.barcode && (
             <button
               onClick={() => onAddBarcode(product)}
               disabled={submitting}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
-              title="Добавить штрихкод"
+              className="p-2 text-[#5A5A40]/20 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
+              title="Штрихкод"
             >
-              <Barcode size={14} />
+              <Barcode size={16} />
             </button>
           )}
           <button
             onClick={() => onDelete(product.id, product.name)}
             disabled={submitting}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#5A5A40]/30 transition-all hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
-            title={t('Delete Product')}
+            className="p-2 text-[#5A5A40]/10 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+            title="Удалить"
           >
             <Trash2 size={16} />
           </button>
@@ -142,3 +137,5 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = React.memo(({
     </tr>
   );
 });
+
+ProductTableRow.displayName = 'ProductTableRow';

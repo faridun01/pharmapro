@@ -4,7 +4,6 @@ import { usePharmacy } from '../context';
 import { lazyNamedImport } from '../../lib/lazyLoadComponents';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { formatProductDisplayName } from '../../lib/productDisplay';
-import { markRuntimeOnce } from '../../lib/runtimeMarks';
 import { 
   TrendingUp, 
   Package, 
@@ -13,8 +12,9 @@ import {
   ArrowDownLeft,
   Clock,
   ShieldAlert,
-  Receipt,
-  Activity
+  Activity,
+  ChevronRight,
+  Target
 } from 'lucide-react';
 
 type DashboardPeriodPreset = 'month' | 'q1' | 'q2' | 'q3' | 'q4' | 'year';
@@ -22,10 +22,9 @@ type DashboardPeriodPreset = 'month' | 'q1' | 'q2' | 'q3' | 'q4' | 'year';
 type DashboardMetricsResponse = {
   lowStock?: { count: number; items: Array<{ productId: string; name: string; currentStock: number; minStock: number }> };
   expiry?: { expired: number; expiringSoon: number };
-  invoices?: { unpaidCount: number; unpaidAmount: number; averageUnpaid: number };
   revenue?: { total: number; averageDaily: number; recognizedInvoiceCount: number };
   revenueTrend?: { mode: 'day' | 'month'; items: Array<{ key: string; name: string; sales: number }> };
-  finance?: { outstandingOrdinarySales: number; totalDebtorOutstanding: number; writeOffAmountMonth: number; grossMarginMonth: number };
+  finance?: { writeOffAmountMonth: number; grossMarginMonth: number };
   inventoryHighlights?: {
     totalInventoryUnits: number;
     lowStockItems: Array<{ productId: string; name: string; currentStock: number; minStock: number }>;
@@ -33,8 +32,6 @@ type DashboardMetricsResponse = {
   };
   summary?: {
     totalProducts: number;
-    totalBatches: number;
-    alertCount: number;
   };
 };
 
@@ -47,430 +44,259 @@ export const DashboardView: React.FC = () => {
   const [showChart, setShowChart] = useState(false);
   const [serverMetrics, setServerMetrics] = useState<DashboardMetricsResponse | null>(null);
 
-  const formatMoney = (value: number) => `${Number(value || 0).toFixed(2)} TJS`;
-  const getProductDisplayLabel = (productId: string | undefined, fallbackName: string) => {
-    const product = products.find((entry) => entry.id === productId);
-    return formatProductDisplayName({
-      name: fallbackName,
-      manufacturer: product?.manufacturer,
-      countryOfOrigin: product?.countryOfOrigin,
-    }, {
-      includeManufacturer: true,
-      includeCountry: true,
-    });
-  };
+  const formatMoney = (value: number) => 
+    `${Number(value || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TJS`;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setShowChart(true), 0);
+    const timer = window.setTimeout(() => setShowChart(true), 150);
     return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    markRuntimeOnce('dashboard-view-mounted', {
-      selectedPeriodPreset,
-      userId: user?.id,
-    });
-  }, [selectedPeriodPreset, user?.id]);
-
-  useEffect(() => {
     let cancelled = false;
-
     void (async () => {
       try {
         const response = await fetch(`/api/reports/metrics/dashboard?preset=${selectedPeriodPreset}`, {
           headers: await buildApiHeaders(),
         });
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(payload?.error || 'Не удалось загрузить метрики дашборда');
-        }
-        if (!cancelled) {
-          setServerMetrics(payload as DashboardMetricsResponse);
-        }
-      } catch {
-        if (!cancelled) {
-          setServerMetrics(null);
-        }
+        const payload = await response.json();
+        if (response.ok && !cancelled) setServerMetrics(payload);
+      } catch (err) {
+        console.error('Dashboard metrics load failed', err);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [selectedPeriodPreset]);
 
-  const now = new Date();
+  // Client-side calculations as fallbacks
+  const now = useMemo(() => new Date(), []);
+  const totalStock = useMemo(() => products.reduce((acc, p) => acc + p.totalStock, 0), [products]);
+  
+  const activityData = useMemo(() => {
+    const invoiceActs = invoices.map(inv => ({
+      id: inv.id,
+      type: (inv.status === 'RETURNED' || inv.status === 'PARTIALLY_RETURNED') ? 'return' : 'sale',
+      title: inv.status.includes('RETURN') ? `Возврат №${inv.invoiceNo}` : `Продажа №${inv.invoiceNo}`,
+      amount: Number(inv.totalAmount || 0),
+      time: new Date(inv.createdAt),
+      subtitle: `${(inv.items || []).length} товаров • ${inv.paymentType}`
+    }));
 
-  const dashboardPeriod = useMemo(() => {
-    if (selectedPeriodPreset === 'month') {
-      return {
-        from: new Date(now.getFullYear(), now.getMonth(), 1),
-        to: now,
-        label: 'Текущий месяц',
-        chartMode: 'day' as const,
-      };
-    }
+    return invoiceActs
+      .sort((a, b) => b.time.getTime() - a.time.getTime())
+      .slice(0, 5);
+  }, [invoices]);
 
-    if (selectedPeriodPreset === 'year') {
-      return {
-        from: new Date(now.getFullYear(), 0, 1),
-        to: now,
-        label: 'Год',
-        chartMode: 'month' as const,
-      };
-    }
-
-    const quarterMap: Record<'q1' | 'q2' | 'q3' | 'q4', { monthIndex: number; label: string }> = {
-      q1: { monthIndex: 0, label: '1 квартал' },
-      q2: { monthIndex: 3, label: '2 квартал' },
-      q3: { monthIndex: 6, label: '3 квартал' },
-      q4: { monthIndex: 9, label: '4 квартал' },
-    };
-
-    const quarter = quarterMap[selectedPeriodPreset as 'q1' | 'q2' | 'q3' | 'q4'];
-    const from = new Date(now.getFullYear(), quarter.monthIndex, 1);
-    const quarterEnd = new Date(now.getFullYear(), quarter.monthIndex + 3, 0, 23, 59, 59, 999);
-
-    return {
-      from,
-      to: quarterEnd < now ? quarterEnd : now,
-      label: quarter.label,
-      chartMode: 'month' as const,
-    };
-  }, [now, selectedPeriodPreset]);
-
-  const totalStock = products.reduce((acc, p) => acc + p.totalStock, 0);
-  const lowStockCount = products.filter(p => p.totalStock < (p.minStock || 10)).length;
-
-  const expiredCount = (products || []).reduce((acc, p) => {
-    const expired = (p.batches || []).filter((b) => new Date(b.expiryDate).getTime() < now.getTime());
-    return acc + expired.length;
-  }, 0);
-
-  const expiringSoonCount = (products || []).reduce((acc, p) => {
-    const expiring = (p.batches || []).filter(b => {
-      const daysLeft = (new Date(b.expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
-      return daysLeft > 0 && daysLeft < 30;
-    });
-    return acc + expiring.length;
-  }, 0);
-
-  const toRelativeTime = (dateValue: Date | string) => {
-    const date = new Date(dateValue as any);
-    if (Number.isNaN(date.getTime())) return t('unknown');
-    const diffMs = now.getTime() - date.getTime();
-    const mins = Math.floor(diffMs / (1000 * 60));
-    if (mins < 1) return t('just now');
-    if (mins < 60) return `${mins} мин. ${t('ago')}`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours} ч. ${t('ago')}`;
-    const days = Math.floor(hours / 24);
-    return `${days} дн. ${t('ago')}`;
-  };
-
-  const movementActivity = (products || []).flatMap((p) =>
-    (p.batches || []).flatMap((b) =>
-      (b.movements || []).map((m) => ({
-        id: `mov-${m.id}`,
-        productId: p.id,
-        type:
-          m.type === 'RESTOCK'
-            ? ('restock' as const)
-            : m.type === 'WRITE_OFF'
-            ? ('writeoff' as const)
-            : ('adjustment' as const),
-        title:
-          m.type === 'RESTOCK'
-            ? `${t('Restock')} ${getProductDisplayLabel(p.id, p.name)}`
-            : m.type === 'WRITE_OFF'
-            ? `${t('Write-off')} ${getProductDisplayLabel(p.id, p.name)}`
-            : `${t('Stock adjustment')} ${getProductDisplayLabel(p.id, p.name)}`,
-        time: toRelativeTime(m.date),
-        amount: Number(m.quantity || 0),
-        date: new Date(m.date as any),
-        subtitle: m.type === 'RESTOCK' ? `Приход ${Number(m.quantity || 0)} ед.` : `Изменение ${Number(m.quantity || 0)} ед.`,
-      }))
-    )
-  );
-
-  const invoiceActivity = invoices.map((invoice) => {
-    const isReturned = invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED';
-    const soldUnits = (invoice.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-
-    if (isReturned) {
-      return {
-        id: `inv-${invoice.id}`,
-        type: 'return' as const,
-        title: `Возврат по накладной ${invoice.invoiceNo || invoice.id}`,
-        subtitle: `${soldUnits} ед. • ${Number(invoice.totalAmount || 0).toFixed(2)} TJS`,
-        amount: Number(invoice.totalAmount || 0),
-        time: toRelativeTime(invoice.createdAt),
-        date: new Date(invoice.createdAt as any),
-      };
-    }
-
-
-    return {
-      id: `inv-${invoice.id}`,
-      type: 'sale' as const,
-      title: `Продажа ${invoice.paymentType === 'CARD' ? 'по карте' : 'за наличные'}`,
-      subtitle: `${soldUnits} ед. • ${Number(invoice.totalAmount || 0).toFixed(2)} TJS`,
-      amount: Number(invoice.totalAmount || 0),
-      time: toRelativeTime(invoice.createdAt),
-      date: new Date(invoice.createdAt as any),
-    };
-  });
-
-  const recentActivity = [...invoiceActivity, ...movementActivity]
-    .filter((a) => !Number.isNaN(a.date.getTime()))
-    .sort((a, b) => b.date.getTime() - a.date.getTime())
-    .slice(0, 5);
-
-  const lowStockProducts = products
-    .filter((product) => product.totalStock < (product.minStock || 10))
-    .sort((left, right) => {
-      const leftGap = left.totalStock - (left.minStock || 10);
-      const rightGap = right.totalStock - (right.minStock || 10);
-      return leftGap - rightGap;
-    })
-    .slice(0, 5);
-
-  const expiringProducts = products
-    .flatMap((product) =>
-      product.batches.map((batch) => {
-        const expiryDate = new Date(batch.expiryDate);
-        const daysLeft = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        let severityRank = 3;
-        let severityLabel = 'Стабильно';
-        if (daysLeft <= 0) {
-          severityRank = 0;
-          severityLabel = 'Просрочено';
-        } else if (daysLeft <= 30) {
-          severityRank = 1;
-          severityLabel = 'Критично';
-        } else if (daysLeft <= 90) {
-          severityRank = 2;
-          severityLabel = 'Скоро истекает';
-        }
-
-        return {
-          id: batch.id,
-          name: product.name,
-          batchNumber: batch.batchNumber,
-          daysLeft,
-          severityRank,
-          severityLabel,
-        };
-      })
-    )
-    .filter((item) => item.daysLeft <= 90)
-    .sort((left, right) => {
-      if (left.severityRank !== right.severityRank) return left.severityRank - right.severityRank;
-      return left.daysLeft - right.daysLeft;
-    })
-    .slice(0, 5);
-
-  const statTotalInventory = serverMetrics?.inventoryHighlights?.totalInventoryUnits ?? totalStock;
-  const statTotalProducts = serverMetrics?.summary?.totalProducts ?? products.length;
-  const statLowStockCount = serverMetrics?.lowStock?.count ?? lowStockCount;
-  const statExpiringSoonCount = serverMetrics?.expiry?.expiringSoon ?? expiringSoonCount;
-  const statSalesInPeriod = serverMetrics?.revenue?.total ?? 0;
-  const statSalesCountInPeriod = serverMetrics?.revenue?.recognizedInvoiceCount ?? 0;
-  const adminWriteOffAmount = serverMetrics?.finance?.writeOffAmountMonth ?? 0;
-  const adminGrossMargin = serverMetrics?.finance?.grossMarginMonth ?? 0;
-  const lowStockWidgetItems = serverMetrics?.inventoryHighlights?.lowStockItems ?? lowStockProducts.map((product) => ({ productId: product.id, name: product.name, currentStock: product.totalStock, minStock: product.minStock || 10 }));
-  const expiringWidgetItems = serverMetrics?.inventoryHighlights?.expiringItems ?? expiringProducts;
-  const chartData = serverMetrics?.revenueTrend?.items ?? [];
+  const dashboardPeriodLabel = useMemo(() => {
+    const labels: Record<string, string> = { month: 'Месяц', q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4', year: 'Год' };
+    return labels[selectedPeriodPreset] || 'Период';
+  }, [selectedPeriodPreset]);
 
   const stats = [
-    { label: 'Наименований товаров', value: statTotalProducts.toLocaleString(), icon: Package, color: 'bg-sky-500', trend: statTotalProducts > 0 ? `${statTotalProducts}` : '0' },
-    { label: 'Общий остаток, шт.', value: statTotalInventory.toLocaleString(), icon: Package, color: 'bg-blue-500', trend: statTotalInventory > 0 ? `${statTotalInventory}` : '0' },
-    { label: t('Low Stock Items'), value: statLowStockCount.toString(), icon: AlertTriangle, color: 'bg-amber-500', trend: statLowStockCount > 0 ? `${statLowStockCount}` : '0' },
-    { label: t('Expiring Soon'), value: statExpiringSoonCount.toString(), icon: Clock, color: 'bg-red-500', trend: statExpiringSoonCount > 0 ? `${statExpiringSoonCount}` : '0' },
-    {
-      label: `${t('Sales')} (${dashboardPeriod.label})`,
-      value: formatMoney(statSalesInPeriod),
-      icon: TrendingUp,
-      color: 'bg-emerald-500',
-      trend: statSalesCountInPeriod > 0 ? `${statSalesCountInPeriod}` : '0',
-    },
-  ];
-
-  const adminCards = [
-    {
-      label: t('Expired Batches'),
-      value: String(expiredCount),
-      icon: ShieldAlert,
-      tone: 'bg-red-100 text-red-700',
-    },
-    {
-      label: `${t('Write-off Cost')} за месяц`,
-      value: formatMoney(adminWriteOffAmount),
-      icon: AlertTriangle,
-      tone: 'bg-orange-100 text-orange-700',
-    },
-    {
-      label: `${t('Gross Margin')} за месяц`,
-      value: formatMoney(adminGrossMargin),
-      icon: Activity,
-      tone: 'bg-emerald-100 text-emerald-700',
-    },
+    { label: 'Номенклатура', value: serverMetrics?.summary?.totalProducts ?? products.length, sub: 'Всего товаров', icon: Package, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { label: 'Складской запас', value: serverMetrics?.inventoryHighlights?.totalInventoryUnits ?? totalStock, sub: 'Единиц в наличии', icon: Activity, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+    { label: 'Низкий остаток', value: serverMetrics?.lowStock?.count ?? 0, sub: 'Требуют закупа', icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-50' },
+    { label: 'Срок годности', value: serverMetrics?.expiry?.expiringSoon ?? 0, sub: 'Критическая зона', icon: Clock, color: 'text-rose-500', bg: 'bg-rose-50' },
+    { label: `Выручка (${dashboardPeriodLabel})`, value: formatMoney(serverMetrics?.revenue?.total ?? 0), sub: `${serverMetrics?.revenue?.recognizedInvoiceCount ?? 0} чеков`, icon: TrendingUp, color: 'text-indigo-500', bg: 'bg-indigo-50' },
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+    <div className="max-w-[1600px] mx-auto space-y-10 pb-12 animate-in fade-in duration-700 font-normal">
+      
+      {/* Header section with period selector */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
         <div>
-          <h2 className="text-2xl font-normal text-[#5A5A40] tracking-tight">{t('Pharmacy Overview')}</h2>
-          <p className="text-[#5A5A40]/60 mt-0.5 text-xs italic">{t('Real-time analytics and inventory status')}</p>
+          <h2 className="text-3xl font-normal text-[#151619] tracking-tight">{t('Analytic Dashboard')}</h2>
+          <p className="text-[#5A5A40]/50 mt-1 text-sm uppercase tracking-widest">{t('Pharmacy operational control center')}</p>
+        </div>
+        <div className="flex bg-white/40 p-1 rounded-2xl border border-[#5A5A40]/5 shadow-sm">
+          {(['month', 'q1', 'q2', 'q3', 'q4', 'year'] as DashboardPeriodPreset[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setSelectedPeriodPreset(p)}
+              className={`px-4 py-2 rounded-xl text-[10px] uppercase tracking-widest transition-all ${selectedPeriodPreset === p ? 'bg-[#5A5A40] text-white shadow-md' : 'text-[#5A5A40]/50 hover:bg-[#5A5A40]/5'}`}
+            >
+              {p === 'month' ? 'Месяц' : p.toUpperCase()}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      {/* Main Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-3xl shadow-sm border border-[#5A5A40]/5 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className={`p-3 rounded-2xl ${stat.color} text-white shadow-lg`}>
-                <stat.icon size={24} />
+          <div key={i} className="group bg-white/60 hover:bg-white border border-white rounded-[2.5rem] p-7 shadow-sm hover:shadow-2xl hover:shadow-[#5A5A40]/5 transition-all relative overflow-hidden">
+            <div className={`absolute top-0 right-0 w-32 h-32 ${stat.bg} rounded-full -mr-16 -mt-16 opacity-40 transition-transform group-hover:scale-110`} />
+            <div className="relative z-10">
+              <div className={`${stat.bg} ${stat.color} w-12 h-12 rounded-2xl flex items-center justify-center mb-6 shadow-inner`}>
+                <stat.icon size={22} />
               </div>
-              <span className={`text-xs font-normal px-2 py-1 rounded-full ${stat.trend.startsWith('+') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                {stat.trend}
-              </span>
+              <h3 className="text-[10px] text-[#5A5A40]/40 uppercase tracking-[0.2em] mb-1">{stat.label}</h3>
+              <p className={`text-xl font-normal text-[#151619] tracking-tight truncate`}>{stat.value}</p>
+              <p className="text-[10px] text-[#5A5A40]/30 mt-2 italic">{stat.sub}</p>
             </div>
-            <h3 className="text-[#5A5A40]/60 text-[10px] font-normal uppercase tracking-wider">{stat.label}</h3>
-            <p className="text-xl font-normal text-[#5A5A40] mt-1">{stat.value}</p>
           </div>
         ))}
       </div>
 
-      {(user?.role === 'ADMIN' || user?.role === 'OWNER') && (
-        <div className="space-y-6">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-normal text-[#5A5A40]">{t('Admin Risk & Finance')}</h3>
-              <p className="text-[11px] text-[#5A5A40]/60">{t('Live operational controls')}</p>
+      {/* Secondary Row: Chart and Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Sales Chart Container */}
+        <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-sm border border-white relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-10 relative z-10">
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
+              <h3 className="text-xl font-normal text-[#151619] tracking-tight">{t('Sales Dynamics')}</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {adminCards.map((card) => (
-                <div key={card.label} className="rounded-2xl border border-[#5A5A40]/10 p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs uppercase tracking-wider text-[#5A5A40]/60 font-normal">{card.label}</p>
-                    <div className={`p-2 rounded-xl ${card.tone}`}>
-                      <card.icon size={16} />
-                    </div>
-                  </div>
-                  <p className="text-xl font-normal text-[#5A5A40] mt-3">{card.value}</p>
+            <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest">{dashboardPeriodLabel} • {formatMoney(serverMetrics?.revenue?.total ?? 0)}</p>
+          </div>
+          
+          <div className="h-[320px] w-full relative z-10">
+            {showChart && serverMetrics?.revenueTrend?.items ? (
+              <Suspense fallback={<div className="h-full w-full bg-[#f8f7f2] animate-pulse rounded-3xl" />}>
+                <DashboardSalesChart data={serverMetrics.revenueTrend.items} />
+              </Suspense>
+            ) : (
+              <div className="h-full w-full flex items-center justify-center bg-[#f8f7f2]/50 rounded-[2rem] border border-dashed border-[#5A5A40]/10">
+                <p className="text-[10px] uppercase tracking-widest text-[#5A5A40]/30 animate-pulse">Сбор аналитики...</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Activity Mini-Widget */}
+        <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-white flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+             <h3 className="text-xl font-normal text-[#151619] tracking-tight">Активность</h3>
+             <Activity size={18} className="text-[#5A5A40]/20" />
+          </div>
+          <div className="flex-1 space-y-6">
+            {activityData.map((act) => (
+              <div key={act.id} className="flex items-start gap-4 group cursor-pointer">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-95 ${act.type === 'sale' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                  {act.type === 'sale' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
                 </div>
-              ))}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] text-[#151619] truncate font-normal">{act.title}</p>
+                  <p className="text-[10px] text-[#5A5A40]/50 lowercase italic mt-0.5">{act.subtitle}</p>
+                  <p className="text-[9px] text-[#5A5A40]/30 uppercase tracking-tighter mt-1">{act.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[13px] text-[#151619] font-normal">{Number(act.amount).toFixed(0)}</p>
+                  <p className="text-[9px] text-[#5A5A40]/30">TJS</p>
+                </div>
+              </div>
+            ))}
+            {activityData.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-center py-10">
+                <Target size={32} className="text-stone-200 mb-3" />
+                <p className="text-xs text-[#5A5A40]/30 font-normal italic">Сегодня без операций</p>
+              </div>
+            )}
+          </div>
+          <button className="mt-8 py-4 border border-[#5A5A40]/5 rounded-2xl text-[10px] uppercase tracking-widest text-[#5A5A40]/40 hover:bg-[#f5f5f0] hover:text-[#5A5A40] transition-all flex items-center justify-center gap-2">
+            Весь журнал <ChevronRight size={12} />
+          </button>
+        </div>
+      </div>
+
+      {/* Critical Risks Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        {/* Low Stock List */}
+        <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-white">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl"><AlertTriangle size={18} /></div>
+              <h3 className="text-xl font-normal text-[#151619] tracking-tight">Пороговые остатки</h3>
+            </div>
+            <span className="text-[10px] bg-amber-50 text-amber-600 px-3 py-1 rounded-full uppercase tracking-widest leading-none">Внимание</span>
+          </div>
+          
+          <div className="space-y-4">
+            {(serverMetrics?.inventoryHighlights?.lowStockItems || []).slice(0, 5).map((item, idx) => (
+              <div key={item.productId} className="flex items-center justify-between p-4 hover:bg-[#f8f7f2]/50 rounded-2xl transition-all border border-transparent hover:border-[#5A5A40]/5">
+                <div className="flex items-center gap-4 min-w-0">
+                  <span className="text-[10px] text-[#5A5A40]/20 font-normal">0{idx + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm text-[#151619] truncate">{item.name}</p>
+                    <p className="text-[10px] text-[#5A5A40]/40 mt-0.5 uppercase tracking-widest italic">Мин: {item.minStock} ед.</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-amber-600 font-normal">{item.currentStock}</p>
+                  <p className="text-[9px] text-[#5A5A40]/30 lowercase">осталось</p>
+                </div>
+              </div>
+            ))}
+            {(!serverMetrics?.inventoryHighlights?.lowStockItems?.length) && (
+              <p className="text-xs text-[#5A5A40]/40 text-center py-6 italic font-normal uppercase tracking-widest">Все товары в достаточном количестве</p>
+            )}
+          </div>
+        </div>
+
+        {/* Expiry Risk List */}
+        <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-white">
+           <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl"><ShieldAlert size={18} /></div>
+              <h3 className="text-xl font-normal text-[#151619] tracking-tight">Контроль сроков</h3>
+            </div>
+            <span className="text-[10px] bg-rose-50 text-rose-600 px-3 py-1 rounded-full uppercase tracking-widest leading-none">Риски</span>
+          </div>
+
+          <div className="space-y-4">
+            {(serverMetrics?.inventoryHighlights?.expiringItems || []).slice(0, 5).map((item, idx) => (
+              <div key={item.id} className="flex items-center justify-between p-4 hover:bg-rose-50/20 rounded-2xl transition-all border border-transparent hover:border-rose-100/30">
+                <div className="flex items-center gap-4 min-w-0">
+                  <span className="text-[10px] text-[#5A5A40]/20 font-normal">0{idx + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm text-[#151619] truncate">{item.name}</p>
+                    <p className="text-[10px] text-[#5A5A40]/40 mt-0.5 uppercase tracking-widest italic">Партия: {item.batchNumber}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-normal ${item.daysLeft <= 30 ? 'text-rose-600' : 'text-[#5A5A40]'}`}>
+                    {item.daysLeft <= 0 ? 'Срок истек' : `${item.daysLeft} дн.`}
+                  </p>
+                  <p className="text-[9px] text-[#5A5A40]/30 lowercase">{item.daysLeft <= 0 ? 'утилизация' : 'до списания'}</p>
+                </div>
+              </div>
+            ))}
+            {(!serverMetrics?.inventoryHighlights?.expiringItems?.length) && (
+              <p className="text-xs text-[#5A5A40]/40 text-center py-6 italic font-normal uppercase tracking-widest">Просроченных товаров не обнаружено</p>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Finance Row (Admin only) */}
+      {(user?.role === 'ADMIN' || user?.role === 'OWNER') && (
+        <div className="bg-[#151619] rounded-[3rem] p-10 shadow-2xl shadow-indigo-500/10 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full -mr-32 -mt-32 blur-3xl opacity-30" />
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-10">
+            <div>
+              <h3 className="text-2xl font-normal tracking-tight mb-2">Финансовый результат</h3>
+              <p className="text-indigo-200/40 text-xs uppercase tracking-[0.3em]">Расчет прибыли за текущий период</p>
+            </div>
+            <div className="flex flex-wrap gap-12">
+               <div>
+                  <p className="text-indigo-200/30 text-[10px] uppercase tracking-widest mb-3 italic">Валовая прибыль</p>
+                  <p className="text-3xl font-normal text-indigo-400 tabular-nums">{formatMoney(serverMetrics?.finance?.grossMarginMonth ?? 0)}</p>
+               </div>
+               <div className="w-px h-16 bg-white/10 hidden md:block" />
+               <div>
+                  <p className="text-indigo-200/30 text-[10px] uppercase tracking-widest mb-3 italic">Списания за месяц</p>
+                  <p className="text-3xl font-normal text-rose-400 tabular-nums">-{formatMoney(serverMetrics?.finance?.writeOffAmountMonth ?? 0)}</p>
+               </div>
             </div>
           </div>
         </div>
       )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-normal text-[#5A5A40]">{t('Sales Performance')}</h3>
-            <select
-              className="bg-[#f5f5f0] border-none rounded-xl px-4 py-2 text-sm text-[#5A5A40] outline-none"
-              value={selectedPeriodPreset}
-              onChange={(e) => setSelectedPeriodPreset(e.target.value as DashboardPeriodPreset)}
-            >
-              <option value="month">Текущий месяц</option>
-              <option value="q1">1 квартал</option>
-              <option value="q2">2 квартал</option>
-              <option value="q3">3 квартал</option>
-              <option value="q4">4 квартал</option>
-              <option value="year">Год</option>
-            </select>
-          </div>
-          <div className="h-75 w-full md:h-90">
-            {showChart ? (
-              <Suspense fallback={<div className="h-full w-full rounded-2xl bg-[#f5f5f0] animate-pulse" />}>
-                <DashboardSalesChart data={chartData} />
-              </Suspense>
-            ) : (
-              <div className="h-full w-full rounded-2xl bg-[#f5f5f0] animate-pulse" />
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
-          <h3 className="text-xl font-normal text-[#5A5A40] mb-6">Последняя активность</h3>
-          <div className="space-y-6">
-            {recentActivity.length === 0 && (
-              <p className="text-sm text-[#5A5A40]/60">Пока нет свежих продаж, долгов или складских событий</p>
-            )}
-            {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  activity.type === 'sale' ? 'bg-emerald-100 text-emerald-700' :
-                  activity.type === 'return' ? 'bg-orange-100 text-orange-700' :
-                  activity.type === 'restock' ? 'bg-blue-100 text-blue-600' :
-                  'bg-stone-100 text-stone-700'
-                }`}>
-                  {activity.type === 'sale' ? <TrendingUp size={20} /> :
-                   activity.type === 'return' ? <ArrowUpRight size={20} /> :
-                   activity.type === 'restock' ? <ArrowDownLeft size={20} /> :
-                   <AlertTriangle size={20} />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-normal text-[#5A5A40] truncate">{t(activity.title)}</p>
-                  <p className="text-xs text-[#5A5A40]/60 mt-0.5">{activity.subtitle}</p>
-                  <p className="text-xs text-[#5A5A40]/45 mt-1">{activity.time}</p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-sm font-normal text-[#5A5A40]">{formatMoney(activity.amount)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
-          <h3 className="text-xl font-normal text-[#5A5A40] mb-6">Товары с низким остатком</h3>
-          <div className="space-y-4">
-            {lowStockWidgetItems.length === 0 && (
-              <p className="text-sm text-[#5A5A40]/60">Критически низких остатков нет</p>
-            )}
-            {lowStockWidgetItems.map((product, index) => (
-              <div key={product.productId} className="flex items-center justify-between gap-4 border-b border-[#5A5A40]/10 pb-4 last:border-b-0 last:pb-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-normal shrink-0">{index + 1}</div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-normal text-[#5A5A40] truncate">{getProductDisplayLabel(product.productId, product.name)}</p>
-                    <p className="text-xs text-[#5A5A40]/60">Минимум: {product.minStock || 10}</p>
-                  </div>
-                </div>
-                <span className="text-sm font-normal text-amber-700">{product.currentStock}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-[#5A5A40]/5">
-          <h3 className="text-xl font-normal text-[#5A5A40] mb-6">Скоро просроченные товары</h3>
-          <div className="space-y-4">
-            {expiringWidgetItems.length === 0 && (
-              <p className="text-sm text-[#5A5A40]/60">Товаров с близким сроком годности нет</p>
-            )}
-            {expiringWidgetItems.map((item, index) => (
-              <div key={item.id} className="flex items-center justify-between gap-4 border-b border-[#5A5A40]/10 pb-4 last:border-b-0 last:pb-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-normal shrink-0 ${item.severityRank === 0 ? 'bg-red-100 text-red-700' : item.severityRank === 1 ? 'bg-orange-100 text-orange-700' : 'bg-amber-100 text-amber-700'}`}>{index + 1}</div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-normal text-[#5A5A40] truncate">{getProductDisplayLabel(undefined, item.name)}</p>
-                    <p className="text-xs text-[#5A5A40]/60">Партия {item.batchNumber} • {item.severityLabel}</p>
-                  </div>
-                </div>
-                <span className={`text-sm font-normal ${item.severityRank === 0 ? 'text-red-700' : item.severityRank === 1 ? 'text-orange-700' : 'text-amber-700'}`}>{item.daysLeft <= 0 ? 'Просрочен' : `${item.daysLeft} дн.`}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
+
+export default DashboardView;

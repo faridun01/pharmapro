@@ -105,6 +105,11 @@ export class InvoiceService {
               quantity: true,
               unitPrice: true,
               totalPrice: true,
+              batch: {
+                select: {
+                  costBasis: true,
+                },
+              },
             },
           },
           payments: {
