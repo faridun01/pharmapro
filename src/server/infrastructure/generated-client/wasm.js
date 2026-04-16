@@ -817,7 +817,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "d:\\pharmapro\\src\\server\\infrastructure\\generated-client",
+      "value": "D:\\pharmapro\\src\\server\\infrastructure\\generated-client",
       "fromEnvVar": null
     },
     "config": {
@@ -831,7 +831,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "d:\\pharmapro\\prisma\\schema.prisma",
+    "sourceFilePath": "D:\\pharmapro\\prisma\\schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {

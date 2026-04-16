@@ -10,94 +10,19 @@ interface ImportInvoiceModalProps {
   onClose: () => void;
 }
 
-interface InvoiceImportItem {
-  lineId: string;
-  productId: string | null;
-  name: string;
-  sku?: string;
-  barcode?: string;
-  quantity: number;
-  unitsInPack: number;
-  costPrice: number;
-  batchNumber: string;
-  expiryDate: string;
-  confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
-  warnings?: string;
-  needsReview?: boolean;
-}
-
-interface OcrAnalyzeResponse {
-  engine: string;
-  invoiceNumber: string;
-  supplierName: string;
-  invoiceDate: string;
-  rawText?: string;
-  review?: { total: number; high: number; medium: number; low: number; needsReview: number };
-  items: Array<{
-    lineId?: string;
-    productId?: string | null;
-    name: string;
-    sku?: string;
-    barcode?: string;
-    quantity: number;
-    costPrice: number;
-    batchNumber?: string;
-    expiryDate?: string;
-    confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
-    warnings?: string;
-    needsReview?: boolean;
-  }>;
-  warning?: string;
-}
-
-type ImportFileKind = 'image' | 'pdf' | 'excel' | 'unsupported';
-
-const randomBatch = () => `B-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-
-const buildItemIdentity = (item: Pick<InvoiceImportItem, 'name' | 'expiryDate' | 'costPrice'>) => {
-  return [
-    item.name.trim().toLowerCase(),
-    item.expiryDate || '',
-    Number(item.costPrice || 0).toFixed(2),
-  ].join('::');
-};
-
-const isPlaceholderItemName = (value: string) => {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (!normalized) return true;
-
-  return [
-    'тестовый препарат',
-    'test product',
-    'sample product',
-    'demo product',
-    'placeholder product',
-  ].some((token) => normalized.includes(token));
-};
-
-const isImportablePreviewItem = (item: Partial<InvoiceImportItem>) => {
-  return !isPlaceholderItemName(String(item.name || ''))
-    && Number(item.quantity || 0) > 0
-    && Number(item.costPrice || 0) > 0;
-};
-
-const formatVisibleError = (message: string | null) => {
-  if (!message) return null;
-
-  const parserValidationMarkers = [
-    'Missing product name',
-    'Quantity could not be parsed',
-    'Cost price could not be parsed',
-    'Quantity must be >= 1',
-    'Cost price must be numeric and > 0',
-  ];
-
-  if (parserValidationMarkers.some((marker) => message.includes(marker))) {
-    return 'Не удалось корректно распознать позиции накладной. Проверьте файл или загрузите более четкое изображение.';
-  }
-
-  return message;
-};
+import { 
+  InvoiceImportItem, 
+  OcrAnalyzeResponse, 
+  ImportFileKind, 
+  randomBatch, 
+  buildItemIdentity, 
+  isImportablePreviewItem, 
+  formatVisibleError, 
+  detectImportFileKind, 
+  findSupplierByName, 
+  requestStructuredPreview, 
+  requestImageOcr 
+} from '../../lib/ocr-service';
 
 export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
@@ -198,47 +123,6 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
   const netTotal = Math.max(0, grossTotal - discountAmount);
   const visibleError = formatVisibleError(error);
 
-  const toBase64 = async (file: File): Promise<string> => {
-    // Prefer arrayBuffer because FileReader can sporadically fail in packaged Electron.
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      if (!bytes.length) throw new Error('empty-file');
-      let binary = '';
-      const chunkSize = 0x8000;
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        const chunk = bytes.subarray(i, i + chunkSize);
-        binary += String.fromCharCode(...chunk);
-      }
-      return btoa(binary);
-    } catch {
-      return await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = String(reader.result || '');
-          const base64 = dataUrl.split(',')[1];
-          if (!base64) {
-            reject(new Error(`Не удалось прочитать файл: ${file.name}`));
-            return;
-          }
-          resolve(base64);
-        };
-        reader.onerror = () => reject(new Error(`Не удалось прочитать файл: ${file.name}`));
-        reader.readAsDataURL(file);
-      });
-    }
-  };
-
-  const findSupplierByName = (candidate: string) => {
-    const normalizedCandidate = String(candidate || '').trim().toLowerCase();
-    if (!normalizedCandidate) return null;
-
-    return suppliers.find(
-      (supplier) =>
-        supplier.name.toLowerCase().includes(normalizedCandidate) ||
-        normalizedCandidate.includes(supplier.name.toLowerCase()),
-    ) || null;
-  };
-
   const applyStructuredPreview = (data: OcrAnalyzeResponse) => {
     setUsedEngine(data.engine ?? null);
     setReviewSummary(data.review ?? null);
@@ -248,7 +132,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
     if (data.invoiceDate) setDate(data.invoiceDate);
 
     if (data.supplierName) {
-      const foundSupplier = findSupplierByName(data.supplierName);
+      const foundSupplier = findSupplierByName(data.supplierName, suppliers);
       if (foundSupplier) setSupplierId(foundSupplier.id);
     }
 
@@ -271,48 +155,6 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
       .filter((item) => isImportablePreviewItem(item)) as InvoiceImportItem[];
   };
 
-  const requestStructuredPreview = async (file: File) => {
-    const fileBase64 = await toBase64(file);
-    const token = localStorage.getItem('pharmapro_token');
-    const response = await fetch('/api/invoices/ocr/structured-preview', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        fileBase64,
-        fileName: file.name,
-        mimeType: file.type,
-      }),
-    });
-
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(body.error || 'Не удалось обработать файл поставщика');
-    }
-
-    return body as OcrAnalyzeResponse;
-  };
-
-  const detectImportFileKind = (file: File): ImportFileKind => {
-    const fileName = file.name.toLowerCase();
-    const mimeType = file.type.toLowerCase();
-
-    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
-      return 'excel';
-    }
-
-    if (fileName.endsWith('.pdf') || mimeType === 'application/pdf') {
-      return 'pdf';
-    }
-
-    if (mimeType.startsWith('image/')) {
-      return 'image';
-    }
-
-    return 'unsupported';
-  };
 
   const processUploadedFile = async (file: File) => {
     const fileKind = detectImportFileKind(file);
@@ -342,25 +184,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
 
       const data: OcrAnalyzeResponse = fileKind === 'pdf'
         ? await requestStructuredPreview(file)
-        : await (async () => {
-          const imageBase64 = await toBase64(file);
-          const token = localStorage.getItem('pharmapro_token');
-          const response = await fetch('/api/invoices/ocr', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ imageBase64, mimeType: file.type || 'image/png', engine: 'ollama' }),
-          });
-
-          if (!response.ok) {
-            const body = await response.json().catch(() => ({}));
-            throw new Error(body.error || t('Failed to analyze invoice'));
-          }
-
-          return await response.json() as OcrAnalyzeResponse;
-        })();
+        : await requestImageOcr(file);
 
       const parsedItems = applyStructuredPreview(data);
 

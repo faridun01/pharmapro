@@ -30,8 +30,8 @@ customersRouter.get(
     };
 
     const [total, customers] = await Promise.all([
-      prisma.customer.count({ where }),
-      prisma.customer.findMany({
+      (prisma as any).customer.count({ where }),
+      (prisma as any).customer.findMany({
         where,
         orderBy: { name: 'asc' },
         skip: (page - 1) * limit,
@@ -72,7 +72,7 @@ customersRouter.get(
   '/:id',
   authenticate,
   asyncHandler(async (req, res) => {
-    const customer = await prisma.customer.findUnique({
+    const customer = await (prisma as any).customer.findUnique({
       where: { id: req.params.id },
       include: {
         invoices: {
@@ -126,7 +126,7 @@ customersRouter.post(
     const trimmedName = String(name || '').trim();
     if (!trimmedName) throw new ValidationError('Имя покупателя обязательно');
 
-    const created = await prisma.customer.create({
+    const created = await (prisma as any).customer.create({
       data: {
         name: trimmedName,
         legalName:       String(legalName || '').trim() || null,
@@ -162,7 +162,7 @@ customersRouter.put(
   asyncHandler(async (req, res) => {
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
-    const existing = await prisma.customer.findUnique({ where: { id }, select: { id: true, name: true } });
+    const existing = await (prisma as any).customer.findUnique({ where: { id }, select: { id: true, name: true } });
     if (!existing) throw new NotFoundError('Покупатель не найден');
 
     const { name, legalName, phone, email, address, taxId, creditLimit, defaultDiscount, paymentTermDays, isActive } = req.body ?? {};
@@ -178,7 +178,7 @@ customersRouter.put(
     if (paymentTermDays !== undefined) data.paymentTermDays = paymentTermDays ? Number(paymentTermDays) : null;
     if (isActive !== undefined)        data.isActive        = Boolean(isActive);
 
-    const updated = await prisma.customer.update({ where: { id }, data });
+    const updated = await (prisma as any).customer.update({ where: { id }, data });
 
     await auditService.log({
       userId: authedReq.user.id,
@@ -202,10 +202,10 @@ customersRouter.delete(
   asyncHandler(async (req, res) => {
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
-    const existing = await prisma.customer.findUnique({ where: { id }, select: { id: true, name: true, isActive: true } });
+    const existing = await (prisma as any).customer.findUnique({ where: { id }, select: { id: true, name: true, isActive: true } });
     if (!existing) throw new NotFoundError('Покупатель не найден');
 
-    await prisma.customer.update({ where: { id }, data: { isActive: false } });
+    await (prisma as any).customer.update({ where: { id }, data: { isActive: false } });
 
     await auditService.log({
       userId: authedReq.user.id,
