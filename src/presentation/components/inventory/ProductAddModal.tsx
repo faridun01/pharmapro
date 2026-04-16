@@ -9,6 +9,7 @@ interface ProductAddModalProps {
   onClose: () => void;
   onSubmit: (form: NewProductForm) => Promise<void>;
   submitting: boolean;
+  existingProducts: { name: string }[];
 }
 
 const DEFAULT_FORM: NewProductForm = {
@@ -33,6 +34,7 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
   onClose,
   onSubmit,
   submitting,
+  existingProducts,
 }) => {
   const { t } = useTranslation();
   const [form, setForm] = useState<NewProductForm>(DEFAULT_FORM);
@@ -70,6 +72,13 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
       setError('Название обязательно');
       return;
     }
+
+    const isDuplicateName = existingProducts.some(p => p.name.trim().toLowerCase() === form.name.trim().toLowerCase());
+    if (isDuplicateName && !form.countryOfOrigin.trim()) {
+      setError('Товар с таким названием уже существует. Пожалуйста, укажите Страну производства для отличия.');
+      return;
+    }
+
     if (!form.expiryDate) {
       setError('Срок годности обязателен');
       return;
@@ -142,13 +151,15 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">Страна производства</label>
+                <label className="text-xs font-semibold text-[#5A5A40] uppercase tracking-wider">
+                  Страна производства {existingProducts.some(p => p.name.trim().toLowerCase() === form.name.trim().toLowerCase()) && '*'}
+                </label>
                 <input 
                   type="text"
-                  className="w-full px-4 py-3 border border-[#5A5A40]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#5A5A40]/20" 
+                  className={`w-full px-4 py-3 border rounded-xl text-sm outline-none transition-all ${existingProducts.some(p => p.name.trim().toLowerCase() === form.name.trim().toLowerCase()) && !form.countryOfOrigin.trim() ? 'border-amber-400 bg-amber-50 focus:ring-amber-200' : 'border-[#5A5A40]/10 focus:ring-[#5A5A40]/20'}`} 
                   value={form.countryOfOrigin}
                   onChange={(e) => setForm((s) => ({ ...s, countryOfOrigin: e.target.value }))}
-                  placeholder="Необязательно"
+                  placeholder={existingProducts.some(p => p.name.trim().toLowerCase() === form.name.trim().toLowerCase()) ? "Обязательно при повторе названия" : "Необязательно"}
                 />
               </div>
 

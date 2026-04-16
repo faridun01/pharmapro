@@ -270,7 +270,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
       </div>
 
       {/* Modals are kept the same but will align with their internal Zen styling */}
-      <ProductAddModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSubmit={saveProduct} submitting={submitting} />
+      <ProductAddModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSubmit={saveProduct} submitting={submitting} existingProducts={products} />
       <ProductEditModal isOpen={!!productEditTarget} product={productEditTarget} onClose={() => setProductEditTarget(null)} onSubmit={async (id, updates) => { try { await updateProduct({ id, ...updates } as any); setProductEditTarget(null); await refreshProducts(); } catch { } }} submitting={submitting} />
       <ProductPriceModal state={priceEditModal} onClose={() => setPriceEditModal(null)} onSubmit={async (id, cp, sp) => { try { await updateProduct({ id, costPrice: cp, sellingPrice: sp } as any); setPriceEditModal(null); await refreshProducts(); } catch { } }} submitting={submitting} currencyCode={currencyCode} />
       <ProductBarcodeModal state={barcodeEditModal} onClose={() => setBarcodeEditModal(null)} onSubmit={async (id, b) => { try { await updateProduct({ id, barcode: b } as any); setBarcodeEditModal(null); await refreshProducts(); } catch { } }} submitting={submitting} />
