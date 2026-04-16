@@ -177,18 +177,21 @@ const DetailModal: React.FC<{ entry: AuditEntry; onClose: () => void }> = ({ ent
 };
 
 export const AuditLogPanel: React.FC = () => {
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const todayStr = now.toISOString().split('T')[0];
+
   const [entries, setEntries]       = useState<AuditEntry[]>([]);
   const [users, setUsers]           = useState<AuditUser[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, limit: 15, totalPages: 1 });
   const [loading, setLoading]       = useState(true);
   const [detail, setDetail]         = useState<AuditEntry | null>(null);
-
+ 
   const [fModule,  setFModule]  = useState('');
   const [fUser,    setFUser]    = useState('');
   const [fAction,  setFAction]  = useState('');
-  const [fFrom,    setFFrom]    = useState(today);
-  const [fTo,      setFTo]      = useState(today);
+  const [fFrom,    setFFrom]    = useState(lastWeek);
+  const [fTo,      setFTo]      = useState(todayStr);
   const [page,     setPage]     = useState(1);
 
   const load = useCallback(async (p = page) => {
@@ -212,7 +215,7 @@ export const AuditLogPanel: React.FC = () => {
 
   useEffect(() => { load(page); }, [load, page]);
 
-  const handleReset = () => { setFModule(''); setFUser(''); setFAction(''); setFFrom(today); setFTo(today); setPage(1); };
+  const handleReset = () => { setFModule(''); setFUser(''); setFAction(''); setFFrom(lastWeek); setFTo(todayStr); setPage(1); };
 
   const handleExport = () => {
     const rows = entries.map(e => ({

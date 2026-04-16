@@ -36,67 +36,103 @@
 }
 
 :root {
-  --primary: #005c97;
-  --primary-container: #d1e4ff;
+  --primary: #5A5A40; /* Тёплый оливковый */
+  --primary-container: #ebebe0;
   --on-primary: #ffffff;
-  --on-primary-container: #001d36;
+  --on-primary-container: #151619;
   
-  --secondary: #535f70;
-  --secondary-container: #d7e3f7;
-  --on-secondary: #ffffff;
-  --on-secondary-container: #101c2b;
-
-  --tertiary: #6b5778;
-  --tertiary-container: #f2daff;
-  --on-tertiary: #ffffff;
-  --on-tertiary-container: #251431;
-
-  --surface: #f8f9ff;
-  --on-surface: #191c1e;
-  --surface-low: #f1f4f9;
+  --secondary: #7a7a60;
+  --secondary-container: #f0f0e8;
+  
+  --surface: #fcfbf7; /* Мягкий кремовый фон */
+  --on-surface: #151619;
+  --surface-low: #f8f7f2;
   --surface-lowest: #ffffff;
-  --surface-high: #e1e2e9;
-  --surface-highest: #dbdde4;
+  --surface-high: #f0efea;
+  --surface-highest: #e6e5df;
   
-  --error: #ba1a1a;
-  --error-container: #ffdad6;
-  --on-error: #ffffff;
-  --on-error-container: #93000a;
-
-  --outline: #73777f;
-  --outline-variant: #c3c7cf;
+  --border-subtle: rgba(90, 90, 64, 0.08);
 }
 
 [data-theme='dark'] {
-  --primary: #9ecaff;
-  --primary-container: #00497d;
-  --on-primary: #003258;
-  --on-primary-container: #d1e4ff;
+  --primary: #d9d4b6; /* Светлая платина/олива */
+  --primary-container: #40443a;
+  --on-primary: #151619;
+  --on-primary-container: #f5f5f0;
   
-  --secondary: #bbc7db;
-  --secondary-container: #3b4858;
-  --on-secondary: #253140;
-  --on-secondary-container: #d7e3f7;
-
-  --tertiary: #d6bee4;
-  --tertiary-container: #523f5f;
-  --on-tertiary: #3b2948;
-  --on-tertiary-container: #f2daff;
-
-  --surface: #111416;
-  --on-surface: #e1e2e5;
-  --surface-low: #191c1e;
-  --surface-lowest: #0c0f10;
-  --surface-high: #232a2f;
-  --surface-highest: #33393e;
+  --surface: #1c1f26; /* Современный грифельный фон */
+  --on-surface: #f5f5f0;
+  --surface-low: #252933; /* Основная карточка */
+  --surface-lowest: #2e3340; /* Усиленные вложенные элементы и поля ввода */
+  --surface-high: #353b4a;
+  --surface-highest: #404655;
   
-  --error: #ffb4ab;
-  --error-container: #93000a;
-  --on-error: #690005;
-  --on-error-container: #ffdad6;
+  --border-subtle: rgba(255, 255, 255, 0.08);
 
-  --outline: #8d9199;
-  --outline-variant: #43474e;
+  --tw-bg-opacity: 1;
+  --tw-text-opacity: 1;
+}
+
+/* Элегантные переопределения для премиального вида */
+[data-theme='dark'] body {
+  background-color: var(--surface) !important;
+  color: var(--on-surface) !important;
+}
+
+[data-theme='dark'] .bg-white,
+[data-theme='dark'] .bg-white\/10,
+[data-theme='dark'] .bg-white\/20,
+[data-theme='dark'] .bg-white\/30,
+[data-theme='dark'] .bg-white\/40,
+[data-theme='dark'] .bg-white\/50,
+[data-theme='dark'] .bg-white\/60,
+[data-theme='dark'] .bg-white\/70,
+[data-theme='dark'] .bg-white\/80 {
+  background-color: var(--surface-low) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+[data-theme='dark'] .bg-white\/40,
+[data-theme='dark'] .bg-white\/80,
+[data-theme='dark'] .backdrop-blur-md {
+  background-color: rgba(28, 29, 33, 0.75) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
+[data-theme='dark'] .bg-\[\#f8f7f2\],
+[data-theme='dark'] .bg-\[\#f5f5f0\],
+[data-theme='dark'] .bg-\[\#f5f5f0\]\/50,
+[data-theme='dark'] .bg-\[\#fcfbf7\]\/50 {
+  background-color: var(--surface-lowest) !important;
+}
+
+[data-theme='dark'] .text-\[\#151619\],
+[data-theme='dark'] .text-on-surface {
+  color: #f5f5f0 !important;
+}
+
+[data-theme='dark'] .text-\[\#5A5A40\],
+[data-theme='dark'] .text-\[\#5A5A40\]\/40,
+[data-theme='dark'] .text-\[\#5A5A40\]\/50 {
+  color: var(--primary) !important;
+  opacity: 1 !important;
+}
+
+[data-theme='dark'] .text-\[\#5A5A40\]\/40 {
+  opacity: 0.5 !important;
+}
+
+[data-theme='dark'] .border-\[\#5A5A40\]\/5,
+[data-theme='dark'] .border-white\/70 {
+  border-color: var(--border-subtle) !important;
+}
+
+[data-theme='dark'] input, 
+[data-theme='dark'] select,
+[data-theme='dark'] textarea {
+  background-color: var(--surface-lowest) !important;
+  color: #f5f5f0 !important;
+  border: 1px solid var(--border-subtle) !important;
 }
 
 @layer base {

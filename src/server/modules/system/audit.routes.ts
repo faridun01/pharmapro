@@ -20,7 +20,11 @@ auditRouter.get(
     const userId = String(req.query.userId || '').trim() || undefined;
     const action = String(req.query.action || '').trim() || undefined;
     const from   = req.query.from ? new Date(String(req.query.from)) : undefined;
-    const to     = req.query.to   ? new Date(String(req.query.to))   : undefined;
+    let to       = req.query.to   ? new Date(String(req.query.to))   : undefined;
+    
+    if (to) {
+      to.setHours(23, 59, 59, 999);
+    }
 
     if (module && !VALID_MODULES.includes(module as any)) {
       throw new ValidationError(`Unknown module filter: ${module}`);
