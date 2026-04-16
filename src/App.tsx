@@ -102,16 +102,16 @@ const App: React.FC = () => {
       const isHealthy = await checkHealth();
       
       if (isHealthy) {
-        // Strict splash duration for premium feel: 4 seconds total from launch
+        // Guaranteed splash duration for branding/ad: at least 3.5 seconds from app startup
         const now = Date.now();
         const elapsed = now - appStartupStartedAt;
-        const remainingTime = Math.max(0, 4000 - elapsed);
+        const MIN_SPLASH_TIME = 3000; // Exactly 3 seconds for the ad/branding screen
+        const remainingTime = Math.max(0, MIN_SPLASH_TIME - elapsed);
         
         setTimeout(async () => {
           setShowSplash(false);
           polling = false;
           
-          // Auto-login to admin page for seamless demo experience
           if (!user) {
             try {
               setStatus('Авторизация...');

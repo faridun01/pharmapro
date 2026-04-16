@@ -139,8 +139,19 @@ export const BootSplash: React.FC<{
                 </motion.form>
               ) : !errorMessage ? (
                 <div className="pharma-fade-in">
-                  <h1 className="text-3xl font-black text-white tracking-widest flex items-center justify-center gap-1 mb-6">
-                    IT<span className="text-[#5A5A40]">FORCE</span>
+                  <h1 className="text-3xl font-black text-white tracking-[0.25em] flex items-center justify-center gap-1 mb-6 relative group">
+                    <motion.span
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                    >IT</motion.span>
+                    <motion.span 
+                      className="text-[#5A5A40] inline-block"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.4, type: 'spring', stiffness: 200 }}
+                    >FORCE</motion.span>
+                    <div className="absolute -inset-x-8 -inset-y-4 bg-[#5A5A40]/5 blur-3xl rounded-full -z-10 animate-pulse" />
                   </h1>
                   
                   <div className="flex flex-col items-center gap-4">
