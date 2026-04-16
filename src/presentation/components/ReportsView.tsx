@@ -13,7 +13,7 @@ import { ReportDetailedView } from './reports/ReportDetailedView';
 import { ReportExpirySection } from './reports/ReportExpirySection';
 import { exportReportToXlsx } from './reports/ExportUtils';
 
-const formatMoney = (amount: number, currency = 'UZS') => {
+const formatMoney = (amount: number, currency = 'TJS') => {
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: currency,
@@ -79,11 +79,11 @@ export const ReportsView: React.FC = () => {
     setExporting(true);
     try {
       if (viewMode === 'expiry') {
-         // Specialized export for expiry could be handled here or inside component
-         // For now let's use the generic logic or just bypass if not implemented
-         alert('Excel export for Expiry Report coming soon!');
+        // Specialized export for expiry could be handled here or inside component
+        // For now let's use the generic logic or just bypass if not implemented
+        alert('Excel export for Expiry Report coming soon!');
       } else {
-         await exportReportToXlsx(report!, viewMode);
+        await exportReportToXlsx(report!, viewMode);
       }
     } catch (e: any) {
       setError(e.message);
@@ -97,8 +97,8 @@ export const ReportsView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 pb-20 overflow-hidden transform-gpu">
-      
+    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 pb-20">
+
       {/* Header Info Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -107,13 +107,13 @@ export const ReportsView: React.FC = () => {
           { label: 'Продаж совершено', val: report ? report.invoices.totalCount : '...', sub: 'Всего транзакций', color: 'text-[#5A5A40]', icon: Inbox },
           { label: 'Рентабельность', val: report && report.kpi.netRevenue ? `${((report.kpi.grossProfit / report.kpi.netRevenue) * 100).toFixed(1)}%` : '...', sub: 'Маржинальность', color: 'text-indigo-600', icon: FileDown },
         ].map((card, idx) => (
-          <div key={idx} className="bg-white/40 border border-[#5A5A40]/5 rounded-[2rem] p-6 shadow-sm hover:shadow-xl transition-all group overflow-hidden transform-gpu translate-z-0">
-             <div className="flex justify-between items-start mb-4">
-                <p className="text-[10px] font-normal text-[#5A5A40]/40 uppercase tracking-[0.2em]">{card.label}</p>
-                <card.icon size={16} className={`${card.color} opacity-30`} />
-             </div>
-             <p className={`text-2xl font-normal ${card.color} tracking-tight`}>{card.val}</p>
-             <p className="text-[10px] font-normal text-[#5A5A40]/30 mt-2 italic">{card.sub}</p>
+          <div key={idx} className="bg-white/40 border border-[#5A5A40]/5 rounded-[2rem] p-6 shadow-sm hover:shadow-xl transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <p className="text-[10px] font-normal text-[#5A5A40]/40 uppercase tracking-[0.2em]">{card.label}</p>
+              <card.icon size={16} className={`${card.color} opacity-30`} />
+            </div>
+            <p className={`text-2xl font-normal ${card.color} tracking-tight`}>{card.val}</p>
+            <p className="text-[10px] font-normal text-[#5A5A40]/30 mt-2 italic">{card.sub}</p>
           </div>
         ))}
       </div>
@@ -219,18 +219,18 @@ export const ReportsView: React.FC = () => {
       <div className="relative">
         {loading && viewMode !== 'expiry' ? (
           <div className="flex flex-col items-center justify-center py-32 bg-white/30 rounded-[3rem] border border-dashed border-[#5A5A40]/10">
-              <div className="w-12 h-12 border-[3px] border-[#5A5A40]/10 border-t-[#5A5A40] rounded-full animate-spin mb-6" />
-              <p className="text-[#5A5A40]/40 text-[10px] uppercase tracking-[0.3em] font-normal animate-pulse">Генерация аналитики...</p>
+            <div className="w-12 h-12 border-[3px] border-[#5A5A40]/10 border-t-[#5A5A40] rounded-full animate-spin mb-6" />
+            <p className="text-[#5A5A40]/40 text-[10px] uppercase tracking-[0.3em] font-normal animate-pulse">Генерация аналитики...</p>
           </div>
         ) : viewMode === 'expiry' ? (
           <ReportExpirySection />
         ) : report ? (
-            <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700 print:space-y-4 overflow-hidden transform-gpu">
+          <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700 print:space-y-4">
             {viewMode === 'summary' ? (
               <div className="space-y-12">
                 <ReportKpiSection data={report} currencyCode={currencyCode} />
                 <div className="bg-white rounded-[3rem] p-10 border border-[#5A5A40]/5 shadow-sm">
-                   <ReportInventorySection data={report} currencyCode={currencyCode} />
+                  <ReportInventorySection data={report} currencyCode={currencyCode} />
                 </div>
               </div>
             ) : (
