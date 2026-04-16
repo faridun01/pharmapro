@@ -114,6 +114,10 @@ export const DebtsView: React.FC = () => {
 
     return Object.values(groups).filter(g => {
       const matchesSearch = g.customer.toLowerCase().includes(searchTerm.toLowerCase());
+      const hasOutstanding = g.remaining > 0.01;
+      
+      if (!hasOutstanding) return false;
+      
       if (filter === 'UNPAID') return matchesSearch && g.paidAmount === 0;
       if (filter === 'PARTIAL') return matchesSearch && g.paidAmount > 0;
       return matchesSearch;

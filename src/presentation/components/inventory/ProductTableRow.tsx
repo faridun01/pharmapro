@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Product } from '../../../core/domain';
-import { AlertTriangle, Layers, Barcode, BadgeDollarSign, Trash2, Plus, Info } from 'lucide-react';
+import { AlertTriangle, Layers, Barcode, BadgeDollarSign, Trash2, Plus, Info, Edit3 } from 'lucide-react';
 
 interface ProductTableRowProps {
   index: number;
@@ -9,6 +9,7 @@ interface ProductTableRowProps {
   stockLabel: string;
   submitting: boolean;
   onOpenBatchHistory: (product: Product) => void;
+  onEdit: (product: Product) => void;
   onEditPrices: (product: Product) => void;
   onRestock: (product: Product) => void;
   onAddBarcode: (product: Product) => void;
@@ -21,6 +22,7 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = React.memo(({
   stockLabel,
   submitting,
   onOpenBatchHistory,
+  onEdit,
   onEditPrices,
   onRestock,
   onAddBarcode,
@@ -105,6 +107,14 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = React.memo(({
             title="Партии"
           >
             <Layers size={16} />
+          </button>
+          <button
+            onClick={() => onEdit(product)}
+            disabled={submitting}
+            className="p-2 text-[#5A5A40]/20 hover:text-emerald-600 hover:bg-[#5A5A40]/5 rounded-xl transition-all"
+            title="Редактировать данные"
+          >
+            <Edit3 size={16} />
           </button>
           <button
             onClick={() => onEditPrices(product)}

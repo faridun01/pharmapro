@@ -515,6 +515,9 @@ export class ReportService {
       where: {
         paymentType: 'CREDIT',
         status: { notIn: ['CANCELLED', 'PAID'] },
+        receivable: {
+          remainingAmount: { gt: 0.01 }
+        }
       },
       include: {
         items: true,
@@ -525,16 +528,16 @@ export class ReportService {
     });
 
     const summary = debts.reduce((acc, inv) => {
-      const paid = inv.payments.reduce((sum, p) => sum + p.amount, 0);
-      const total = inv.totalAmount;
-      const debt = total - paid;
-      
-      acc.totalDebt += debt;
+      const remaining = Number(inv.receivable?.remainingAmount || 0);
+      if (remaining <= 0.01) return acc;
+
+      acc.totalDebt += remaining;
       if (inv.paymentStatus === 'UNPAID') acc.unpaidCount++;
       if (inv.paymentStatus === 'PARTIALLY_PAID') acc.partialCount++;
+      acc.totalCount++;
       
       return acc;
-    }, { totalDebt: 0, unpaidCount: 0, partialCount: 0, totalCount: debts.length });
+    }, { totalDebt: 0, unpaidCount: 0, partialCount: 0, totalCount: 0 });
 
     return { items: debts, summary };
   }

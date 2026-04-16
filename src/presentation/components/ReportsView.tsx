@@ -97,7 +97,7 @@ export const ReportsView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 pb-20">
+    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 pb-20 overflow-hidden transform-gpu">
       
       {/* Header Info Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -107,7 +107,7 @@ export const ReportsView: React.FC = () => {
           { label: 'Продаж совершено', val: report ? report.invoices.totalCount : '...', sub: 'Всего транзакций', color: 'text-[#5A5A40]', icon: Inbox },
           { label: 'Рентабельность', val: report && report.kpi.netRevenue ? `${((report.kpi.grossProfit / report.kpi.netRevenue) * 100).toFixed(1)}%` : '...', sub: 'Маржинальность', color: 'text-indigo-600', icon: FileDown },
         ].map((card, idx) => (
-          <div key={idx} className="bg-white/40 border border-[#5A5A40]/5 rounded-[2rem] p-6 shadow-sm hover:shadow-xl transition-all group">
+          <div key={idx} className="bg-white/40 border border-[#5A5A40]/5 rounded-[2rem] p-6 shadow-sm hover:shadow-xl transition-all group overflow-hidden transform-gpu translate-z-0">
              <div className="flex justify-between items-start mb-4">
                 <p className="text-[10px] font-normal text-[#5A5A40]/40 uppercase tracking-[0.2em]">{card.label}</p>
                 <card.icon size={16} className={`${card.color} opacity-30`} />
@@ -225,7 +225,7 @@ export const ReportsView: React.FC = () => {
         ) : viewMode === 'expiry' ? (
           <ReportExpirySection />
         ) : report ? (
-          <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700 print:space-y-4">
+            <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700 print:space-y-4 overflow-hidden transform-gpu">
             {viewMode === 'summary' ? (
               <div className="space-y-12">
                 <ReportKpiSection data={report} currencyCode={currencyCode} />

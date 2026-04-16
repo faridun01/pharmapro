@@ -16,6 +16,7 @@ import { ProductBarcodeModal } from './inventory/ProductBarcodeModal';
 import { ProductDeleteModal } from './inventory/ProductDeleteModal';
 import { ProductBatchHistoryModal } from './inventory/ProductBatchHistoryModal';
 import { ProductRestockModal } from './inventory/ProductRestockModal';
+import { ProductEditModal } from './inventory/ProductEditModal';
 import {
   NewProductForm,
   PriceEditModalState,
@@ -48,6 +49,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
   const [priceEditModal, setPriceEditModal] = useState<PriceEditModalState | null>(null);
   const [barcodeEditModal, setBarcodeEditModal] = useState<BarcodeEditModalState | null>(null);
   const [batchHistoryProduct, setBatchHistoryProduct] = useState<Product | null>(null);
+  const [productEditTarget, setProductEditTarget] = useState<Product | null>(null);
 
   const [restockModal, setRestockModal] = useState<RestockModalState>({
     open: false,
@@ -235,6 +237,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
                   stockLabel={`${p.totalStock}`}
                   submitting={submitting}
                   onOpenBatchHistory={setBatchHistoryProduct}
+                  onEdit={setProductEditTarget}
                   onEditPrices={(prod) => setPriceEditModal({ product: prod, costPrice: String(prod.costPrice), sellingPrice: String(prod.sellingPrice) })}
                   onRestock={openRestockModal}
                   onAddBarcode={(prod) => setBarcodeEditModal({ product: prod, barcode: '' })}
@@ -268,6 +271,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
 
       {/* Modals are kept the same but will align with their internal Zen styling */}
       <ProductAddModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSubmit={saveProduct} submitting={submitting} />
+      <ProductEditModal isOpen={!!productEditTarget} product={productEditTarget} onClose={() => setProductEditTarget(null)} onSubmit={async (id, updates) => { try { await updateProduct({ id, ...updates } as any); setProductEditTarget(null); await refreshProducts(); } catch { } }} submitting={submitting} />
       <ProductPriceModal state={priceEditModal} onClose={() => setPriceEditModal(null)} onSubmit={async (id, cp, sp) => { try { await updateProduct({ id, costPrice: cp, sellingPrice: sp } as any); setPriceEditModal(null); await refreshProducts(); } catch { } }} submitting={submitting} currencyCode={currencyCode} />
       <ProductBarcodeModal state={barcodeEditModal} onClose={() => setBarcodeEditModal(null)} onSubmit={async (id, b) => { try { await updateProduct({ id, barcode: b } as any); setBarcodeEditModal(null); await refreshProducts(); } catch { } }} submitting={submitting} />
       <ProductDeleteModal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onSubmit={async () => { try { if (deleteTarget) await deleteProduct(deleteTarget.id); setDeleteTarget(null); await refreshProducts(); } catch { } }} productName={deleteTarget?.name || ''} submitting={submitting} />

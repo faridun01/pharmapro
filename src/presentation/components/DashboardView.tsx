@@ -124,7 +124,7 @@ export const DashboardView: React.FC = () => {
       {/* Main Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         {stats.map((stat, i) => (
-          <div key={i} className="group bg-white/60 hover:bg-white border border-white rounded-[2.5rem] p-7 shadow-sm hover:shadow-2xl hover:shadow-[#5A5A40]/5 transition-all relative overflow-hidden">
+          <div key={i} className="group bg-white/60 hover:bg-white border border-white rounded-[2.5rem] p-7 shadow-sm hover:shadow-2xl hover:shadow-[#5A5A40]/5 transition-all relative overflow-hidden transform-gpu">
             <div className={`absolute top-0 right-0 w-32 h-32 ${stat.bg} rounded-full -mr-16 -mt-16 opacity-40 transition-transform group-hover:scale-110`} />
             <div className="relative z-10">
               <div className={`${stat.bg} ${stat.color} w-12 h-12 rounded-2xl flex items-center justify-center mb-6 shadow-inner`}>
@@ -142,7 +142,7 @@ export const DashboardView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         {/* Sales Chart Container */}
-        <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-sm border border-white relative overflow-hidden group">
+        <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-sm border border-white relative overflow-hidden group transform-gpu">
           <div className="flex items-center justify-between mb-10 relative z-10">
             <div className="flex items-center gap-3">
               <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
@@ -165,7 +165,7 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Recent Activity Mini-Widget */}
-        <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-white flex flex-col">
+        <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-white flex flex-col overflow-hidden transform-gpu">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-xl font-normal text-[#151619] tracking-tight">Активность</h3>
             <Activity size={18} className="text-[#5A5A40]/20" />
