@@ -67,7 +67,8 @@ const App: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [backingUp, setBackingUp] = React.useState(false);
   const desktopControls = window.pharmaproDesktop?.controls;
-  const appStartupStartedAt = window.pharmaproDesktop?.startupStartedAt || Date.now();
+  // Capture the exact moment the renderer starts to ensure 3s mandatory visibility
+  const [appStartupStartedAt] = React.useState(Date.now());
 
   const checkHealth = React.useCallback(async () => {
     try {
@@ -125,10 +126,10 @@ const App: React.FC = () => {
       const isHealthy = await checkHealth();
       
       if (isHealthy) {
-        // Guaranteed splash duration for branding/ad: at least 3.5 seconds from app startup
+        // Guaranteed splash duration for branding/ad: exactly 3 seconds from renderer startup
         const now = Date.now();
         const elapsed = now - appStartupStartedAt;
-        const MIN_SPLASH_TIME = 3000; // Exactly 3 seconds for the ad/branding screen
+        const MIN_SPLASH_TIME = 3000; // Mandatory 3 seconds
         const remainingTime = Math.max(0, MIN_SPLASH_TIME - elapsed);
         
         setTimeout(async () => {
