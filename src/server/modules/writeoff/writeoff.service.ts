@@ -61,18 +61,23 @@ async function restoreWriteOffItems(
     await tx.batch.update({
       where: { id: item.batchId },
       data: {
-        quantity: Number(batch.quantity || 0) + qty,
-        currentQty: Number(batch.currentQty || batch.quantity || 0) + qty,
-        availableQty: Number(batch.availableQty || batch.quantity || 0) + qty,
+        quantity: { increment: qty },
+        currentQty: { increment: qty },
+        availableQty: { increment: qty },
       },
     });
 
-    const nextStock = Number(product.totalStock || 0) + qty;
+    const updatedProduct = await tx.product.update({
+      where: { id: item.productId },
+      data: {
+        totalStock: { increment: qty },
+      },
+    });
+
     await tx.product.update({
       where: { id: item.productId },
       data: {
-        totalStock: nextStock,
-        status: mapProductStatus(nextStock, product.minStock),
+        status: mapProductStatus(updatedProduct.totalStock, product.minStock),
       },
     });
 
@@ -151,18 +156,23 @@ async function applyWriteOffItems(
     await tx.batch.update({
       where: { id: item.batchId },
       data: {
-        quantity: Math.max(0, Number(batch.quantity) - qty),
-        currentQty: Math.max(0, Number(batch.currentQty || batch.quantity) - qty),
-        availableQty: Math.max(0, Number(batch.availableQty || batch.quantity) - qty),
+        quantity: { decrement: qty },
+        currentQty: { decrement: qty },
+        availableQty: { decrement: qty },
       },
     });
 
-    const nextStock = Math.max(0, Number(product.totalStock) - qty);
+    const updatedProduct = await tx.product.update({
+      where: { id: item.productId },
+      data: {
+        totalStock: { decrement: qty },
+      },
+    });
+
     await tx.product.update({
       where: { id: item.productId },
       data: {
-        totalStock: nextStock,
-        status: mapProductStatus(nextStock, product.minStock),
+        status: mapProductStatus(updatedProduct.totalStock, product.minStock),
       },
     });
 

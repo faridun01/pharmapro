@@ -63,8 +63,8 @@ export const ReportKpiSection: React.FC<Props> = ({ data, currencyCode }) => {
     },
     {
       label: 'Дебиторская задолженность',
-      value: formatMoney((data.debts as any).receivableTotal, currencyCode),
-      hint: `Просрочено: ${formatMoney((data.debts as any).receivableOverdue, currencyCode)}`,
+      value: formatMoney((data as any).debts.receivableTotal, currencyCode),
+      hint: `Просрочено: ${formatMoney((data as any).debts.receivableOverdue, currencyCode)}`,
       accent: 'text-sky-600',
       description: 'Сумма неоплаченных долгов клиентов перед аптекой (отложенные платежи/в долг).',
     },

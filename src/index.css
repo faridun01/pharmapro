@@ -145,6 +145,21 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  
+  *:focus, 
+  *:focus-visible, 
+  *:focus-within,
+  *:active,
+  *.ring-offset-2,
+  *.ring-2,
+  *::-moz-focus-inner {
+    outline: none !important;
+    --tw-ring-offset-width: 0px !important;
+    --tw-ring-width: 0px !important;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-manrope;
     font-weight: 400 !important;

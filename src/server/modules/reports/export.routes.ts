@@ -114,7 +114,7 @@ exportRouter.get(
       invoiceNo: inv.invoiceNo,
       date: fmt.datetime(inv.createdAt),
       totalAmount: fmt.money(inv.totalAmount),
-      discountAmount: fmt.money(inv.discount),
+      discountAmount: fmt.money((inv as any).discount),
       taxAmount: fmt.money(inv.taxAmount),
       paymentType: inv.paymentType,
       paymentStatus: inv.paymentStatus,
@@ -146,9 +146,9 @@ exportRouter.get(
           productName: item.product?.name ?? '—',
           sku: item.product?.sku ?? '—',
           quantity: fmt.qty(item.quantity),
-          sellingPrice: fmt.money(item.unitPrice),
-          lineTotal: fmt.money(item.totalPrice),
-          discount: fmt.money(item.discountAmount),
+          sellingPrice: fmt.money((item as any).unitPrice),
+          lineTotal: fmt.money((item as any).totalPrice),
+          discount: fmt.money((item as any).discountAmount),
         });
       }
     }

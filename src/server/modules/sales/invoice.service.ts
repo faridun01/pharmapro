@@ -2,6 +2,7 @@ import { prisma, Prisma } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { computeProductStatus } from '../../common/productStatus';
+import { stockService } from '../../services/stock.service';
 import { z } from 'zod';
 
 const PaymentPayloadSchema = z.object({
@@ -332,6 +333,24 @@ export class InvoiceService {
             }
           });
 
+          await tx.product.update({
+            where: { id: lineItem.productId },
+            data: { totalStock: { increment: returnItem.quantity } }
+          });
+
+          const batchRecord = await tx.batch.findUnique({ 
+            where: { id: lineItem.batchId },
+            select: { warehouseId: true }
+          });
+
+          if (batchRecord?.warehouseId) {
+            await tx.warehouseStock.upsert({
+              where: { warehouseId_productId: { warehouseId: batchRecord.warehouseId, productId: lineItem.productId } },
+              update: { quantity: { increment: returnItem.quantity } },
+              create: { warehouseId: batchRecord.warehouseId, productId: lineItem.productId, quantity: returnItem.quantity }
+            });
+          }
+
           await tx.batchMovement.create({
             data: {
               batchId: lineItem.batchId,
@@ -480,6 +499,19 @@ export class InvoiceService {
               currentQty: { increment: item.quantity },
             }
           });
+
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { totalStock: { increment: item.quantity } }
+          });
+
+          const b = await tx.batch.findUnique({ where: { id: item.batchId }, select: { warehouseId: true } });
+          if (b?.warehouseId) {
+            await tx.warehouseStock.update({
+              where: { warehouseId_productId: { warehouseId: b.warehouseId, productId: item.productId } },
+              data: { quantity: { increment: item.quantity } }
+            });
+          }
         }
       }
 

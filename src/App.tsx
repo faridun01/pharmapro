@@ -92,6 +92,29 @@ const App: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      // Small delay to allow default actions but then clear the focus frame
+      if (e.target instanceof HTMLElement) {
+        // We don't blur inputs or textareas as it breaks typing
+        const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+        if (!isInput) {
+          // Use a tiny timeout to ensure the click event has finished processing
+          setTimeout(() => {
+            if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+              const activeTag = document.activeElement.tagName;
+              if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+                 (document.activeElement as HTMLElement).blur();
+              }
+            }
+          }, 100);
+        }
+      }
+    };
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, []);
+
+  React.useEffect(() => {
     let polling = true;
     let attempts = 0;
     const MAX_ATTEMPTS = 30; // 30 seconds total

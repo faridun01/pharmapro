@@ -95,13 +95,18 @@ export class InventoryService {
         },
       });
 
-      const newTotalStock = product.totalStock + input.quantity;
       const updatedProduct = await tx.product.update({
         where: { id: product.id },
         data: {
-          totalStock: newTotalStock,
+          totalStock: { increment: input.quantity },
           costPrice: input.costBasis || product.costPrice,
-          status: mapProductStatus(newTotalStock, product.minStock),
+        },
+      });
+
+      await tx.product.update({
+        where: { id: product.id },
+        data: {
+          status: mapProductStatus(updatedProduct.totalStock, product.minStock),
         },
       });
 
@@ -215,12 +220,17 @@ export class InventoryService {
         },
       });
 
-      const newTotalStock = Math.max(0, Number(batch.product.totalStock || 0) + delta);
       const updatedProduct = await tx.product.update({
         where: { id: batch.product.id },
         data: {
-          totalStock: newTotalStock,
-          status: mapProductStatus(newTotalStock, batch.product.minStock),
+          totalStock: { increment: delta },
+        },
+      });
+
+      await tx.product.update({
+        where: { id: batch.product.id },
+        data: {
+          status: mapProductStatus(updatedProduct.totalStock, batch.product.minStock),
         },
       });
 
@@ -481,9 +491,13 @@ export class InventoryService {
 
       // Update product total stock if quantity changed
       if (quantityDelta !== 0) {
-        const newTotalStock = Math.max(0, Number(batch.product.totalStock || 0) + quantityDelta);
-        productUpdateData.totalStock = newTotalStock;
-        productUpdateData.status = mapProductStatus(newTotalStock, batch.product.minStock);
+        const updatedProduct = await tx.product.update({
+          where: { id: batch.product.id },
+          data: {
+            totalStock: { increment: quantityDelta },
+          },
+        });
+        productUpdateData.status = mapProductStatus(updatedProduct.totalStock, batch.product.minStock);
       }
 
       const updatedProduct =
@@ -575,7 +589,7 @@ export class InventoryService {
 
       const [linkedInvoiceItems, linkedReservations, linkedReturns, linkedWriteOffs, linkedTransfers] = await Promise.all([
         tx.invoiceItem.count({ where: { batchId } }),
-        tx.reservation.count({ where: { batchId } }),
+        (tx as any).reservation.count({ where: { batchId } }),
         tx.returnItem.count({ where: { batchId } }),
         tx.writeOffItem.count({ where: { batchId } }),
         tx.stockTransferItem.count({ where: { batchId } }),
@@ -590,12 +604,17 @@ export class InventoryService {
 
       await tx.batch.delete({ where: { id: batchId } });
 
-      const newTotalStock = Math.max(0, Number(batch.product.totalStock) - stockToRemove);
+      const updatedProduct = await tx.product.update({
+        where: { id: batch.product.id },
+        data: {
+          totalStock: { decrement: stockToRemove },
+        },
+      });
+
       await tx.product.update({
         where: { id: batch.product.id },
         data: {
-          totalStock: newTotalStock,
-          status: mapProductStatus(newTotalStock, batch.product.minStock),
+          status: mapProductStatus(updatedProduct.totalStock, batch.product.minStock),
         },
       });
 
@@ -710,13 +729,18 @@ export class InventoryService {
       create: { warehouseId, productId: product.id, quantity: item.quantity },
     });
 
-    const newTotalStock = product.totalStock + item.quantity;
+    const updatedProduct = await tx.product.update({
+      where: { id: product.id },
+      data: {
+        totalStock: { increment: item.quantity },
+        costPrice: price,
+      },
+    });
+
     await tx.product.update({
       where: { id: product.id },
       data: {
-        totalStock: newTotalStock,
-        costPrice: price,
-        status: mapProductStatus(newTotalStock, product.minStock),
+        status: mapProductStatus(updatedProduct.totalStock, product.minStock),
       },
     });
   }

@@ -52,7 +52,7 @@ export class ReturnsService {
         invoiceId: input.invoiceId || null,
         supplierId: input.supplierId || null,
         customerName: input.customerName || null,
-        refundMethod: input.refundMethod || null,
+        refundMethod: input.refundMethod as any,
         reason: input.reason || null,
         note: input.note || null,
         totalAmount,

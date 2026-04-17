@@ -4,6 +4,7 @@ import { NotFoundError, ValidationError } from '../../common/errors';
 import { computeProductStatus } from '../../common/productStatus';
 import { reportCache } from '../../common/cache';
 import { computeBatchStatus } from '../../common/batchStatus';
+import { stockService } from '../../services/stock.service';
 
 export type SaleItemInput = {
   productId: string;
@@ -141,27 +142,22 @@ export class SalesService {
           await tx.batch.update({
             where: { id: batch.id },
             data: {
-              quantity: nextQty,
-              currentQty: nextCurrent,
-              availableQty: nextAvailable,
+              quantity: { decrement: deduct },
+              currentQty: { decrement: deduct },
+              availableQty: { decrement: deduct },
               status: computeBatchStatus(batch.expiryDate),
             },
           });
 
           if (batch.warehouseId) {
-            await tx.warehouseStock.upsert({
+            await tx.warehouseStock.update({
               where: {
                 warehouseId_productId: {
                   warehouseId: batch.warehouseId,
                   productId: product.id,
                 },
               },
-              update: { quantity: { decrement: deduct } },
-              create: {
-                warehouseId: batch.warehouseId,
-                productId: product.id,
-                quantity: 0,
-              },
+              data: { quantity: { decrement: deduct } },
             });
           }
 
@@ -189,12 +185,18 @@ export class SalesService {
           remainingToDeduct -= deduct;
         }
 
-        const newTotalStock = product.totalStock - quantity;
+        const updatedProduct = await tx.product.update({
+          where: { id: product.id },
+          data: {
+            totalStock: { decrement: quantity },
+          },
+        });
+
+        // Update status after decrement
         await tx.product.update({
           where: { id: product.id },
           data: {
-            totalStock: newTotalStock,
-            status: computeProductStatus(newTotalStock, product.minStock),
+            status: computeProductStatus(updatedProduct.totalStock, product.minStock),
           },
         });
       }
@@ -217,15 +219,16 @@ export class SalesService {
         },
         include: {
           items: true,
+          receivable: true,
         },
-      });
+      }) as any;
 
       if (input.paymentType === 'CREDIT') {
         const initialPaid = Number(input.paidAmount || 0);
         const totalAmount = Number(input.total);
         const remaining = Math.max(0, totalAmount - initialPaid);
         
-        await tx.receivable.create({
+        await (tx as any).receivable.create({
           data: {
             invoiceId: createdInvoice.id,
             customerName: input.customerName,
@@ -315,8 +318,9 @@ export class SalesService {
       include: {
         items: true,
         payments: true,
+        receivable: true,
       },
-    });
+    }) as any;
 
     if (!invoice) throw new NotFoundError('Invoice not found');
     if (invoice.status === 'CANCELLED') throw new ValidationError('Invoice is already cancelled');
@@ -398,14 +402,14 @@ export class SalesService {
       const amount = Number(input.amount);
       
       // Resiliency: if receivable record is missing for some reason, create it now
-      let receivableRecord = invoice.receivable;
+      let receivableRecord = (invoice as any).receivable;
       if (!receivableRecord) {
-        receivableRecord = await tx.receivable.create({
+        receivableRecord = await (tx as any).receivable.create({
           data: {
-            invoiceId: invoice.id,
-            customerName: invoice.customer || 'Аноним',
-            originalAmount: Number(invoice.totalAmount),
-            remainingAmount: Number(invoice.totalAmount),
+            invoiceId: (invoice as any).id,
+            customerName: (invoice as any).customer || 'Аноним',
+            originalAmount: Number((invoice as any).totalAmount),
+            remainingAmount: Number((invoice as any).totalAmount),
             status: 'OPEN'
           }
         });
@@ -414,10 +418,10 @@ export class SalesService {
       // Update Receivable
       const currentPaid = Number(receivableRecord.paidAmount || 0);
       const newPaid = currentPaid + amount;
-      const totalAmount = Number(invoice.totalAmount);
+      const totalAmount = Number((invoice as any).totalAmount);
       const isFullyPaid = newPaid >= totalAmount;
 
-      const updatedReceivable = await tx.receivable.update({
+      const updatedReceivable = await (tx as any).receivable.update({
         where: { id: receivableRecord.id },
         data: {
           paidAmount: newPaid,

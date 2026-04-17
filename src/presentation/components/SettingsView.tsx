@@ -87,6 +87,7 @@ export const SettingsView: React.FC = () => {
   const [systemStatus, setSystemStatus] = useState<any>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+  const [activeUsersCount, setActiveUsersCount] = useState<number | null>(null);
   const [dbConfig, setDbConfig] = useState({
     user: 'postgres',
     password: '',
@@ -149,7 +150,7 @@ export const SettingsView: React.FC = () => {
       setIntegrityError(null);
     }
     try {
-      const response = await fetch('/api/dev/stock-integrity', {
+      const response = await fetch('/api/system/stock-integrity', {
         method: 'GET',
         headers: await buildApiHeaders(false),
       });
@@ -175,7 +176,7 @@ export const SettingsView: React.FC = () => {
     setIntegrityLoading(true);
     setIntegrityError(null);
     try {
-      const response = await fetch('/api/dev/stock-integrity/fix', {
+      const response = await fetch('/api/system/stock-integrity/fix', {
         method: 'POST',
         headers: await buildApiHeaders(),
         body: JSON.stringify({}),
@@ -250,6 +251,17 @@ export const SettingsView: React.FC = () => {
           const companyBody = await companyRes.json().catch(() => ({}));
           if (companyRes.ok) {
             setCompanyProfile((prev) => ({ ...prev, ...(companyBody || {}) }));
+          }
+        }
+        if (isAdmin) {
+          try {
+            const usersRes = await fetch('/api/system/users', { headers: await buildApiHeaders(false) });
+            if (usersRes.ok) {
+              const users = await usersRes.json();
+              setActiveUsersCount(Array.isArray(users) ? users.filter((u: any) => u.isActive).length : null);
+            }
+          } catch (e) {
+            console.error('Failed to fetch user count for header', e);
           }
         }
       } catch (e: any) {
@@ -387,35 +399,15 @@ export const SettingsView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 pb-20">
-      
-      {/* Dynamic Notifications */}
-      <AnimatePresence>
-        {(message || errorMessage) && (
-          <motion.div
-            initial={{ opacity: 0, y: -50, x: '-50%' }}
-            animate={{ opacity: 1, y: 30, x: '-50%' }}
-            exit={{ opacity: 0, y: -50, x: '-50%' }}
-            className={`fixed top-0 left-1/2 z-[100] min-w-[340px] text-center rounded-[1.5rem] px-8 py-4 text-xs font-bold shadow-2xl border backdrop-blur-xl ${
-              errorMessage 
-                ? 'bg-rose-50/90 border-rose-200 text-rose-700' 
-                : 'bg-emerald-50/90 border-emerald-200 text-emerald-700'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-3">
-              {errorMessage ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
-              {errorMessage || message}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <>
+      <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 pb-20">
 
       {/* Header Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Система', val: 'Online', sub: 'Защищенное соединение', color: 'text-emerald-600', icon: CircleCheck },
           { label: 'База данных', val: 'Prisma DB', sub: 'Интеграция активна', color: 'text-[#5A5A40]', icon: Database },
-          { label: 'Пользователи', val: '5 активных', sub: 'Доступ согласно ролям', color: 'text-[#5A5A40]', icon: UsersIcon },
+          { label: 'Пользователи', val: activeUsersCount !== null ? `${activeUsersCount} активных` : 'Загрузка...', sub: 'Доступ согласно ролям', color: 'text-[#5A5A40]', icon: UsersIcon },
           { label: 'Хранилище', val: '84% свободно', sub: 'Место на диске', color: 'text-amber-600', icon: HardDrive },
         ].map((card, idx) => (
           <div key={idx} className="bg-white/40 border border-[#5A5A40]/5 rounded-[2rem] p-6 shadow-sm hover:shadow-xl transition-all group">
@@ -779,7 +771,11 @@ export const SettingsView: React.FC = () => {
                       <p className="text-xs text-[#5A5A40]/50 italic">Проверка соответствия складских остатков и истории транзакций.</p>
                     </header>
                     
-                    <div className={`p-8 rounded-[2rem] border transition-all ${integrityError ? 'bg-rose-50 border-rose-100' : 'bg-[#f8f7f2] border-[#5A5A40]/5'}`}>
+                    <div className={`p-8 rounded-[2rem] border transition-all ${
+                      integrityError ? 'bg-rose-50 border-rose-100' : 
+                      integrityReport?.healthy ? 'bg-emerald-50/50 border-emerald-100/50' :
+                      'bg-[#f8f7f2] border-[#5A5A40]/5'
+                    }`}>
                       {integrityLoading ? (
                         <div className="flex items-center gap-4">
                           <RefreshCw size={24} className="animate-spin text-[#5A5A40]/30" />
@@ -793,7 +789,9 @@ export const SettingsView: React.FC = () => {
                             </div>
                             <div>
                               <p className="text-sm font-bold text-[#151619]">{integrityReport.healthy ? 'Ошибок не обнаружено' : 'Обнаружены расхождения'}</p>
-                              <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-widest">{new Date(integrityReport.timestamp).toLocaleString()}</p>
+                              <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-widest">
+                                {integrityReport.timestamp ? new Date(integrityReport.timestamp).toLocaleString() : 'Только что'}
+                              </p>
                             </div>
                           </div>
                           {!integrityReport.healthy && (
@@ -1016,5 +1014,26 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
     </div>
+
+    <AnimatePresence>
+        {(message || errorMessage) && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, x: '-50%' }}
+            animate={{ opacity: 1, y: 30, x: '-50%' }}
+            exit={{ opacity: 0, y: -50, x: '-50%' }}
+            className={`fixed top-[60px] left-1/2 z-[9999] min-w-[340px] text-center rounded-[1.5rem] px-8 py-4 text-xs font-bold shadow-2xl border backdrop-blur-xl ${
+              errorMessage 
+                ? 'bg-rose-50/90 border-rose-200 text-rose-700' 
+                : 'bg-emerald-50/90 border-emerald-200 text-emerald-700'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-3">
+              {errorMessage ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
+              {errorMessage || message}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };

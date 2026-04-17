@@ -10,6 +10,7 @@ import {
   readSystemSettings,
   writeSystemSettings,
 } from './systemSettings.storage';
+import { buildStockIntegrityReport, applyStockIntegrityFix } from '../../services/stockIntegrity.service';
 
 export const systemRouter = Router();
 
@@ -170,4 +171,34 @@ systemRouter.get('/backup/export', authenticate, asyncHandler(async (req, res) =
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="pharmapro-backup-${new Date().toISOString().slice(0, 10)}.json"`);
   res.send(JSON.stringify(payload, null, 2));
+}));
+
+systemRouter.get('/stock-integrity', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  if (!canManageSystem(authedReq.user.role)) {
+    throw new ValidationError('Only ADMIN or OWNER can run stock integrity checks');
+  }
+
+  const report = await buildStockIntegrityReport();
+  res.json({ 
+    ok: report.issuesCount === 0, 
+    healthy: report.issuesCount === 0, 
+    ...report 
+  });
+}));
+
+systemRouter.post('/stock-integrity/fix', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  if (!canManageSystem(authedReq.user.role)) {
+    throw new ValidationError('Only ADMIN or OWNER can fix stock integrity');
+  }
+
+  await applyStockIntegrityFix();
+  const report = await buildStockIntegrityReport();
+  res.json({ 
+    ok: report.issuesCount === 0, 
+    healthy: report.issuesCount === 0, 
+    repaired: true, 
+    ...report 
+  });
 }));
