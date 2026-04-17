@@ -34,7 +34,7 @@ export const PurchasesView: React.FC = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setInvoices(data);
+        setInvoices(Array.isArray(data) ? data : (data.invoices || []));
       }
     } catch (err) {
       console.error('Failed to fetch purchase invoices:', err);

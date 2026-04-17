@@ -447,11 +447,11 @@ function ShiftReportPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
             )}
           </div>
 
-          {report.cashMovements.length > 0 && (
+          {(report.cashMovements || []).length > 0 && (
             <div>
               <h4 className="text-xs font-semibold text-[#5A5A40]/60 uppercase tracking-widest mb-3">{t('Cash Movements')}</h4>
               <div className="space-y-2">
-                {report.cashMovements.map((m) => (
+                {(report.cashMovements || []).map((m) => (
                   <div key={m.id} className="flex items-center justify-between bg-[#f5f5f0] rounded-xl px-4 py-2.5">
                     <div className="flex items-center gap-3">
                       {m.type === 'CASH_IN'
