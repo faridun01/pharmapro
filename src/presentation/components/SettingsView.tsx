@@ -787,17 +787,48 @@ export const SettingsView: React.FC = () => {
                             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${integrityReport.healthy ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
                               {integrityReport.healthy ? <CheckCircle2 size={24} /> : <ShieldAlert size={24} />}
                             </div>
-                            <div>
-                              <p className="text-sm font-bold text-[#151619]">{integrityReport.healthy ? 'Ошибок не обнаружено' : 'Обнаружены расхождения'}</p>
-                              <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-widest">
-                                {integrityReport.timestamp ? new Date(integrityReport.timestamp).toLocaleString() : 'Только что'}
+                            <div className="flex-1">
+                              <p className="text-sm font-bold text-[#151619]">
+                                {integrityReport.healthy ? 'Ошибок не обнаружено' : `Обнаружено расхождений: ${integrityReport.issuesCount || 0}`}
                               </p>
+                              <div className="flex gap-3 mt-1">
+                                <p className="text-[9px] text-[#5A5A40]/50 uppercase tracking-widest font-bold">
+                                  Товаров: {integrityReport.checkedProducts || 0}
+                                </p>
+                                <p className="text-[9px] text-[#5A5A40]/50 uppercase tracking-widest font-bold">
+                                  Записей склада: {integrityReport.checkedWarehouseStockRows || 0}
+                                </p>
+                              </div>
                             </div>
                           </div>
                           {!integrityReport.healthy && (
-                            <button onClick={fixIntegrity} className="w-full py-4 bg-red-500 text-white rounded-2xl text-[11px] uppercase tracking-widest font-normal hover:bg-red-600 transition-all shadow-xl shadow-red-200">
+                            <div className="space-y-2 mt-4 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar border-t border-[#5A5A40]/5 pt-4">
+                              {(integrityReport.issues || []).slice(0, 5).map((issue: any, idx: number) => (
+                                <div key={idx} className="p-3 bg-white/50 border border-red-200/50 rounded-xl text-[10px] text-red-700">
+                                  <span className="font-black bg-red-100 px-1.5 py-0.5 rounded mr-2 uppercase text-[8px]">{issue.type}</span>
+                                  <span className="font-bold">{issue.productName}</span>: {issue.message}
+                                </div>
+                              ))}
+                              {(integrityReport.issues?.length || 0) > 5 && (
+                                <p className="text-[9px] text-red-400 text-center italic">... и еще {(integrityReport.issues?.length || 0) - 5} проблем</p>
+                              )}
+                            </div>
+                          )}
+                          {!integrityReport.healthy && (
+                            <button 
+                              onClick={fixIntegrity} 
+                              disabled={integrityLoading}
+                              className="w-full py-4 bg-red-500 text-white rounded-2xl text-[11px] uppercase tracking-widest font-bold hover:bg-red-600 transition-all shadow-xl shadow-red-200 mt-4 flex items-center justify-center gap-2"
+                            >
+                              {integrityLoading && <RefreshCw size={14} className="animate-spin" />}
                               Исправить расхождения автоматически
                             </button>
+                          )}
+                          {integrityReport.repaired && (
+                            <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 flex items-center gap-2 mt-4">
+                               <CheckCircle2 size={14} className="text-emerald-600" />
+                               <p className="text-[10px] text-emerald-700 font-bold uppercase tracking-widest">База исправлена</p>
+                            </div>
                           )}
                         </div>
                       ) : (

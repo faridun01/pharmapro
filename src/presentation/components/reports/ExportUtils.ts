@@ -104,6 +104,7 @@ export const exportReportToXlsx = async (report: FinanceReport, viewMode: Report
       ['Валовая прибыль', report.kpi.grossProfit],
       ['Маржа %', report.kpi.grossMarginPct],
       ['Кредиторская задолженность', report.debts.payableTotal],
+      ['Дебиторская задолженность', report.debts.receivableTotal],
       ['Операционная прибыль', report.kpi.operatingProfit],
       ['Денежный поток (Net)', report.cashflow.net],
     ];

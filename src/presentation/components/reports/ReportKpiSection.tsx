@@ -63,8 +63,8 @@ export const ReportKpiSection: React.FC<Props> = ({ data, currencyCode }) => {
     },
     {
       label: 'Дебиторская задолженность',
-      value: formatMoney((data as any).debts.receivableTotal, currencyCode),
-      hint: `Просрочено: ${formatMoney((data as any).debts.receivableOverdue, currencyCode)}`,
+      value: formatMoney(data.debts.receivableTotal, currencyCode),
+      hint: `Просрочено: ${formatMoney(data.debts.receivableOverdue, currencyCode)}`,
       accent: 'text-sky-600',
       description: 'Сумма неоплаченных долгов клиентов перед аптекой (отложенные платежи/в долг).',
     },
@@ -75,7 +75,7 @@ export const ReportKpiSection: React.FC<Props> = ({ data, currencyCode }) => {
       {cards.map((card) => (
         <div 
           key={card.label} 
-          className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 cursor-help transition-all hover:bg-slate-50"
+          className="bg-white p-4 rounded-xl border border-[#5A5A40]/10"
           title={card.description}
         >
           <p className="text-[10px] font-black text-slate-400 mb-1 uppercase tracking-widest">{card.label}</p>

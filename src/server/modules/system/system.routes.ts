@@ -21,9 +21,16 @@ const canManageSystem = (role: string | undefined) => {
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 
+systemRouter.get('/ping', (_req, res) => {
+  res.json({ ok: true, message: 'System service is healthy', timestamp: new Date().toISOString() });
+});
+
+
+
 systemRouter.get('/me/profile', authenticate, asyncHandler(async (req, res) => {
+  const db = prisma as any;
   const authedReq = req as AuthedRequest;
-  const user = await prisma.user.findUnique({
+  const user = await db.user.findUnique({
     where: { id: authedReq.user.id },
     select: { id: true, name: true, email: true, role: true, username: true },
   });
@@ -35,6 +42,7 @@ systemRouter.get('/me/profile', authenticate, asyncHandler(async (req, res) => {
 }));
 
 systemRouter.put('/me/profile', authenticate, asyncHandler(async (req, res) => {
+  const db = prisma as any;
   const authedReq = req as AuthedRequest;
   const nextName = String(req.body?.name || '').trim();
   const nextEmail = normalizeEmail(req.body?.email);
@@ -46,7 +54,7 @@ systemRouter.put('/me/profile', authenticate, asyncHandler(async (req, res) => {
     throw new ValidationError('Valid email is required');
   }
 
-  const duplicate = await prisma.user.findFirst({
+  const duplicate = await db.user.findFirst({
     where: {
       email: nextEmail,
       NOT: { id: authedReq.user.id },
@@ -57,7 +65,7 @@ systemRouter.put('/me/profile', authenticate, asyncHandler(async (req, res) => {
     throw new ValidationError('Email is already used by another account');
   }
 
-  const updated = await prisma.user.update({
+  const updated = await db.user.update({
     where: { id: authedReq.user.id },
     data: {
       name: nextName,
@@ -71,6 +79,7 @@ systemRouter.put('/me/profile', authenticate, asyncHandler(async (req, res) => {
 }));
 
 systemRouter.put('/me/password', authenticate, asyncHandler(async (req, res) => {
+  const db = prisma as any;
   const authedReq = req as AuthedRequest;
   const currentPassword = String(req.body?.currentPassword || '');
   const nextPassword = String(req.body?.newPassword || '');
@@ -88,7 +97,7 @@ systemRouter.put('/me/password', authenticate, asyncHandler(async (req, res) => 
     throw new ValidationError('Password confirmation does not match');
   }
 
-  const user = await prisma.user.findUnique({ where: { id: authedReq.user.id } });
+  const user = await db.user.findUnique({ where: { id: authedReq.user.id } });
   if (!user) {
     throw new ValidationError('User not found');
   }
@@ -103,7 +112,7 @@ systemRouter.put('/me/password', authenticate, asyncHandler(async (req, res) => 
     throw new ValidationError('New password must differ from current password');
   }
 
-  await prisma.user.update({
+  await db.user.update({
     where: { id: authedReq.user.id },
     data: {
       password: await bcrypt.hash(nextPassword, 12),
@@ -131,6 +140,7 @@ systemRouter.put('/me/preferences', authenticate, asyncHandler(async (req, res) 
 }));
 
 systemRouter.get('/backup/export', authenticate, asyncHandler(async (req, res) => {
+  const db = prisma as any;
   const authedReq = req as AuthedRequest;
   if (!canManageSystem(authedReq.user.role)) {
     throw new ValidationError('Only ADMIN or OWNER can export backups');
@@ -145,13 +155,13 @@ systemRouter.get('/backup/export', authenticate, asyncHandler(async (req, res) =
     shifts,
     warehouses,
   ] = await Promise.all([
-    prisma.product.findMany({ include: { batches: true } }),
-    prisma.invoice.findMany({ include: { items: true } }),
-    prisma.supplier.findMany(),
-    prisma.return.findMany({ include: { items: true } }),
-    prisma.writeOff.findMany({ include: { items: true } }),
-    prisma.cashShift.findMany({ include: { cashMovements: true, invoices: true } }),
-    prisma.warehouse.findMany({ include: { stocks: true } }),
+    db.product.findMany({ include: { batches: true } }),
+    db.invoice.findMany({ include: { items: true } }),
+    db.supplier.findMany(),
+    db.return.findMany({ include: { items: true } }),
+    db.writeOff.findMany({ include: { items: true } }),
+    db.cashShift.findMany({ include: { cashMovements: true, invoices: true } }),
+    db.warehouse.findMany({ include: { stocks: true } }),
   ]);
 
   const payload = {
@@ -179,12 +189,17 @@ systemRouter.get('/stock-integrity', authenticate, asyncHandler(async (req, res)
     throw new ValidationError('Only ADMIN or OWNER can run stock integrity checks');
   }
 
-  const report = await buildStockIntegrityReport();
-  res.json({ 
-    ok: report.issuesCount === 0, 
-    healthy: report.issuesCount === 0, 
-    ...report 
-  });
+  try {
+    const report = await buildStockIntegrityReport();
+    res.json({ 
+      ok: report.issuesCount === 0, 
+      healthy: report.issuesCount === 0, 
+      ...report 
+    });
+  } catch (err: any) {
+    console.error('[STOCK_INTEGRITY_SERVICE_ERROR]:', err);
+    throw err;
+  }
 }));
 
 systemRouter.post('/stock-integrity/fix', authenticate, asyncHandler(async (req, res) => {
@@ -193,12 +208,17 @@ systemRouter.post('/stock-integrity/fix', authenticate, asyncHandler(async (req,
     throw new ValidationError('Only ADMIN or OWNER can fix stock integrity');
   }
 
-  await applyStockIntegrityFix();
-  const report = await buildStockIntegrityReport();
-  res.json({ 
-    ok: report.issuesCount === 0, 
-    healthy: report.issuesCount === 0, 
-    repaired: true, 
-    ...report 
-  });
+  try {
+    await applyStockIntegrityFix();
+    const report = await buildStockIntegrityReport();
+    res.json({ 
+      ok: report.issuesCount === 0, 
+      healthy: report.issuesCount === 0, 
+      repaired: true, 
+      ...report 
+    });
+  } catch (err: any) {
+    console.error('[STOCK_INTEGRITY_FIX_ERROR]:', err);
+    throw err;
+  }
 }));

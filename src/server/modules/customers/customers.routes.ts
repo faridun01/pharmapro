@@ -12,6 +12,7 @@ customersRouter.get(
   '/',
   authenticate,
   asyncHandler(async (req, res) => {
+    const db = prisma as any;
     const search = String(req.query.search || '').trim();
     const page   = Math.max(1, Number(req.query.page) || 1);
     const limit  = Math.max(1, Math.min(100, Number(req.query.limit) || 50));
@@ -30,8 +31,8 @@ customersRouter.get(
     };
 
     const [total, customers] = await Promise.all([
-      (prisma as any).customer.count({ where }),
-      (prisma as any).customer.findMany({
+      db.customer.count({ where }),
+      db.customer.findMany({
         where,
         orderBy: { name: 'asc' },
         skip: (page - 1) * limit,
@@ -72,7 +73,8 @@ customersRouter.get(
   '/:id',
   authenticate,
   asyncHandler(async (req, res) => {
-    const customer = await (prisma as any).customer.findUnique({
+    const db = prisma as any;
+    const customer = await db.customer.findUnique({
       where: { id: req.params.id },
       include: {
         invoices: {
@@ -120,13 +122,14 @@ customersRouter.post(
   authenticate,
   requireRole(['ADMIN', 'OWNER', 'CASHIER', 'PHARMACIST']),
   asyncHandler(async (req, res) => {
+    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { name, legalName, phone, email, address, taxId, creditLimit, defaultDiscount, paymentTermDays } = req.body ?? {};
 
     const trimmedName = String(name || '').trim();
     if (!trimmedName) throw new ValidationError('Имя покупателя обязательно');
 
-    const created = await (prisma as any).customer.create({
+    const created = await db.customer.create({
       data: {
         name: trimmedName,
         legalName:       String(legalName || '').trim() || null,
@@ -160,9 +163,10 @@ customersRouter.put(
   authenticate,
   requireRole(['ADMIN', 'OWNER', 'CASHIER', 'PHARMACIST']),
   asyncHandler(async (req, res) => {
+    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
-    const existing = await (prisma as any).customer.findUnique({ where: { id }, select: { id: true, name: true } });
+    const existing = await db.customer.findUnique({ where: { id }, select: { id: true, name: true } });
     if (!existing) throw new NotFoundError('Покупатель не найден');
 
     const { name, legalName, phone, email, address, taxId, creditLimit, defaultDiscount, paymentTermDays, isActive } = req.body ?? {};
@@ -178,7 +182,7 @@ customersRouter.put(
     if (paymentTermDays !== undefined) data.paymentTermDays = paymentTermDays ? Number(paymentTermDays) : null;
     if (isActive !== undefined)        data.isActive        = Boolean(isActive);
 
-    const updated = await (prisma as any).customer.update({ where: { id }, data });
+    const updated = await db.customer.update({ where: { id }, data });
 
     await auditService.log({
       userId: authedReq.user.id,
@@ -200,12 +204,13 @@ customersRouter.delete(
   authenticate,
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (req, res) => {
+    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
-    const existing = await (prisma as any).customer.findUnique({ where: { id }, select: { id: true, name: true, isActive: true } });
+    const existing = await db.customer.findUnique({ where: { id }, select: { id: true, name: true, isActive: true } });
     if (!existing) throw new NotFoundError('Покупатель не найден');
 
-    await (prisma as any).customer.update({ where: { id }, data: { isActive: false } });
+    await db.customer.update({ where: { id }, data: { isActive: false } });
 
     await auditService.log({
       userId: authedReq.user.id,

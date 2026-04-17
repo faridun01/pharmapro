@@ -19,7 +19,8 @@ usersRouter.get(
   authenticate,
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (_req, res) => {
-    const users = await prisma.user.findMany({
+    const db = prisma as any;
+    const users = await db.user.findMany({
       orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
       select: {
         id: true,
@@ -44,6 +45,7 @@ usersRouter.post(
   authenticate,
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (req, res) => {
+    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { name, email, password, role, username, warehouseId } = req.body ?? {};
 
@@ -64,12 +66,12 @@ usersRouter.post(
       throw new ValidationError('Только владелец может создавать другого владельца');
     }
 
-    const existing = await prisma.user.findFirst({ where: { email: normalizedEmail }, select: { id: true } });
+    const existing = await db.user.findFirst({ where: { email: normalizedEmail }, select: { id: true } });
     if (existing) throw new ValidationError('Пользователь с таким email уже существует');
 
     const hashed = await bcrypt.hash(trimmedPassword, 12);
 
-    const user = await prisma.user.create({
+    const user = await db.user.create({
       data: {
         name: trimmedName,
         email: normalizedEmail,
@@ -113,11 +115,12 @@ usersRouter.put(
   authenticate,
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (req, res) => {
+    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
     const { name, email, role, username, isActive, warehouseId, password } = req.body ?? {};
 
-    const existing = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, email: true, name: true } });
+    const existing = await db.user.findUnique({ where: { id }, select: { id: true, role: true, email: true, name: true } });
     if (!existing) throw new NotFoundError('Пользователь не найден');
 
     // Prevent ADMIN from editing OWNER
@@ -140,7 +143,7 @@ usersRouter.put(
     if (email !== undefined) {
       const normalized = normalizeEmail(email);
       if (!normalized || !normalized.includes('@')) throw new ValidationError('Некорректный email');
-      const dup = await prisma.user.findFirst({ where: { email: normalized, NOT: { id } }, select: { id: true } });
+      const dup = await db.user.findFirst({ where: { email: normalized, NOT: { id } }, select: { id: true } });
       if (dup) throw new ValidationError('Этот email уже используется другим пользователем');
       updateData.email = normalized;
     }
@@ -168,13 +171,11 @@ usersRouter.put(
       updateData.warehouseId = warehouseId || null;
     }
 
-    if (password !== undefined) {
-      const trimmed = String(password || '');
-      if (trimmed.length < 6) throw new ValidationError('Новый пароль должен быть не менее 6 символов');
-      updateData.password = await bcrypt.hash(trimmed, 12);
+    if (password) {
+      updateData.password = await bcrypt.hash(String(password), 12);
     }
 
-    const updated = await prisma.user.update({
+    const updated = await db.user.update({
       where: { id },
       data: updateData,
       select: {
@@ -217,14 +218,15 @@ usersRouter.delete(
 
     if (id === authedReq.user.id) throw new ValidationError('Нельзя удалить собственный аккаунт');
 
-    const existing = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, name: true } });
+    const db = prisma as any;
+    const existing = await db.user.findUnique({ where: { id }, select: { id: true, role: true, name: true } });
     if (!existing) throw new NotFoundError('Пользователь не найден');
 
     if (existing.role === 'OWNER' && authedReq.user.role !== 'OWNER') {
       throw new ValidationError('Только владелец может деактивировать владельца');
     }
 
-    await prisma.user.update({ where: { id }, data: { isActive: false } });
+    await db.user.update({ where: { id }, data: { isActive: false } });
 
     await auditService.log({
       userId: authedReq.user.id,

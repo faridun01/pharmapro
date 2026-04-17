@@ -97,7 +97,7 @@ export const ReportsView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 pb-20 outline-none ring-0">
+    <div className="max-w-[1600px] mx-auto space-y-8 pb-20 outline-none ring-0">
 
       {/* Header Info Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -107,7 +107,7 @@ export const ReportsView: React.FC = () => {
           { label: 'Продаж совершено', val: report ? report.invoices.totalCount : '...', sub: 'Всего транзакций', color: 'text-[#5A5A40]', icon: Inbox },
           { label: 'Рентабельность', val: report && report.kpi.netRevenue ? `${((report.kpi.grossProfit / report.kpi.netRevenue) * 100).toFixed(1)}%` : '...', sub: 'Маржинальность', color: 'text-indigo-600', icon: FileDown },
         ].map((card, idx) => (
-          <div key={idx} className="bg-white/40 border border-[#5A5A40]/5 rounded-[2rem] p-6 shadow-sm hover:shadow-xl transition-all group">
+          <div key={idx} className="bg-white border border-[#5A5A40]/10 rounded-[2rem] p-6">
             <div className="flex justify-between items-start mb-4">
               <p className="text-[10px] font-normal text-[#5A5A40]/40 uppercase tracking-[0.2em]">{card.label}</p>
               <card.icon size={16} className={`${card.color} opacity-30`} />
@@ -119,9 +119,9 @@ export const ReportsView: React.FC = () => {
       </div>
 
       {/* Control Bar */}
-      <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] border border-white/70 p-4 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+      <div className="bg-white rounded-[2.5rem] border border-[#5A5A40]/10 p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
         <div className="flex items-center gap-4 px-2">
-          <div className="w-12 h-12 rounded-[1.2rem] bg-[#5A5A40] text-white flex items-center justify-center shadow-lg shadow-[#5A5A40]/20">
+          <div className="w-12 h-12 rounded-[1.2rem] bg-[#5A5A40] text-white flex items-center justify-center">
             <ChartBar size={24} />
           </div>
           <div>
@@ -132,22 +132,22 @@ export const ReportsView: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-3">
           {/* View Toggle */}
-          <div className="bg-[#f5f5f0]/50 p-1.5 rounded-[1.5rem] border border-[#5A5A40]/5 flex gap-1">
+          <div className="bg-[#f5f5f0] p-1.5 rounded-[1.5rem] border border-[#5A5A40]/10 flex gap-1">
             <button
               onClick={() => setViewMode('summary')}
-              className={`px-5 py-2.5 rounded-[1.2rem] text-[11px] uppercase tracking-widest transition-all font-normal ${viewMode === 'summary' ? 'bg-[#5A5A40] shadow-md text-white' : 'text-[#5A5A40]/40 hover:text-[#5A5A40]'}`}
+              className={`px-5 py-2.5 rounded-[1.2rem] text-[11px] uppercase tracking-widest font-normal ${viewMode === 'summary' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/40'}`}
             >
               Сводка
             </button>
             <button
               onClick={() => setViewMode('detailed')}
-              className={`px-5 py-2.5 rounded-[1.2rem] text-[11px] uppercase tracking-widest transition-all font-normal ${viewMode === 'detailed' ? 'bg-[#5A5A40] shadow-md text-white' : 'text-[#5A5A40]/40 hover:text-[#5A5A40]'}`}
+              className={`px-5 py-2.5 rounded-[1.2rem] text-[11px] uppercase tracking-widest font-normal ${viewMode === 'detailed' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/40'}`}
             >
               Детально
             </button>
             <button
               onClick={() => setViewMode('expiry')}
-              className={`px-5 py-2.5 rounded-[1.2rem] text-[11px] uppercase tracking-widest transition-all font-normal ${viewMode === 'expiry' ? 'bg-[#5A5A40] shadow-md text-white' : 'text-[#5A5A40]/40 hover:text-[#5A5A40]'}`}
+              className={`px-5 py-2.5 rounded-[1.2rem] text-[11px] uppercase tracking-widest font-normal ${viewMode === 'expiry' ? 'bg-[#5A5A40] text-white' : 'text-[#5A5A40]/40'}`}
             >
               Сроки годности
             </button>
@@ -160,7 +160,7 @@ export const ReportsView: React.FC = () => {
             <button
               onClick={handlePrint}
               disabled={!report && viewMode !== 'expiry'}
-              className="w-11 h-11 flex items-center justify-center rounded-2xl border border-[#5A5A40]/10 text-[#5A5A40]/40 hover:bg-white hover:text-[#5A5A40] transition-all disabled:opacity-30"
+              className="w-11 h-11 flex items-center justify-center rounded-2xl border border-[#5A5A40]/10 text-[#5A5A40]/40 disabled:opacity-30"
               title="Печать"
             >
               <Printer size={18} />
@@ -168,7 +168,7 @@ export const ReportsView: React.FC = () => {
             <button
               onClick={handleExportXlsx}
               disabled={(!report && viewMode !== 'expiry') || exporting}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#5A5A40] text-white text-[11px] uppercase tracking-widest font-normal shadow-lg shadow-[#5A5A40]/10 hover:bg-[#4A4A30] active:scale-95 transition-all disabled:opacity-30"
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#5A5A40] text-white text-[11px] uppercase tracking-widest font-normal disabled:opacity-30"
             >
               {exporting ? <RefreshCw size={14} className="animate-spin" /> : <FileSpreadsheet size={16} />}
               <span>Экспорт XLSX</span>
@@ -178,20 +178,20 @@ export const ReportsView: React.FC = () => {
       </div>
 
       {/* Date Presets and Filters */}
-      <div className="bg-white/40 p-4 rounded-[2rem] border border-[#5A5A40]/5 flex flex-wrap items-center justify-between gap-6">
+      <div className="bg-white p-4 rounded-[2rem] border border-[#5A5A40]/10 flex flex-wrap items-center justify-between gap-6">
         <div className="flex flex-wrap gap-1.5 p-1 bg-[#f5f5f0]/30 rounded-[1.5rem]">
           {(['month', 'q1', 'q2', 'q3', 'q4', 'year', 'all'] as ReportRangePreset[]).map((p) => (
             <button
               key={p}
               onClick={() => { setPreset(p); setFromDate(''); setToDate(''); }}
-              className={`px-5 py-2 rounded-[1.2rem] text-[10px] font-bold uppercase transition-all tracking-wider ${preset === p ? 'bg-white text-[#5A5A40] shadow-sm border border-[#5A5A40]/5' : 'text-[#5A5A40]/40 hover:text-[#5A5A40]'}`}
+              className={`px-5 py-2 rounded-[1.2rem] text-[10px] font-bold uppercase tracking-wider ${preset === p ? 'bg-stone-100 text-[#5A5A40] border border-[#5A5A40]/10' : 'text-[#5A5A40]/40'}`}
             >
               {presetLabels[p]}
             </button>
           ))}
         </div>
 
-        <div className="flex items-center gap-3 bg-white/60 px-6 py-2.5 rounded-[1.5rem] border border-[#5A5A40]/5 ml-auto">
+        <div className="flex items-center gap-3 bg-white px-6 py-2.5 rounded-[1.5rem] border border-[#5A5A40]/10 ml-auto">
           <Filter size={14} className="text-[#5A5A40]/30" />
           <div className="flex items-center gap-4">
             <input
@@ -209,7 +209,7 @@ export const ReportsView: React.FC = () => {
 
       {/* Error State */}
       {error && (
-        <div className="bg-rose-50 border border-rose-100 rounded-[2rem] p-5 flex items-center gap-3 text-rose-700 animate-in slide-in-from-top-2 shadow-sm">
+        <div className="bg-rose-50 border border-rose-100 rounded-[2rem] p-5 flex items-center gap-3 text-rose-700">
           <AlertCircle size={20} />
           <p className="text-xs font-bold uppercase tracking-widest">{error}</p>
         </div>
@@ -225,7 +225,7 @@ export const ReportsView: React.FC = () => {
         ) : viewMode === 'expiry' ? (
           <ReportExpirySection />
         ) : report ? (
-          <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700 print:space-y-4">
+          <div className="space-y-12 print:space-y-4">
             {viewMode === 'summary' ? (
               <div className="space-y-12">
                 <ReportKpiSection data={report} currencyCode={currencyCode} />

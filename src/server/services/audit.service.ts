@@ -16,7 +16,7 @@ type AuditInput = {
 
 export class AuditService {
   async log(input: AuditInput, db: Prisma.TransactionClient | typeof prisma = prisma) {
-    await db.auditLog.create({
+    await (db as any).auditLog.create({
       data: {
         userId: input.userId,
         userRole: input.userRole ?? null,

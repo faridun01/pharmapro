@@ -3,8 +3,9 @@ import { computeBatchStatus } from '../common/batchStatus';
 import { computeProductStatus } from '../common/productStatus';
 
 export const buildStockIntegrityReport = async () => {
+  const db = prisma as any;
   const [products, warehouseStocks] = await Promise.all([
-    prisma.product.findMany({
+    db.product.findMany({
       where: { isActive: true },
       include: {
         batches: {
@@ -23,7 +24,7 @@ export const buildStockIntegrityReport = async () => {
       },
       orderBy: { name: 'asc' },
     }),
-    prisma.warehouseStock.findMany({
+    db.warehouseStock.findMany({
       select: {
         warehouseId: true,
         productId: true,
@@ -31,6 +32,8 @@ export const buildStockIntegrityReport = async () => {
       },
     }),
   ]);
+
+  console.log('[STOCK_INTEGRITY_DEBUG]: Found', products.length, 'active products and', warehouseStocks.length, 'warehouse stock rows.');
 
   const issues: Array<Record<string, any>> = [];
 
@@ -127,8 +130,9 @@ export const buildStockIntegrityReport = async () => {
 };
 
 export const applyStockIntegrityFix = async () => {
+  const db = prisma as any;
   const [products, warehouseStocks, warehouses] = await Promise.all([
-    prisma.product.findMany({
+    db.product.findMany({
       where: { isActive: true },
       include: {
         batches: {
@@ -144,11 +148,11 @@ export const applyStockIntegrityFix = async () => {
         },
       },
     }),
-    prisma.warehouseStock.findMany(),
-    prisma.warehouse.findMany({ select: { id: true } }),
+    db.warehouseStock.findMany(),
+    db.warehouse.findMany({ select: { id: true } }),
   ]);
 
-  await prisma.$transaction(async (tx: any) => {
+  await db.$transaction(async (tx: any) => {
     for (const product of products) {
       let totalQty = 0;
       const warehouseTotals: Record<string, number> = {};
