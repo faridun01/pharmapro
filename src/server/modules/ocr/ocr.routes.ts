@@ -1,4 +1,4 @@
-﻿import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -151,6 +151,10 @@ const pickExistingUserId = async (reqUser?: { id?: string; email?: string }) => 
 
   const firstUser = await prisma.user.findFirst({ select: { id: true } });
   if (firstUser) return firstUser.id;
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Authenticated user missing during OCR operation');
+  }
 
   const fallback = await prisma.user.create({
     data: {

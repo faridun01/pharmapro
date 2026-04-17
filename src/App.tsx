@@ -136,7 +136,7 @@ const App: React.FC = () => {
           setShowSplash(false);
           polling = false;
           
-          if (!user) {
+          if (!user && import.meta.env.DEV) {
             try {
               setStatus('Авторизация...');
               await handleLogin('admin@pharmapro.com', 'dev-password');
