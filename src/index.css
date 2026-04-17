@@ -1,41 +1,9 @@
 @import "tailwindcss";
 
-@theme {
+:root {
   --font-manrope: "Segoe UI", "Arial", sans-serif;
   --font-inter: "Segoe UI", "Arial", sans-serif;
 
-  --color-primary: var(--primary);
-  --color-primary-container: var(--primary-container);
-  --color-on-primary: var(--on-primary);
-  --color-on-primary-container: var(--on-primary-container);
-  
-  --color-secondary: var(--secondary);
-  --color-secondary-container: var(--secondary-container);
-  --color-on-secondary: var(--on-secondary);
-  --color-on-secondary-container: var(--on-secondary-container);
-
-  --color-tertiary: var(--tertiary);
-  --color-tertiary-container: var(--tertiary-container);
-  --color-on-tertiary: var(--on-tertiary);
-  --color-on-tertiary-container: var(--on-tertiary-container);
-
-  --color-surface: var(--surface);
-  --color-on-surface: var(--on-surface);
-  --color-surface-container-low: var(--surface-low);
-  --color-surface-container-lowest: var(--surface-lowest);
-  --color-surface-container-high: var(--surface-high);
-  --color-surface-container-highest: var(--surface-highest);
-  
-  --color-error: var(--error);
-  --color-error-container: var(--error-container);
-  --color-on-error: var(--on-error);
-  --color-on-error-container: var(--on-error-container);
-
-  --color-outline: var(--outline);
-  --color-outline-variant: var(--outline-variant);
-}
-
-:root {
   --primary: #5A5A40; /* Тёплый оливковый */
   --primary-container: #ebebe0;
   --on-primary: #ffffff;
@@ -52,6 +20,33 @@
   --surface-highest: #e6e5df;
   
   --border-subtle: rgba(90, 90, 64, 0.08);
+
+  /* Tailwind v4 mappings (auto-detected colors) */
+  --color-primary: var(--primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary: var(--on-primary);
+  --color-on-primary-container: var(--on-primary-container);
+  --secondary: #7a7a60;
+  --secondary-container: #f0f0e8;
+  
+  --surface: #fcfbf7; /* Мягкий кремовый фон */
+  --on-surface: #151619;
+  --surface-low: #f8f7f2;
+  --surface-lowest: #ffffff;
+  --surface-high: #f0efea;
+  --surface-highest: #e6e5df;
+  
+  --border-subtle: rgba(90, 90, 64, 0.08);
+
+  /* Tailwind v4 mappings (auto-detected colors) */
+  --color-primary: var(--primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary: var(--on-primary);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-secondary: var(--secondary);
+  --color-secondary-container: var(--secondary-container);
+  --color-surface: var(--surface);
+  --color-on-surface: var(--on-surface);
 }
 
 [data-theme='dark'] {
@@ -95,8 +90,8 @@
 [data-theme='dark'] .bg-white\/40,
 [data-theme='dark'] .bg-white\/80,
 [data-theme='dark'] .backdrop-blur-md {
-  background-color: rgba(28, 29, 33, 0.75) !important;
-  backdrop-filter: blur(16px) !important;
+  background-color: var(--surface-low) !important;
+  backdrop-filter: none !important;
 }
 
 [data-theme='dark'] .bg-\[\#f8f7f2\],
@@ -138,10 +133,24 @@
 @layer base {
   * {
     font-weight: 400 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+    transition-duration: 0s !important;
+  }
+  
+  .backdrop-blur-md, 
+  .backdrop-blur-xl, 
+  .backdrop-blur-sm, 
+  .backdrop-blur {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
   
   body {
-    @apply font-inter bg-surface text-on-surface;
+    font-family: var(--font-inter);
+    background-color: var(--surface);
+    color: var(--on-surface);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -161,7 +170,7 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-manrope;
+    font-family: var(--font-manrope);
     font-weight: 400 !important;
   }
   
@@ -175,10 +184,11 @@
   width: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  @apply bg-transparent;
+  background-color: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-stone-200 rounded-full;
+  background-color: #e5e7eb; /* stone-200 */
+  border-radius: 9999px;
 }
 
 .app-drag {

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
-import { prisma } from '../../infrastructure/prisma';
+import { db } from '../../infrastructure/prisma';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { auditService } from '../../services/audit.service';
 
@@ -12,7 +12,6 @@ customersRouter.get(
   '/',
   authenticate,
   asyncHandler(async (req, res) => {
-    const db = prisma as any;
     const search = String(req.query.search || '').trim();
     const page   = Math.max(1, Number(req.query.page) || 1);
     const limit  = Math.max(1, Math.min(100, Number(req.query.limit) || 50));
@@ -73,7 +72,6 @@ customersRouter.get(
   '/:id',
   authenticate,
   asyncHandler(async (req, res) => {
-    const db = prisma as any;
     const customer = await db.customer.findUnique({
       where: { id: req.params.id },
       include: {
@@ -122,7 +120,6 @@ customersRouter.post(
   authenticate,
   requireRole(['ADMIN', 'OWNER', 'CASHIER', 'PHARMACIST']),
   asyncHandler(async (req, res) => {
-    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { name, legalName, phone, email, address, taxId, creditLimit, defaultDiscount, paymentTermDays } = req.body ?? {};
 
@@ -163,7 +160,6 @@ customersRouter.put(
   authenticate,
   requireRole(['ADMIN', 'OWNER', 'CASHIER', 'PHARMACIST']),
   asyncHandler(async (req, res) => {
-    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
     const existing = await db.customer.findUnique({ where: { id }, select: { id: true, name: true } });
@@ -204,7 +200,6 @@ customersRouter.delete(
   authenticate,
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (req, res) => {
-    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
     const existing = await db.customer.findUnique({ where: { id }, select: { id: true, name: true, isActive: true } });

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { authenticate, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { ValidationError } from '../../common/errors';
-import { prisma } from '../../infrastructure/prisma';
+import { db } from '../../infrastructure/prisma';
 import {
   getDefaultUserPreferences,
   normalizeUserPreferences,
@@ -28,7 +28,6 @@ systemRouter.get('/ping', (_req, res) => {
 
 
 systemRouter.get('/me/profile', authenticate, asyncHandler(async (req, res) => {
-  const db = prisma as any;
   const authedReq = req as AuthedRequest;
   const user = await db.user.findUnique({
     where: { id: authedReq.user.id },
@@ -42,7 +41,6 @@ systemRouter.get('/me/profile', authenticate, asyncHandler(async (req, res) => {
 }));
 
 systemRouter.put('/me/profile', authenticate, asyncHandler(async (req, res) => {
-  const db = prisma as any;
   const authedReq = req as AuthedRequest;
   const nextName = String(req.body?.name || '').trim();
   const nextEmail = normalizeEmail(req.body?.email);
@@ -79,7 +77,6 @@ systemRouter.put('/me/profile', authenticate, asyncHandler(async (req, res) => {
 }));
 
 systemRouter.put('/me/password', authenticate, asyncHandler(async (req, res) => {
-  const db = prisma as any;
   const authedReq = req as AuthedRequest;
   const currentPassword = String(req.body?.currentPassword || '');
   const nextPassword = String(req.body?.newPassword || '');
@@ -140,7 +137,6 @@ systemRouter.put('/me/preferences', authenticate, asyncHandler(async (req, res) 
 }));
 
 systemRouter.get('/backup/export', authenticate, asyncHandler(async (req, res) => {
-  const db = prisma as any;
   const authedReq = req as AuthedRequest;
   if (!canManageSystem(authedReq.user.role)) {
     throw new ValidationError('Only ADMIN or OWNER can export backups');

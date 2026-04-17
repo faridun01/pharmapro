@@ -3,6 +3,7 @@ import { authenticate, requireRole, type AuthedRequest } from '../../common/auth
 import { asyncHandler } from '../../common/http';
 import { ValidationError } from '../../common/errors';
 import { inventoryService } from './inventory.service';
+import { db } from '../../infrastructure/prisma';
 
 export const inventoryRouter = Router();
 
@@ -38,18 +39,26 @@ inventoryRouter.post('/restock', authenticate, requireRole(['PHARMACIST', 'ADMIN
 }));
 
 // GET /purchase-invoices — PHARMACIST, ADMIN, OWNER
-inventoryRouter.get('/purchase-invoices', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (_req, res) => {
-  const { prisma } = await import('../../infrastructure/prisma');
-  const invoices = await prisma.purchaseInvoice.findMany({
-    include: {
-      supplier: { select: { name: true } },
-      warehouse: { select: { name: true } },
-      items: { include: { product: { select: { name: true } } } },
-      createdBy: { select: { name: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json(invoices);
+inventoryRouter.get('/purchase-invoices', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 100);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+  const [invoices, total] = await Promise.all([
+    db.purchaseInvoice.findMany({
+      include: {
+        supplier: { select: { name: true } },
+        warehouse: { select: { name: true } },
+        items: { include: { product: { select: { name: true } } } },
+        createdBy: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
+    }),
+    db.purchaseInvoice.count(),
+  ]);
+
+  res.json({ invoices, total, limit, offset });
 }));
 
 // POST /purchase-invoices — PHARMACIST, ADMIN, OWNER

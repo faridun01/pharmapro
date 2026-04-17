@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
-import { prisma } from '../../infrastructure/prisma';
+import { db } from '../../infrastructure/prisma';
 import { ValidationError, NotFoundError } from '../../common/errors';
 import { auditService } from '../../services/audit.service';
 
@@ -19,7 +19,6 @@ usersRouter.get(
   authenticate,
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (_req, res) => {
-    const db = prisma as any;
     const users = await db.user.findMany({
       orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
       select: {
@@ -45,7 +44,6 @@ usersRouter.post(
   authenticate,
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (req, res) => {
-    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { name, email, password, role, username, warehouseId } = req.body ?? {};
 
@@ -115,7 +113,6 @@ usersRouter.put(
   authenticate,
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (req, res) => {
-    const db = prisma as any;
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
     const { name, email, role, username, isActive, warehouseId, password } = req.body ?? {};
@@ -218,7 +215,6 @@ usersRouter.delete(
 
     if (id === authedReq.user.id) throw new ValidationError('Нельзя удалить собственный аккаунт');
 
-    const db = prisma as any;
     const existing = await db.user.findUnique({ where: { id }, select: { id: true, role: true, name: true } });
     if (!existing) throw new NotFoundError('Пользователь не найден');
 

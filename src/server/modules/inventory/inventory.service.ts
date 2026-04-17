@@ -1,4 +1,4 @@
-import { prisma } from '../../infrastructure/prisma';
+import { db } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { reportCache } from '../../common/cache';
@@ -49,7 +49,7 @@ export class InventoryService {
     if (!input.batchNumber) throw new ValidationError('batchNumber is required');
     if (!input.quantity || input.quantity <= 0) throw new ValidationError('quantity must be a positive number');
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: any) => {
       const product = await tx.product.findUnique({
         where: { id: input.productId },
       });
@@ -159,7 +159,7 @@ export class InventoryService {
       throw new ValidationError('newQuantity must be a non-negative number');
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: any) => {
       const batch = await tx.batch.findUnique({
         where: { id: batchId },
         include: {
@@ -322,7 +322,7 @@ export class InventoryService {
 
     const invoiceNumber = String(input.invoiceNumber || '').trim();
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: any) => {
       const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
       if (!supplier) throw new NotFoundError(`Supplier ${input.supplierId} not found`);
 
@@ -423,7 +423,7 @@ export class InventoryService {
     if (!batchId) throw new ValidationError('batchId is required');
     if (Object.keys(updates).length === 0) throw new ValidationError('At least one field must be updated');
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: any) => {
       const batch = await tx.batch.findUnique({
         where: { id: batchId },
         include: {
@@ -570,7 +570,7 @@ export class InventoryService {
   async deleteBatch(batchId: string, userId: string) {
     if (!batchId) throw new ValidationError('batchId is required');
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: any) => {
       const batch = await tx.batch.findUnique({
         where: { id: batchId },
         include: {
@@ -746,7 +746,7 @@ export class InventoryService {
   }
 
   async approvePurchaseInvoice(invoiceId: string, userId: string) {
-    return await prisma.$transaction(async (tx) => {
+    return await db.$transaction(async (tx: any) => {
       const invoice = await tx.purchaseInvoice.findUnique({
         where: { id: invoiceId },
         include: { items: true },

@@ -1,4 +1,4 @@
-import { prisma } from '../../infrastructure/prisma';
+import { db } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { computeProductStatus } from '../../common/productStatus';
@@ -49,7 +49,7 @@ export class SalesService {
       throw new ValidationError('paidAmount cannot be negative');
     }
 
-    const invoice = await prisma.$transaction(async (tx) => {
+    const invoice = await db.$transaction(async (tx: any) => {
 
       const activeShift = await tx.cashShift.findFirst({
         where: {
@@ -90,7 +90,7 @@ export class SalesService {
           },
         },
       });
-      const productMap = new Map(allProducts.map((p) => [p.id, p]));
+      const productMap = new Map<string, any>(allProducts.map((p: any) => [p.id, p]));
 
       for (const item of input.items) {
         const quantity = Number(item.quantity);
@@ -313,7 +313,7 @@ export class SalesService {
   }
 
   async voidSale(invoiceId: string, userId: string) {
-    const invoice = await prisma.invoice.findUnique({
+    const invoice = await db.invoice.findUnique({
       where: { id: invoiceId },
       include: {
         items: true,
@@ -328,7 +328,7 @@ export class SalesService {
       throw new ValidationError('Returned invoices cannot be voided, use return workflow');
     }
 
-    return await prisma.$transaction(async (tx) => {
+    return await db.$transaction(async (tx: any) => {
       // 1. Restore stock
       for (const item of invoice.items) {
         await tx.batch.update({
@@ -389,7 +389,7 @@ export class SalesService {
   }
 
   async payDebt(invoiceId: string, input: { amount: number, paymentMethod: 'CASH' | 'CARD', userId: string }) {
-    const invoice = await prisma.invoice.findUnique({
+    const invoice = await db.invoice.findUnique({
       where: { id: invoiceId },
       include: { receivable: true }
     });
@@ -398,7 +398,7 @@ export class SalesService {
     if (invoice.paymentType !== 'CREDIT') throw new ValidationError('This is not a debt invoice');
     if (invoice.status === 'PAID') throw new ValidationError('This debt is already paid');
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: any) => {
       const amount = Number(input.amount);
       
       // Resiliency: if receivable record is missing for some reason, create it now

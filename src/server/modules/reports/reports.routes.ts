@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
-import { prisma } from '../../infrastructure/prisma';
+import { db } from '../../infrastructure/prisma';
 import { ValidationError } from '../../common/errors';
 import { readReportSettings, writeReportSettings } from './reportSettings.storage';
 import { readSystemSettings, getDefaultUserPreferences } from '../system/systemSettings.storage';
@@ -231,7 +231,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const chartMode = preset === 'month' ? 'day' : 'month';
 
   const [products, salesInvoicesInRange, ordinaryOpenInvoices, batches, writeoffsMonth, monthlySalesInvoices, receivables, purchasePayables] = await Promise.all([
-    prisma.product.findMany({
+    db.product.findMany({
       where: { isActive: true },
       select: {
         id: true,
@@ -242,7 +242,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         sellingPrice: true,
       },
     }),
-    prisma.invoice.findMany({
+    db.invoice.findMany({
       where: {
         createdAt: { gte: from, lte: to },
         status: { notIn: ['CANCELLED'] },
@@ -261,7 +261,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         },
       },
     }),
-    prisma.invoice.findMany({
+    db.invoice.findMany({
       where: {
         status: { in: ['PENDING', 'PAID'] },
         paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] },
@@ -278,7 +278,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         },
       },
     }),
-    prisma.batch.findMany({
+    db.batch.findMany({
       where: {
         quantity: { gt: 0 },
       },
@@ -296,7 +296,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         status: true,
       },
     }),
-    prisma.writeOff.findMany({
+    db.writeOff.findMany({
       where: { createdAt: { gte: monthStart, lte: monthEnd } },
       select: {
         totalAmount: true,
@@ -309,7 +309,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         },
       },
     }),
-    prisma.invoice.findMany({
+    db.invoice.findMany({
       where: {
         createdAt: { gte: monthStart, lte: monthEnd },
         status: { notIn: ['CANCELLED'] },
@@ -330,7 +330,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         },
       },
     }),
-    (prisma as any).receivable.findMany({
+    db.receivable.findMany({
       where: {
         status: { not: 'PAID' },
       },
@@ -348,7 +348,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         },
       },
     }),
-    prisma.payable.findMany({
+    db.payable.findMany({
       where: {
         status: { not: 'PAID' },
       },
@@ -484,7 +484,7 @@ reportsRouter.get('/metrics/inventory-status', authenticate, asyncHandler(async 
   const cachedResult = reportCache.get(cacheKey);
   if (cachedResult) return res.json(cachedResult);
 
-  const products = await prisma.product.findMany({
+  const products = await db.product.findMany({
     where: { isActive: true },
     select: { id: true, name: true, sku: true, totalStock: true, minStock: true, costPrice: true, sellingPrice: true }
   });
@@ -525,7 +525,7 @@ reportsRouter.get('/expiry', authenticate, asyncHandler(async (req, res) => {
     where.expiryDate = { gte: criticalThreshold, lte: warningThreshold };
   }
 
-  const batches = await prisma.batch.findMany({
+  const batches = await db.batch.findMany({
     where,
     include: {
       product: {
