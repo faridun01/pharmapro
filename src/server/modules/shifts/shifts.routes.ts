@@ -49,7 +49,7 @@ const getInvoicePaidAmount = (invoice: ShiftWithReportData['invoices'][number]) 
 async function getOrCreateDefaultWarehouse(): Promise<string> {
   let wh = await prisma.warehouse.findFirst({ where: { isDefault: true } });
   if (!wh) {
-    wh = await prisma.warehouse.create({ data: { code: 'MAIN', name: 'Main Warehouse', isDefault: true } });
+    wh = await prisma.warehouse.create({ data: { code: 'MAIN', name: 'Аптечный склад', isDefault: true } });
   }
   return wh.id;
 }

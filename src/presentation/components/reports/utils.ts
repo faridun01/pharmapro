@@ -2,7 +2,7 @@ import { AgingBuckets, FinanceReport, ReportRangePreset } from './types';
 
 export const toNumber = (value: unknown) => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0;
 };
 
 export const normalizeAging = (value: any): AgingBuckets => ({
@@ -132,6 +132,7 @@ export const formatMoney = (amount: number, currency = 'UZS') => {
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: currency,
-    minimumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount);
 };

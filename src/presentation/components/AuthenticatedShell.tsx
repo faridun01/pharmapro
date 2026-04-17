@@ -312,7 +312,7 @@ export default function AuthenticatedShell({ onSignedOut, onClose }: { onSignedO
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 px-4 py-2 bg-[#f5f5f0]/50 rounded-2xl border border-[#5A5A40]/10">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-              <span className="text-[10px] font-normal text-[#5A5A40]/60 uppercase tracking-widest">{t('Server Connected')}</span>
+              <span className="text-[10px] font-normal text-[#5A5A40]/60 uppercase tracking-widest">Сервер подключен</span>
             </div>
           </div>
         </header>

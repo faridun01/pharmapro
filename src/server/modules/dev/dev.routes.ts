@@ -68,7 +68,7 @@ async function ensureDefaultWarehouse() {
   let warehouse = await prisma.warehouse.findFirst({ where: { isDefault: true } });
   if (!warehouse) {
     warehouse = await prisma.warehouse.create({
-      data: { code: 'MAIN', name: 'Main Warehouse', isDefault: true, isActive: true },
+      data: { code: 'MAIN', name: 'Аптечный склад', isDefault: true, isActive: true },
     });
   }
   return warehouse;
@@ -81,8 +81,8 @@ const DEMO_DEBTOR_ACCOUNTS = [
     legalName: 'City General Pharmacy LLC',
     phone: '+998901111111',
     email: 'buyer1@citypharm.local',
-    address: 'Tashkent, Yunusabad district',
-    managerName: 'Dilshod Karimov',
+    address: 'Душанбе, район Исмоили Сомони',
+    managerName: 'Абдуллоев Исмоил',
     creditLimit: 15000000,
     defaultDiscount: 5,
     paymentTermDays: 14,
@@ -120,10 +120,10 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
   if (!supplier) {
     supplier = await prisma.supplier.create({
       data: {
-        name: 'Demo Supplier',
-        contact: '+7 (900) 000-00-00',
+        name: 'Демо поставщик',
+        contact: '+992900000000',
         email: 'demo@supplier.local',
-        address: 'Москва, Тестовая, 1',
+        address: 'Душанбе, Тестовая, 1',
       },
     });
   }
@@ -278,7 +278,7 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
           paymentStatus: 'PARTIALLY_PAID',
           totalAmount: sampleProducts.reduce((sum, product) => sum + product.costPrice * 50, 0),
           createdById: user.id,
-          comment: 'Demo purchase invoice',
+          comment: 'Демо закупочный инвойс',
           items: {
             create: sampleProducts.map((product, index) => ({
               productId: product.id,
@@ -351,10 +351,10 @@ devRouter.post('/reset-operations', authenticate, asyncHandler(async (_req, res)
 
 devRouter.get('/stock-integrity', authenticate, asyncHandler(async (_req, res) => {
   const report = await buildStockIntegrityReport();
-  res.json({ 
-    ok: report.issuesCount === 0, 
-    healthy: report.issuesCount === 0, 
-    ...report 
+  res.json({
+    ok: report.issuesCount === 0,
+    healthy: report.issuesCount === 0,
+    ...report
   });
 }));
 
@@ -367,10 +367,10 @@ devRouter.post('/stock-integrity/fix', authenticate, asyncHandler(async (req, re
 
   await applyStockIntegrityFix();
   const report = await buildStockIntegrityReport();
-  res.json({ 
-    ok: report.issuesCount === 0, 
-    healthy: report.issuesCount === 0, 
-    repaired: true, 
-    ...report 
+  res.json({
+    ok: report.issuesCount === 0,
+    healthy: report.issuesCount === 0,
+    repaired: true,
+    ...report
   });
 }));

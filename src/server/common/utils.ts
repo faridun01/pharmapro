@@ -86,3 +86,13 @@ export const parseAuditJson = (value: string | null): any => {
     return null;
   }
 };
+/**
+ * Rounds a number to a fixed number of decimal places (default is 2).
+ * Safely handles strings and null/undefined by converting to number.
+ */
+export const round = (value: unknown, precision: number = 2): number => {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return 0;
+  const factor = Math.pow(10, precision);
+  return Math.round(n * factor) / factor;
+};

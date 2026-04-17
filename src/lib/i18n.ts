@@ -258,6 +258,7 @@ const resources = {
       'Top Performing Products': 'Топ товаров',
       'Sales by Category': 'Продажи по категориям',
       'Daily sales vs profit analysis': 'Ежедневный анализ продаж и прибыли',
+      'Sales Dynamics': 'Динамика продаж',
       'Advanced analytics and performance reporting': 'Расширенная аналитика и отчетность',
       'Business Intelligence': 'Бизнес-аналитика',
       'View All': 'Показать все',

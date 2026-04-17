@@ -22,7 +22,7 @@ export const ReportKpiSection: React.FC<Props> = ({ data, currencyCode }) => {
     {
       label: t('reports.grossProfit'),
       value: formatMoney(kpi.grossProfit, currencyCode),
-      hint: `${t('reports.margin')}: ${kpi.grossMarginPct.toFixed(1)}%`,
+      hint: `${t('reports.margin')}: ${kpi.grossMarginPct.toFixed(2)}%`,
       accent: 'text-emerald-600',
       description: 'Прибыль от продаж после вычета только себестоимости закупки товара (COGS).',
     },
@@ -43,7 +43,7 @@ export const ReportKpiSection: React.FC<Props> = ({ data, currencyCode }) => {
     {
       label: 'Операционная прибыль',
       value: formatMoney(kpi.operatingProfit, currencyCode),
-      hint: `Маржа: ${kpi.operatingMarginPct.toFixed(1)}%`,
+      hint: `Маржа: ${kpi.operatingMarginPct.toFixed(2)}%`,
       accent: kpi.operatingProfit >= 0 ? 'text-emerald-600' : 'text-red-600',
       description: 'Итоговая прибыль после вычета себестоимости, списаний и операционных расходов.',
     },

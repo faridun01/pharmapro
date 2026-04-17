@@ -3,6 +3,7 @@ import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { reportCache } from '../../common/cache';
 import { computeBatchStatus } from '../../common/batchStatus';
+import { round } from '../../common/utils';
 
 export type RestockItemInput = {
   productId: string;
@@ -344,10 +345,10 @@ export class InventoryService {
         throw new ValidationError(`Purchase invoice ${invoiceNumber} already exists`);
       }
 
-      const grossTotal = input.items.reduce((sum, item) => sum + (Number(item.costBasis) * Number(item.quantity)), 0);
-      const discountAmount = Number(input.discountAmount ?? 0);
-      const taxAmount = Number(input.taxAmount ?? 0);
-      const totalAmount = Math.max(0, grossTotal - discountAmount + taxAmount);
+      const grossTotal = round(input.items.reduce((sum, item) => sum + (Number(item.costBasis) * Number(item.quantity)), 0));
+      const discountAmount = round(input.discountAmount ?? 0);
+      const taxAmount = round(input.taxAmount ?? 0);
+      const totalAmount = round(Math.max(0, grossTotal - discountAmount + taxAmount));
 
       const purchaseInvoice = await tx.purchaseInvoice.create({
         data: {

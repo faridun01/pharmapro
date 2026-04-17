@@ -63,6 +63,7 @@ export const DashboardSalesChart: React.FC<DashboardSalesChartProps> = ({ data }
           <Tooltip
             contentStyle={{ backgroundColor: '#fff', borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}
             itemStyle={{ color: '#5A5A40', fontWeight: 'bold' }}
+            formatter={(val: number) => [val.toFixed(2), 'sales']}
           />
           <Area type="monotone" dataKey="sales" stroke="#5A5A40" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
         </AreaChart>

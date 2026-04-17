@@ -105,7 +105,7 @@ export const ReportsView: React.FC = () => {
           { label: 'Чистая выручка', val: report ? formatMoney(report.kpi.netRevenue, currencyCode) : '...', sub: 'За выбранный период', color: 'text-[#5A5A40]', icon: TrendingUp },
           { label: 'Валовая прибыль', val: report ? formatMoney(report.kpi.grossProfit, currencyCode) : '...', sub: 'До вычета расходов', color: 'text-emerald-600', icon: ChartBar },
           { label: 'Продаж совершено', val: report ? report.invoices.totalCount : '...', sub: 'Всего транзакций', color: 'text-[#5A5A40]', icon: Inbox },
-          { label: 'Рентабельность', val: report && report.kpi.netRevenue ? `${((report.kpi.grossProfit / report.kpi.netRevenue) * 100).toFixed(1)}%` : '...', sub: 'Маржинальность', color: 'text-indigo-600', icon: FileDown },
+          { label: 'Рентабельность', val: report && report.kpi.netRevenue ? `${((report.kpi.grossProfit / report.kpi.netRevenue) * 100).toFixed(2)}%` : '...', sub: 'Маржинальность', color: 'text-indigo-600', icon: FileDown },
         ].map((card, idx) => (
           <div key={idx} className="bg-white border border-[#5A5A40]/10 rounded-[2rem] p-6">
             <div className="flex justify-between items-start mb-4">

@@ -78,7 +78,7 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = React.memo(({
       </td>
       <td className="px-6 py-4">
         <p className="text-[14px] text-[#151619] font-normal tabular-nums">{product.sellingPrice.toFixed(2)}</p>
-        <p className="text-[9px] text-[#5A5A40]/30 uppercase tracking-tighter mt-0.5">Себест: {product.costPrice.toFixed(0)}</p>
+        <p className="text-[9px] text-[#5A5A40]/30 uppercase tracking-tighter mt-0.5">Себест: {product.costPrice.toFixed(2)}</p>
       </td>
       <td className="px-6 py-4">
         <div className="flex flex-col gap-1">

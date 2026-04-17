@@ -182,7 +182,7 @@ export const DashboardView: React.FC = () => {
                   <p className="text-[9px] text-[#5A5A40]/30 uppercase tracking-tighter mt-1">{act.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-[13px] text-[#151619] font-normal">{Number(act.amount).toFixed(0)}</p>
+                  <p className="text-[13px] text-[#151619] font-normal">{Number(act.amount).toFixed(2)}</p>
                   <p className="text-[9px] text-[#5A5A40]/30">TJS</p>
                 </div>
               </div>

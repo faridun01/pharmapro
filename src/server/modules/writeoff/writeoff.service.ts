@@ -32,7 +32,7 @@ const mapProductStatus = (totalStock: number, minStock: number) => {
 async function getOrCreateDefaultWarehouse() {
   let wh = await prisma.warehouse.findFirst({ where: { isDefault: true } });
   if (!wh) {
-    wh = await prisma.warehouse.create({ data: { code: 'MAIN', name: 'Main Warehouse', isDefault: true } });
+    wh = await prisma.warehouse.create({ data: { code: 'MAIN', name: 'Аптечный склад', isDefault: true } });
   }
   return wh.id;
 }
@@ -400,7 +400,7 @@ export class WriteOffService {
   }
 
   async massWriteOffExpired(userId: string, userRole: string) {
-     if (userRole !== 'ADMIN' && userRole !== 'OWNER' && userRole !== 'PHARMACIST') {
+    if (userRole !== 'ADMIN' && userRole !== 'OWNER' && userRole !== 'PHARMACIST') {
       throw new ValidationError('Only Pharmacists or Admins can mass write-off');
     }
 

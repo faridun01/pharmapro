@@ -5,6 +5,7 @@ import { computeProductStatus } from '../../common/productStatus';
 import { reportCache } from '../../common/cache';
 import { computeBatchStatus } from '../../common/batchStatus';
 import { stockService } from '../../services/stock.service';
+import { round } from '../../common/utils';
 
 export type SaleItemInput = {
   productId: string;
@@ -178,8 +179,8 @@ export class SalesService {
             batchNo: batch.batchNumber,
             quantity: deduct,
             unitPrice: sellingPrice,
-            discountAmount: (itemDiscount / quantity) * deduct,
-            totalPrice: (deduct * sellingPrice) - ((itemDiscount / quantity) * deduct),
+            discountAmount: round((itemDiscount / quantity) * deduct),
+            totalPrice: round((deduct * sellingPrice) - ((itemDiscount / quantity) * deduct)),
           });
 
           remainingToDeduct -= deduct;
@@ -224,9 +225,9 @@ export class SalesService {
       }) as any;
 
       if (input.paymentType === 'CREDIT') {
-        const initialPaid = Number(input.paidAmount || 0);
-        const totalAmount = Number(input.total);
-        const remaining = Math.max(0, totalAmount - initialPaid);
+        const initialPaid = round(input.paidAmount || 0);
+        const totalAmount = round(input.total);
+        const remaining = round(Math.max(0, totalAmount - initialPaid));
         
         await (tx as any).receivable.create({
           data: {
