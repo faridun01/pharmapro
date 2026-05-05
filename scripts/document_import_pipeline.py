@@ -273,6 +273,8 @@ def build_column_mapping(columns: Sequence[str], aliases: dict[str, tuple[str, .
         if best_match:
             mapping[target_field] = best_match[1]
     return mapping
+
+
 def heuristically_map_columns(
     headers: Sequence[str], body_rows: Sequence[Sequence[Any]], current_mapping: dict[str, str]
 ) -> dict[str, str]:
