@@ -699,7 +699,7 @@ ipcMain.handle('desktop:perform-backup', async () => {
 
     for (const cp of commonPaths) {
       if (fs.existsSync(cp)) {
-        pgDumpPath = `"${cp}"`;
+        pgDumpPath = cp;
         break;
       }
     }
@@ -716,7 +716,7 @@ ipcMain.handle('desktop:perform-backup', async () => {
         dbname
       ], {
         env: { ...process.env, PGPASSWORD: password },
-        shell: true
+        shell: false
       });
 
       let stderr = '';
