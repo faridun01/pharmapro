@@ -135,15 +135,6 @@ const App: React.FC = () => {
         setTimeout(async () => {
           setShowSplash(false);
           polling = false;
-          
-          if (!user && import.meta.env.DEV) {
-            try {
-              setStatus('Авторизация...');
-              await handleLogin('admin@pharmapro.com', 'dev-password');
-            } catch (err) {
-              console.warn('Auto-login failed, showing login screen');
-            }
-          }
         }, remainingTime);
       } else {
         attempts++;
