@@ -32,7 +32,7 @@
   },
   "build": {
     "appId": "com.pharmapro.app",
-    "productName": "PharmaPro",
+    "productName": "3C: Pharma",
     "directories": {
       "output": "release",
       "buildResources": "build"

@@ -61,7 +61,7 @@ export const LoginView: React.FC<{
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-4 animate-pulse">
             <ShieldCheck size={32} />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">PharmaPro</h1>
+          <h1 className="text-3xl font-bold tracking-tight">3C: Pharma</h1>
           <p className="text-white/70 mt-2 italic">
             {needsSetup ? 'Первичная настройка системы' : t('Professional Pharmacy Management')}
           </p>

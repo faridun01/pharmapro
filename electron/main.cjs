@@ -395,7 +395,7 @@ function createWindow() {
       additionalArguments: [`--pharmapro-started-at=${appStartupStartedAt}`],
     },
     icon: windowIcon,
-    title: 'PharmaPro Management System',
+    title: '3C: Pharma Management System',
     backgroundColor: '#151619',
     show: false,
   });

@@ -54,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         {isSidebarOpen && (
           <div className="flex flex-col pharma-fade-in">
-            <h1 className="font-normal text-xl tracking-tight leading-none text-white">PharmaPro</h1>
+            <h1 className="font-normal text-xl tracking-tight leading-none text-white">3C: Pharma</h1>
             <span className="text-[10px] text-[#5A5A40] font-normal uppercase tracking-[0.2em] mt-1.5">ITFORCE System</span>
           </div>
         )}
