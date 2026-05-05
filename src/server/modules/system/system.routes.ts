@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { authenticate, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
@@ -24,8 +25,19 @@ const canManageSystem = (role: string | undefined) => {
 systemRouter.get('/ping', (_req, res) => {
   res.json({ ok: true, message: 'System service is healthy', timestamp: new Date().toISOString() });
 });
-
-
+systemRouter.get('/disk-space', authenticate, asyncHandler(async (_req, res) => {
+  try {
+    const stats = await fs.promises.statfs(process.cwd());
+    const totalBytes = stats.bsize * stats.blocks;
+    const freeBytes = stats.bsize * stats.bavail;
+    const freeGb = (freeBytes / (1024 * 1024 * 1024)).toFixed(1);
+    const percentage = Math.round((freeBytes / totalBytes) * 100);
+    
+    res.json({ ok: true, freeGb, percentage });
+  } catch (err) {
+    res.json({ ok: true, freeGb: '0.0', percentage: 0 });
+  }
+}));
 
 systemRouter.get('/me/profile', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;

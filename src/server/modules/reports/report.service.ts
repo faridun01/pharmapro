@@ -455,11 +455,11 @@ export class ReportService {
         byMethod,
       },
       debts: {
-        payableTotal: Number(payableStats._sum?.remainingAmount || 0),
-        payableOverdue: 0, // Would need aging logic on aggregated data
+        payableTotal: apAging.total,
+        payableOverdue: payableOverdue,
         apAging,
-        receivableTotal: Number(receivableStats._sum?.remainingAmount || 0),
-        receivableOverdue: 0,
+        receivableTotal: arAging.total,
+        receivableOverdue: receivableOverdue,
         arAging,
       },
       purchases: {
@@ -492,11 +492,11 @@ export class ReportService {
       },
       meta: {
         source: {
-          invoiceCount: invoices.length,
+          invoiceCount: activeInvoices.length,
           purchaseInvoiceCount: purchaseInvoices.length,
-          paymentCount: payments.length,
+          paymentCount: 0,
           expenseCount: expenses.length,
-          purchaseItemCount: purchaseInvoiceItems.length,
+          purchaseItemCount: 0,
         },
       },
     };

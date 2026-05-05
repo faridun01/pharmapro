@@ -86,6 +86,7 @@ export const SettingsView: React.FC = () => {
   const [statusLoading, setStatusLoading] = useState(false);
   const [isDbModalOpen, setIsDbModalOpen] = useState(false);
   const [activeUsersCount, setActiveUsersCount] = useState<number | null>(null);
+  const [diskSpace, setDiskSpace] = useState<{ freeGb: string; percentage: number } | null>(null);
   const [dbConfig, setDbConfig] = useState({
     user: 'postgres',
     password: '',
@@ -252,13 +253,21 @@ export const SettingsView: React.FC = () => {
         }
         if (isAdmin) {
           try {
-            const usersRes = await fetch('/api/system/users', { headers: await buildApiHeaders(false) });
+            const [usersRes, diskRes] = await Promise.all([
+              fetch('/api/system/users', { headers: await buildApiHeaders(false) }),
+              fetch('/api/system/disk-space', { headers: await buildApiHeaders(false) })
+            ]);
+
             if (usersRes.ok) {
               const users = await usersRes.json();
               setActiveUsersCount(Array.isArray(users) ? users.filter((u: any) => u.isActive).length : null);
             }
+            if (diskRes.ok) {
+              const diskData = await diskRes.json();
+              setDiskSpace(diskData);
+            }
           } catch (e) {
-            console.error('Failed to fetch user count for header', e);
+            console.warn('Could not load extra admin stats', e);
           }
         }
       } catch (e: any) {
@@ -405,7 +414,7 @@ export const SettingsView: React.FC = () => {
           { label: 'Система', val: 'Online', sub: 'Защищенное соединение', color: 'text-emerald-600', icon: CircleCheck },
           { label: 'База данных', val: 'Prisma DB', sub: 'Интеграция активна', color: 'text-[#5A5A40]', icon: Database },
           { label: 'Пользователи', val: activeUsersCount !== null ? `${activeUsersCount} активных` : 'Загрузка...', sub: 'Доступ согласно ролям', color: 'text-[#5A5A40]', icon: UsersIcon },
-          { label: 'Хранилище', val: '84% свободно', sub: 'Место на диске', color: 'text-amber-600', icon: HardDrive },
+          { label: 'Хранилище', val: diskSpace ? `${diskSpace.percentage}% свободно` : 'Загрузка...', sub: diskSpace ? `Доступно ${diskSpace.freeGb} ГБ` : 'Место на диске', color: 'text-amber-600', icon: HardDrive },
         ].map((card, idx) => (
           <div key={idx} className="bg-white/40 border border-[#5A5A40]/5 rounded-[2rem] p-6 shadow-sm hover:shadow-xl transition-all group">
             <div className="flex justify-between items-start mb-4">
