@@ -5,7 +5,7 @@
 
 export type BatchStatus = 'CRITICAL' | 'STABLE' | 'NEAR_EXPIRY' | 'EXPIRED';
 export type MovementType = 'RESTOCK' | 'DISPATCH' | 'ADJUSTMENT' | 'RETURN' | 'WRITE_OFF';
-export type UserRole = 'ADMIN' | 'CASHIER' | 'WAREHOUSE' | 'OWNER';
+export type UserRole = 'OWNER' | 'ADMIN' | 'CASHIER' | 'PHARMACIST' | 'WAREHOUSE_STAFF';
 
 export interface BatchMovement {
   id: string;
@@ -29,6 +29,7 @@ export interface Batch {
   expiryDate: Date;
   receivedAt: Date;
   status: BatchStatus;
+  countryOfOrigin?: string;
   movements: BatchMovement[];
 }
 
@@ -54,7 +55,7 @@ export interface Product {
 
 export interface User {
   id: string;
-  email: string;
+  username: string;
   name: string;
   role: UserRole;
 }
@@ -63,7 +64,6 @@ export interface Supplier {
   id: string;
   name: string;
   contact?: string;
-  email?: string;
   address?: string;
 }
 

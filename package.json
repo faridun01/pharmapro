@@ -44,7 +44,8 @@
       }
     ],
     "asarUnpack": [
-      "dist-server/**"
+      "dist-server/**",
+      "prisma/**"
     ],
     "files": [
       "dist/**/*",

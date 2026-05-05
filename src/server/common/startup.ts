@@ -1,10 +1,39 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import pkg from 'pg';
 const { Client } = pkg;
 import { prisma } from '../infrastructure/prisma';
 import { logger } from './logger';
+
+const currentDir =
+  typeof __dirname !== 'undefined'
+    ? __dirname
+    : path.dirname(process.argv[1] || process.cwd());
+
+const findExistingPath = (candidates: Array<string | undefined | null>) =>
+  candidates.find((candidate) => Boolean(candidate) && fs.existsSync(candidate)) ?? null;
+
+const resolveRuntimeRoot = () => {
+  const explicitRoot = process.env.PHARMAPRO_RUNTIME_ROOT;
+  if (explicitRoot && fs.existsSync(explicitRoot)) {
+    return explicitRoot;
+  }
+
+  const candidates = [
+    process.cwd(),
+    path.resolve(currentDir, '..'),
+    path.resolve(currentDir, '../..'),
+    path.resolve(currentDir, '../../..'),
+    path.resolve(process.cwd(), '..'),
+  ];
+
+  const rootWithPrisma = candidates.find((candidate) =>
+    fs.existsSync(path.join(candidate, 'prisma', 'schema.prisma'))
+  );
+
+  return rootWithPrisma ?? candidates[0];
+};
 
 const maskDatabaseUrl = (value?: string) => {
   if (!value) return '(not set)';
@@ -76,34 +105,47 @@ export const ensureDatabaseExists = async (databaseUrl: string) => {
 };
 
 export const runDatabaseMigrations = async () => {
-  const isProduction = process.env.NODE_ENV === 'production';
-  // In development, we use project root. In production (Electron), we use the app package root.
-  const projectRoot = isProduction 
-    ? path.resolve(process.cwd(), '..') // In Electron, backend usually runs from unpacked/dist-server
-    : process.cwd();
+  const runtimeRoot = resolveRuntimeRoot();
+  const schemaPath = findExistingPath([
+    process.env.PHARMAPRO_PRISMA_SCHEMA,
+    path.join(runtimeRoot, 'prisma', 'schema.prisma'),
+    path.join(currentDir, '..', 'prisma', 'schema.prisma'),
+    path.join(currentDir, '../..', 'prisma', 'schema.prisma'),
+    path.join(currentDir, '../../..', 'prisma', 'schema.prisma'),
+    path.join(process.cwd(), 'prisma', 'schema.prisma'),
+    path.join(process.cwd(), '..', 'prisma', 'schema.prisma'),
+  ]);
 
-  const prismaCli = path.resolve(
-    projectRoot,
-    'node_modules',
-    '.bin',
-    process.platform === 'win32' ? 'prisma.cmd' : 'prisma'
-  );
+  const prismaCliEntry = findExistingPath([
+    path.join(runtimeRoot, 'node_modules', 'prisma', 'build', 'index.js'),
+    path.join(currentDir, '..', 'node_modules', 'prisma', 'build', 'index.js'),
+    path.join(currentDir, '../..', 'node_modules', 'prisma', 'build', 'index.js'),
+    path.join(currentDir, '../../..', 'node_modules', 'prisma', 'build', 'index.js'),
+    path.join(process.cwd(), 'node_modules', 'prisma', 'build', 'index.js'),
+    path.join(process.cwd(), '..', 'node_modules', 'prisma', 'build', 'index.js'),
+  ]);
 
-  const schemaPath = path.resolve(projectRoot, 'prisma', 'schema.prisma');
-
-  if (!fs.existsSync(schemaPath)) {
+  if (!schemaPath) {
     logger.warn('Schema file not found, skipping migrations.', { path: schemaPath });
+    return;
+  }
+
+  if (!prismaCliEntry) {
+    logger.warn('Prisma CLI entry not found, skipping migrations.', { runtimeRoot });
     return;
   }
 
   logger.info('Checking database migrations...', {
     env: process.env.NODE_ENV,
     schema: schemaPath,
+    prismaCliEntry,
+    runtimeRoot,
   });
 
   try {
     // We use migrate deploy to apply pending migrations without data loss or reset.
-    const output = execSync(`"${prismaCli}" migrate deploy --schema="${schemaPath}"`, {
+    const output = execFileSync(process.execPath, [prismaCliEntry, 'migrate', 'deploy', `--schema=${schemaPath}`], {
+      cwd: runtimeRoot,
       env: {
         ...process.env,
         // Ensure Prisma doesn't try to open interactive prompts

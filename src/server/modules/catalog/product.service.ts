@@ -30,6 +30,8 @@ const CreateProductSchema = z.object({
   prescription: z.boolean().optional().default(false),
   markingRequired: z.boolean().optional().default(false),
   status: z.string().optional().nullable(),
+  dosage: z.string().optional().nullable(),
+  formId: z.string().optional().nullable(),
   analogs: z.union([z.array(z.string()), z.string()]).optional().nullable(),
   batches: z.array(z.object({
     id: z.string().optional(),
@@ -154,7 +156,12 @@ export class ProductService {
       analogs: Array.isArray(data.analogs) ? JSON.stringify(data.analogs) : normalizeNullableText(data.analogs),
     };
 
-    const existingProduct = await findExistingProductByName(productData.name, productData.countryOfOrigin);
+    const existingProduct = await findExistingProductByName(
+      productData.name, 
+      productData.countryOfOrigin,
+      data.dosage,
+      data.formId
+    );
     if (existingProduct) return existingProduct;
 
     const normalizedSku = normalizeSku(productData.sku);
@@ -299,7 +306,7 @@ export class ProductService {
         action: 'UPDATE_PRODUCT',
       },
       include: {
-        user: { select: { name: true, email: true } },
+        user: { select: { name: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 25,
@@ -320,7 +327,7 @@ export class ProductService {
         return {
           id: entry.id,
           createdAt: entry.createdAt,
-          actorName: entry.user?.name || entry.user?.email || 'Сотрудник',
+          actorName: entry.user?.name || 'Сотрудник',
           costPrice: { old: oldCostPrice, new: newCostPrice },
           sellingPrice: { old: oldSellingPrice, new: newSellingPrice },
         };

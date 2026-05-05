@@ -80,7 +80,6 @@ const DEMO_DEBTOR_ACCOUNTS = [
     name: 'City General Pharmacy',
     legalName: 'City General Pharmacy LLC',
     phone: '+998901111111',
-    email: 'buyer1@citypharm.local',
     address: 'Душанбе, район Исмоили Сомони',
     managerName: 'Абдуллоев Исмоил',
     creditLimit: 15000000,
@@ -92,7 +91,6 @@ const DEMO_DEBTOR_ACCOUNTS = [
     name: 'HealthPlus Clinic',
     legalName: 'HealthPlus Clinic LLC',
     phone: '+998902222222',
-    email: 'procurement@healthplus.local',
     address: 'Tashkent, Chilanzar district',
     managerName: 'Malika Rakhimova',
     creditLimit: 8000000,
@@ -106,10 +104,10 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
   const warehouse = await ensureDefaultWarehouse();
 
   const user = await prisma.user.findUnique({ where: { id: authedReq.user.id } })
-    ?? await prisma.user.findFirst({ where: { email: authedReq.user.email } })
+    ?? await prisma.user.findFirst({ where: { username: authedReq.user.username } })
     ?? await prisma.user.create({
       data: {
-        email: authedReq.user.email,
+        username: authedReq.user.username || 'admin',
         password: 'dev-password',
         name: 'Dev Admin',
         role: 'ADMIN',
@@ -122,7 +120,6 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
       data: {
         name: 'Демо поставщик',
         contact: '+992900000000',
-        email: 'demo@supplier.local',
         address: 'Душанбе, Тестовая, 1',
       },
     });
@@ -138,7 +135,6 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
         name: debtorAccount.name,
         legalName: debtorAccount.legalName,
         phone: debtorAccount.phone,
-        email: debtorAccount.email,
         address: debtorAccount.address,
         managerName: debtorAccount.managerName,
         creditLimit: debtorAccount.creditLimit,
@@ -151,7 +147,6 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
         name: debtorAccount.name,
         legalName: debtorAccount.legalName,
         phone: debtorAccount.phone,
-        email: debtorAccount.email,
         address: debtorAccount.address,
         managerName: debtorAccount.managerName,
         creditLimit: debtorAccount.creditLimit,

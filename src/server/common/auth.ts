@@ -7,16 +7,15 @@ import { getJwtSecret, isDevAuthBypassEnabled } from './jwt';
 
 type JwtUser = {
   id: string;
-  email: string;
+  username: string;
   role: string;
 };
 
 export type AuthedRequest = Request & { user: JwtUser };
 
-const DEV_ADMIN_EMAIL = 'admin@pharmapro.com';
 const DEV_ADMIN_USERNAME = 'admin';
-const DEV_ADMIN_PASSWORD = 'admin123';
-const DEV_ADMIN_PASSWORD_HASH = '$2b$10$wnlS.eRxOglKIuDgS8Nycu.g/VcgDSHkwTRNjvIx9ZSPoJZww9/ey';
+const DEV_ADMIN_PASSWORD = 'dev-password';
+const DEV_ADMIN_PASSWORD_HASH = '$2b$10$QWHZjMpDfrae3H8.xQL3R.eQmv7Lj9cUOxkD.2E1gC/lmhMkKewxm';
 const PRODUCTION_BOOTSTRAP_HINT = 'Run `npm run bootstrap:admin -- --email owner@example.com --password <strong-password> --name "Owner" --role OWNER` before first production login.';
 
 const isTrustedDesktopRequest = (req: Request) => {
@@ -49,22 +48,21 @@ export const ensureAdminUser = async () => {
     return;
   }
 
-  const existing = await prisma.user.findFirst({
-    where: { email: DEV_ADMIN_EMAIL },
+  const existing = await prisma.user.findUnique({
+    where: { username: DEV_ADMIN_USERNAME },
     select: { id: true, username: true, password: true, isActive: true },
   });
 
   if (!existing) {
     await prisma.user.create({
       data: {
-        email: DEV_ADMIN_EMAIL,
         username: DEV_ADMIN_USERNAME,
         password: DEV_ADMIN_PASSWORD_HASH,
         name: 'Admin',
         role: 'ADMIN',
       },
     });
-    console.log('[auth] Admin user created: admin / admin123');
+    console.log(`[auth] Admin user created: admin / ${DEV_ADMIN_PASSWORD}`);
   } else {
     const updateData: { username?: string; password?: string; isActive?: boolean } = {};
 
@@ -83,7 +81,7 @@ export const ensureAdminUser = async () => {
 
     if (Object.keys(updateData).length > 0) {
       await prisma.user.update({
-        where: { email: DEV_ADMIN_EMAIL },
+        where: { id: existing.id },
         data: updateData,
       });
       console.log('[auth] Admin credentials synchronized');
@@ -92,30 +90,31 @@ export const ensureAdminUser = async () => {
 };
 
 const ensureDevUser = async () => {
-  const devUser = await prisma.user.findFirst({
-    where: { email: DEV_ADMIN_EMAIL },
-    select: { id: true, email: true, role: true },
+  const devUser = await prisma.user.findUnique({
+    where: { username: DEV_ADMIN_USERNAME },
+    select: { id: true, username: true, role: true, isActive: true },
   });
-  if (!devUser) {
+  if (!devUser || !devUser.isActive) {
     await ensureAdminUser();
-    return prisma.user.findFirst({
-      where: { email: DEV_ADMIN_EMAIL },
-      select: { id: true, email: true, role: true },
-    }) as Promise<{ id: string; email: string; role: string }>;
+    return prisma.user.findUnique({
+      where: { username: DEV_ADMIN_USERNAME },
+      select: { id: true, username: true, role: true },
+    }) as Promise<{ id: string; username: string; role: string }>;
   }
   return devUser;
 };
 
 export const authenticate = async (req: Request, _res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(' ')[1];
+  const [scheme, token] = req.headers.authorization?.split(/\s+/) ?? [];
+  const bearerToken = scheme?.toLowerCase() === 'bearer' ? token : undefined;
 
-  if (!token && isTrustedDesktopRequest(req)) {
+  if (!bearerToken && isTrustedDesktopRequest(req)) {
     try {
       const devUser = await ensureDevUser();
 
       (req as AuthedRequest).user = {
         id: devUser.id,
-        email: devUser.email,
+        username: devUser.username,
         role: devUser.role,
       };
       return next();
@@ -124,13 +123,13 @@ export const authenticate = async (req: Request, _res: Response, next: NextFunct
     }
   }
 
-  if (!token && process.env.NODE_ENV !== 'production' && isDevAuthBypassEnabled()) {
+  if (!bearerToken && process.env.NODE_ENV !== 'production' && isDevAuthBypassEnabled()) {
     try {
       const devUser = await ensureDevUser();
 
       (req as AuthedRequest).user = {
         id: devUser.id,
-        email: devUser.email,
+        username: devUser.username,
         role: devUser.role,
       };
       return next();
@@ -139,17 +138,32 @@ export const authenticate = async (req: Request, _res: Response, next: NextFunct
     }
   }
 
-  if (!token) {
+  if (!bearerToken) {
     return next(new UnauthorizedError());
   }
 
+  let decoded: JwtUser;
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as JwtUser;
-    (req as AuthedRequest).user = decoded;
-    return next();
+    decoded = jwt.verify(bearerToken, getJwtSecret()) as JwtUser;
   } catch {
     return next(new UnauthorizedError('Invalid token'));
   }
+
+  const activeUser = await prisma.user.findUnique({
+    where: { id: decoded.id },
+    select: { id: true, username: true, role: true, isActive: true },
+  });
+
+  if (!activeUser?.isActive) {
+    return next(new UnauthorizedError());
+  }
+
+  (req as AuthedRequest).user = {
+    id: activeUser.id,
+    username: activeUser.username,
+    role: activeUser.role,
+  };
+  return next();
 };
 
 export const requireRole = (roles: string[]) => {

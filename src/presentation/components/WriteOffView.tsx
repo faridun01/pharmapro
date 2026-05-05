@@ -115,7 +115,7 @@ const getSortedWriteOffBatches = (product?: { batches?: Array<any> } | null) => 
 };
 
 function authHeaders() {
-  const token = localStorage.getItem('pharmapro_token');
+  const token = sessionStorage.getItem('pharmapro_token');
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -470,7 +470,7 @@ const REASON_STYLES: Record<string, string> = {
   OTHER: 'bg-gray-100 text-gray-700',
 };
 
-export const WriteOffView: React.FC = () => {
+export const WriteOffView: React.FC<{ hideHeader?: boolean }> = ({ hideHeader }) => {
   const { refreshProducts } = usePharmacy();
   const currencyCode = useCurrencyCode();
   const [writeOffs, setWriteOffs] = useState<WriteOff[]>([]);
@@ -606,14 +606,17 @@ export const WriteOffView: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-[#f9ebe7] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-red-600/80">
-              Контроль потерь
-            </span>
-            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
-              Просрочка, брак и расхождения
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-red-100 rounded-2xl">
+              <AlertTriangle className="text-red-600" size={24} />
+            </div>
+            <span>
+              <h2 className="text-2xl font-bold text-[#151619]">Списания</h2>
+              <span className="text-[#5A5A40]/60 text-sm">
+                Просрочка, брак и расхождения
+              </span>
             </span>
           </div>
 
@@ -629,7 +632,7 @@ export const WriteOffView: React.FC = () => {
           </button>
         </div>
         </div>
-      </div>
+      )}
 
       {feedback && (
         <div className={`rounded-3xl border px-4 py-3 shadow-sm ${feedback.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-700'}`}>

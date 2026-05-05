@@ -172,16 +172,24 @@ const App: React.FC = () => {
 
   const handleSaveConfig = async (url: string) => {
     setStatus('Применение настроек...');
+    setError(null);
     try {
       const result = await window.pharmaproDesktop?.saveDatabaseConfig(url);
       if (result?.success) {
         setStatus('Перезапуск сервера...');
         // The polling in useEffect will automatically pick up the new server
+        return;
       } else {
-        setError(result?.error || 'Не удалось сохранить настройки');
+        const message = result?.error || 'Не удалось сохранить настройки';
+        setError(message);
+        throw new Error(message);
       }
     } catch (err) {
-      setError('Ошибка IPC: Не удалось сохранить настройки');
+      const message = err instanceof Error
+        ? err.message
+        : 'Ошибка IPC: Не удалось сохранить настройки';
+      setError(message);
+      throw err instanceof Error ? err : new Error(message);
     }
   };
 
@@ -235,7 +243,7 @@ const App: React.FC = () => {
           <div className="w-16 h-16 border-4 border-white/10 border-t-white rounded-full animate-spin mb-8" />
           <h2 className="text-2xl font-normal tracking-tight mb-4">Создание резервной копии</h2>
           <p className="text-sm text-white/50 max-w-sm lowercase tracking-wider leading-relaxed italic">
-            Пожалуйста, не выключайте компьютер. Мы сохраняем базу данных на диск D для вашей безопасности.
+            Пожалуйста, не выключайте компьютер. Мы сохраняем базу данных в системную папку резервных копий.
           </p>
         </div>
       )}

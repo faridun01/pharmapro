@@ -3,13 +3,15 @@ import { prisma } from '../infrastructure/prisma';
 export const normalizeProductName = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
 const normalizeCountry = (value: string | null | undefined) => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
 
-export async function findExistingProductByName(name: string, countryOfOrigin?: string | null) {
+export async function findExistingProductByName(
+  name: string, 
+  countryOfOrigin?: string | null,
+  dosage?: string | null,
+  formId?: string | null
+) {
   const normalizedName = normalizeProductName(name || '');
   if (!normalizedName) return null;
 
-  // Search by name directly in DB (case-insensitive)
-  // We first fetch active products with exact case-insensitive name match.
-  // This is much faster than loading all products into memory.
   const matched = await prisma.product.findFirst({
     where: {
       isActive: true,
@@ -17,7 +19,8 @@ export async function findExistingProductByName(name: string, countryOfOrigin?: 
         equals: normalizedName,
         mode: 'insensitive',
       },
-      // If country is provided, match it too (case-insensitive)
+      ...(dosage ? { dosage: { equals: dosage.trim(), mode: 'insensitive' } } : {}),
+      ...(formId ? { formId: formId } : {}),
       ...(countryOfOrigin
         ? {
             countryOfOrigin: {

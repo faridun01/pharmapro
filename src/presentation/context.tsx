@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Product, User, Invoice, Supplier } from '../core/domain';
 import { TransactionDTO } from '../application/services';
 import { ApiProductRepository, ApiInvoiceRepository, ApiSupplierRepository, buildApiHeaders } from '../infrastructure/api';
@@ -57,8 +57,11 @@ interface PharmacyContextType {
       costBasis: number;
       manufacturedDate: Date;
       expiryDate: Date;
+      countryOfOrigin?: string;
     }>;
   }) => Promise<void>;
+  updatePurchaseInvoice: (id: string, payload: any) => Promise<void>;
+  deletePurchaseInvoice: (id: string) => Promise<void>;
   createProduct: (payload: Omit<Product, 'batches' | 'totalStock' | 'status'> & { minStock?: number }) => Promise<Product>;
   updateProduct: (payload: Product) => Promise<Product>;
   deleteProduct: (productId: string) => Promise<void>;
@@ -69,7 +72,7 @@ const PharmacyContext = createContext<PharmacyContextType | undefined>(undefined
 const bootstrapLoads = new Map<string, Promise<void>>();
 
 const getBootstrapLoadKey = (user: User | null) => {
-  const token = window.sessionStorage.getItem('pharmapro_token') || localStorage.getItem('pharmapro_token') || 'guest';
+  const token = window.sessionStorage.getItem('pharmapro_token') || 'guest';
   return user ? `auth:${user.id}:${token}` : `guest:${token}`;
 };
 
@@ -120,7 +123,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       const data = payload;
       window.sessionStorage.setItem('pharmapro_token', data.token);
       window.sessionStorage.setItem('pharmapro_user', JSON.stringify(data.user));
-      localStorage.setItem('pharmapro_token', data.token);
+      localStorage.removeItem('pharmapro_token');
       setUser(data.user);
     } catch (err: any) {
       setError(err.message);
@@ -135,7 +138,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     setUser(null);
   };
 
-  const refreshProducts = async () => {
+  const refreshProducts = useCallback(async () => {
     try {
       const result = await productRepository.getAll();
       const data = Array.isArray(result) ? result : (result?.items || []);
@@ -143,9 +146,9 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     } catch (err: any) {
       logger.error('Failed to fetch products', err);
     }
-  };
+  }, []);
 
-  const refreshInvoices = async () => {
+  const refreshInvoices = useCallback(async () => {
     try {
       const result = await invoiceRepository.getAll();
       const data = Array.isArray(result) ? result : (result?.items || []);
@@ -153,9 +156,9 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     } catch (err: any) {
       logger.error('Failed to fetch invoices', err);
     }
-  };
+  }, []);
 
-  const refreshSuppliers = async (force: boolean = false) => {
+  const refreshSuppliers = useCallback(async (force: boolean = false) => {
     try {
       const now = Date.now();
       const cached = cacheRef.current.suppliers;
@@ -174,7 +177,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     } catch (err: any) {
       logger.error('Failed to fetch suppliers', err);
     }
-  };
+  }, []);
 
   const processTransaction = async (transaction: TransactionDTO) => {
     try {
@@ -249,6 +252,31 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(body.error || 'Failed to import purchase invoice');
+    }
+  };
+
+  const updatePurchaseInvoice = async (id: string, payload: any) => {
+    const response = await fetch(`/api/inventory/purchase-invoices/${id}`, {
+      method: 'PUT',
+      headers: await buildApiHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.error || 'Failed to update purchase invoice');
+    }
+  };
+
+  const deletePurchaseInvoice = async (id: string) => {
+    const response = await fetch(`/api/inventory/purchase-invoices/${id}`, {
+      method: 'DELETE',
+      headers: await buildApiHeaders(),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.error || 'Failed to delete purchase invoice');
     }
   };
 
@@ -387,6 +415,8 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       processTransaction,
       restockInventory,
       importPurchaseInvoice,
+      updatePurchaseInvoice,
+      deletePurchaseInvoice,
       createProduct,
       updateProduct,
       deleteProduct

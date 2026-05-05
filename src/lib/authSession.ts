@@ -37,6 +37,6 @@ export const loginWithPassword = async (login: string, password: string): Promis
   const data = payload as LoginResponse;
   window.sessionStorage.setItem('pharmapro_token', data.token);
   window.sessionStorage.setItem('pharmapro_user', JSON.stringify(data.user));
-  window.localStorage.setItem('pharmapro_token', data.token);
+  window.localStorage.removeItem('pharmapro_token');
   return data;
 };

@@ -17,20 +17,22 @@ const currentDir =
   typeof __dirname !== 'undefined'
     ? __dirname
     : path.dirname(process.argv[1] || process.cwd());
+const processWithResources = process as NodeJS.Process & { resourcesPath?: string };
 
-// Try candidate paths in priority order so the backend finds .env regardless
-// of how the exe was launched (from project root, from resources dir, etc.)
-const candidates = [
-  process.env.PHARMAPRO_ENV_FILE,         // explicit override from Electron main
-  path.join(process.cwd(), '.env'),        // inherited CWD
-  path.join(currentDir, '../../.env'),     // project root in dev / dist-server in prod
-  // Desktop-specific paths
+const unique = <T>(values: T[]) => [...new Set(values)];
+
+// Load from lowest priority to highest priority so user-saved DB settings
+// override bundled defaults without discarding required shared keys.
+const candidates = unique([
+  processWithResources.resourcesPath ? path.join(processWithResources.resourcesPath, '.env') : null,
+  path.join(currentDir, '../../.env'),
+  path.join(process.cwd(), '.env'),
   process.env.APPDATA ? path.join(process.env.APPDATA, 'pharmapro', '.env') : null,
   process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library/Application Support', 'pharmapro', '.env') : null,
-].filter(Boolean) as string[];
+  process.env.PHARMAPRO_ENV_FILE,
+].filter(Boolean) as string[]);
 
 for (const p of candidates) {
   if (!fs.existsSync(p)) continue;
-  const result = dotenv.config({ path: p, override: false });
-  if (!result.error) break;
+  dotenv.config({ path: p, override: true });
 }

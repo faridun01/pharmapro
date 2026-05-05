@@ -13,7 +13,6 @@ type SupplierRecord = {
   id: string;
   name: string;
   contact?: string | null;
-  email?: string | null;
   address?: string | null;
 };
 
@@ -72,14 +71,12 @@ type SupplierOverview = {
 type SupplierForm = {
   name: string;
   contact: string;
-  email: string;
   address: string;
 };
 
 const INITIAL_FORM: SupplierForm = {
   name: '',
   contact: '',
-  email: '',
   address: '',
 };
 
@@ -126,7 +123,7 @@ export const SuppliersPage: React.FC = () => {
     try {
       const data = await request('/api/suppliers/full');
       if (Array.isArray(data)) {
-        setSuppliers(data.map(s => ({ id: s.id, name: s.name, contact: s.contact, email: s.email, address: s.address })));
+        setSuppliers(data.map(s => ({ id: s.id, name: s.name, contact: s.contact, address: s.address })));
         const statsMap: Record<string, any> = {};
         for (const s of data) {
           if (s.summary) statsMap[s.id] = { summary: s.summary };
@@ -165,7 +162,7 @@ export const SuppliersPage: React.FC = () => {
   const filteredSuppliers = useMemo(() => suppliers.filter((supplier) => {
     const query = debouncedSearchTerm.trim().toLocaleLowerCase('ru-RU');
     if (!query) return true;
-    return [supplier.name, supplier.contact, supplier.email, supplier.address]
+    return [supplier.name, supplier.contact, supplier.address]
       .some((value) => String(value || '').toLocaleLowerCase('ru-RU').includes(query));
   }), [suppliers, debouncedSearchTerm]);
 
@@ -186,7 +183,6 @@ export const SuppliersPage: React.FC = () => {
         body: JSON.stringify({
           name: form.name.trim(),
           contact: form.contact.trim() || null,
-          email: form.email.trim() || null,
           address: form.address.trim() || null,
         }),
       });
@@ -295,7 +291,7 @@ export const SuppliersPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setForm({ name: s.name, contact: s.contact || '', email: s.email || '', address: s.address || '' }); setEditingSupplierId(s.id); setIsAddOpen(true); }}
+                      onClick={(e) => { e.stopPropagation(); setForm({ name: s.name, contact: s.contact || '', address: s.address || '' }); setEditingSupplierId(s.id); setIsAddOpen(true); }}
                       className="p-2.5 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-[#f5f5f0] rounded-xl transition-all"
                     >
                       <Edit3 size={16} />
@@ -322,10 +318,6 @@ export const SuppliersPage: React.FC = () => {
                     <div className="flex items-center gap-3 p-2.5 bg-white/50 rounded-2xl border border-[#5A5A40]/5 group-hover:border-[#5A5A40]/10 transition-all font-normal">
                       <Phone size={14} className="text-[#5A5A40]/20" />
                       <span className="text-xs text-[#5A5A40]/70">{s.contact || '—'}</span>
-                    </div>
-                    <div className="flex items-center gap-3 p-2.5 bg-white/50 rounded-2xl border border-[#5A5A40]/5 group-hover:border-[#5A5A40]/10 transition-all font-normal">
-                      <Mail size={14} className="text-[#5A5A40]/20" />
-                      <span className="text-xs text-[#5A5A40]/70 truncate">{s.email || '—'}</span>
                     </div>
                   </div>
                 </div>
@@ -536,7 +528,6 @@ export const SuppliersPage: React.FC = () => {
               {[
                 { label: 'Название компании', val: form.name, key: 'name' },
                 { label: 'Контактный телефон', val: form.contact, key: 'contact' },
-                { label: 'E-mail адрес', val: form.email, key: 'email' },
                 { label: 'Юридический адрес', val: form.address, key: 'address' },
               ].map((f) => (
                 <div key={f.key} className="space-y-1.5 focus-within:translate-x-1 transition-transform">

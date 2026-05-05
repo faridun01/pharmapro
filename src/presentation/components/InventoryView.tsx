@@ -142,6 +142,7 @@ export const InventoryView: React.FC<{ initialSection?: 'catalog' | 'batches' }>
       unit: 'шт.',
       costBasis: String(product.costPrice || 0),
       expiryDate: '',
+      supplierId: '',
       error: null,
     });
   };

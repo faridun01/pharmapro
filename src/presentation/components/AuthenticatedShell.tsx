@@ -90,13 +90,14 @@ const InvoicesView = lazyNamedImport(() => import('./InvoicesView'), 'InvoicesVi
 const SuppliersPage = lazyNamedImport(() => import('./SuppliersPage'), 'SuppliersPage');
 const ReportsView = lazyNamedImport(() => import('./ReportsView'), 'ReportsView');
 const SettingsView = lazyNamedImport(() => import('./SettingsView'), 'SettingsView');
+const OperationsView = lazyNamedImport(() => import('./OperationsView'), 'OperationsView');
+const DebtsView = lazyNamedImport(() => import('./DebtsView.tsx'), 'DebtsView');
 const ReturnView = lazyNamedImport(() => import('./ReturnView'), 'ReturnView');
 const WriteOffView = lazyNamedImport(() => import('./WriteOffView'), 'WriteOffView');
 const ShiftView = lazyNamedImport(() => import('./ShiftView'), 'ShiftView');
 const PurchasesView = lazyNamedImport(() => import('./PurchasesView.tsx'), 'PurchasesView');
 const AdminView = lazyNamedImport(() => import('./AdminView'), 'AdminView');
 const BatchesView = lazyNamedImport(() => import('./BatchesView'), 'BatchesView');
-const DebtsView = lazyNamedImport(() => import('./DebtsView.tsx'), 'DebtsView');
 
 const AppLoader: React.FC<{ label?: string; compact?: boolean }> = ({ label = 'Загрузка...', compact = false }) => (
   <div className={`${compact ? 'min-h-60' : 'h-full min-h-0'} flex items-center justify-center bg-[#f5f5f0]`}>
@@ -173,9 +174,7 @@ export default function AuthenticatedShell({ onSignedOut, onClose }: { onSignedO
     {
       group: 'Торговля', items: [
         { id: 'pos' as SidebarView, label: 'Кассовый терминал', icon: ShoppingCart },
-        { id: 'invoices' as SidebarView, label: 'История продаж', icon: Pill },
-        { id: 'debts' as SidebarView, label: 'Должники', icon: Clock },
-        { id: 'returns' as SidebarView, label: 'Возвраты', icon: RotateCcw },
+        { id: 'operations' as SidebarView, label: 'Учет и долги', icon: RotateCcw },
         { id: 'inventory' as SidebarView, label: 'Инвентарь', icon: Package },
         { id: 'shifts' as SidebarView, label: 'Смены', icon: Clock },
       ]
@@ -183,7 +182,6 @@ export default function AuthenticatedShell({ onSignedOut, onClose }: { onSignedO
     {
       group: 'Склад', items: [
         { id: 'purchases' as SidebarView, label: 'Приемка (Приход)', icon: CheckCircle2 },
-        { id: 'writeoffs' as SidebarView, label: 'Списания', icon: Trash2 },
       ]
     },
     {
@@ -268,13 +266,14 @@ export default function AuthenticatedShell({ onSignedOut, onClose }: { onSignedO
     switch (currentView) {
       case 'dashboard': return <DashboardView />;
       case 'pos': return <POSView />;
+      case 'operations': return <OperationsView />;
       case 'inventory': return <InventoryView />;
       case 'invoices': return <InvoicesView />;
-      case 'debts': return <DebtsView />;
+      case 'debts': return <OperationsView />;
       case 'suppliers': return <SuppliersPage />;
       case 'reports': return <ReportsView />;
-      case 'returns': return <ReturnView />;
-      case 'writeoffs': return <WriteOffView />;
+      case 'returns': return <OperationsView />;
+      case 'writeoffs': return <OperationsView />;
       case 'shifts': return <ShiftView />;
       case 'purchases': return <PurchasesView />;
       case 'settings': return <SettingsView />;

@@ -4,11 +4,13 @@ export interface InvoiceImportItem {
   lineId: string;
   productId: string | null;
   name: string;
+  countryOfOrigin?: string;
   sku?: string;
   barcode?: string;
   quantity: number;
   unitsInPack: number;
   costPrice: number;
+  wholesalePrice?: number | null;
   batchNumber: string;
   expiryDate: string;
   confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -27,10 +29,12 @@ export interface OcrAnalyzeResponse {
     lineId?: string;
     productId?: string | null;
     name: string;
+    countryOfOrigin?: string;
     sku?: string;
     barcode?: string;
     quantity: number;
     costPrice: number;
+    wholesalePrice?: number | null;
     batchNumber?: string;
     expiryDate?: string;
     confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -44,9 +48,10 @@ export type ImportFileKind = 'image' | 'pdf' | 'excel' | 'unsupported';
 
 export const randomBatch = () => `B-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
-export const buildItemIdentity = (item: Pick<InvoiceImportItem, 'name' | 'expiryDate' | 'costPrice'>) => {
+export const buildItemIdentity = (item: Pick<InvoiceImportItem, 'name' | 'countryOfOrigin' | 'expiryDate' | 'costPrice'>) => {
   return [
     item.name.trim().toLowerCase(),
+    String(item.countryOfOrigin || '').trim().toLowerCase(),
     item.expiryDate || '',
     Number(item.costPrice || 0).toFixed(2),
   ].join('::');
@@ -150,7 +155,7 @@ export const findSupplierByName = (candidate: string, suppliers: Supplier[]) => 
 
 export const requestStructuredPreview = async (file: File): Promise<OcrAnalyzeResponse> => {
   const fileBase64 = await toBase64(file);
-  const token = localStorage.getItem('pharmapro_token');
+  const token = sessionStorage.getItem('pharmapro_token');
   const response = await fetch('/api/invoices/ocr/structured-preview', {
     method: 'POST',
     headers: {
@@ -174,7 +179,7 @@ export const requestStructuredPreview = async (file: File): Promise<OcrAnalyzeRe
 
 export const requestImageOcr = async (file: File): Promise<OcrAnalyzeResponse> => {
   const imageBase64 = await toBase64(file);
-  const token = localStorage.getItem('pharmapro_token');
+  const token = sessionStorage.getItem('pharmapro_token');
   const response = await fetch('/api/invoices/ocr', {
     method: 'POST',
     headers: {

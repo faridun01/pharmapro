@@ -19,8 +19,7 @@ type UserRole = 'OWNER' | 'ADMIN' | 'CASHIER' | 'PHARMACIST' | 'WAREHOUSE_STAFF'
 type ManagedUser = {
   id: string;
   name: string;
-  email: string;
-  username: string | null;
+  username: string;
   role: UserRole;
   isActive: boolean;
   warehouseId: string | null;
@@ -48,7 +47,6 @@ const ROLE_COLORS: Record<UserRole, string> = {
 
 type FormState = {
   name: string;
-  email: string;
   username: string;
   password: string;
   role: UserRole;
@@ -57,7 +55,6 @@ type FormState = {
 
 const emptyForm = (): FormState => ({
   name: '',
-  email: '',
   username: '',
   password: '',
   role: 'CASHIER',
@@ -125,7 +122,6 @@ export const UsersAdminPanel: React.FC<UsersAdminPanelProps> = ({ currentUserRol
     setModalMode('edit');
     setForm({
       name: u.name,
-      email: u.email,
       username: u.username ?? '',
       password: '',
       role: u.role,
@@ -141,10 +137,10 @@ export const UsersAdminPanel: React.FC<UsersAdminPanelProps> = ({ currentUserRol
   const handleSave = async () => {
     setSaving(true);
     try {
+      const trimmedName = form.name.trim();
       const payload: Record<string, any> = {
-        name: form.name,
-        email: form.email,
-        username: form.username || undefined,
+        name: trimmedName,
+        username: form.username,
         role: form.role,
         warehouseId: form.warehouseId || null,
       };
@@ -289,8 +285,7 @@ export const UsersAdminPanel: React.FC<UsersAdminPanelProps> = ({ currentUserRol
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-[#151619] truncate">{u.name}</p>
-                        <p className="text-xs text-[#5A5A40]/55 truncate">{u.email}</p>
-                        {u.username && <p className="text-xs text-[#5A5A40]/40 truncate">@{u.username}</p>}
+                        <p className="text-xs text-[#5A5A40]/40 truncate">@{u.username}</p>
                       </div>
                     </div>
                   </td>
@@ -371,21 +366,11 @@ export const UsersAdminPanel: React.FC<UsersAdminPanelProps> = ({ currentUserRol
                 />
               </div>
 
-              {/* Email */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#5A5A40]/50 mb-1.5">Email *</label>
-                <input
-                  type="email"
-                  className="w-full px-4 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                  placeholder="ivan@apteka.ru"
-                  value={form.email}
-                  onChange={e => setForm(s => ({ ...s, email: e.target.value }))}
-                />
-              </div>
+
 
               {/* Username */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#5A5A40]/50 mb-1.5">Логин (необязательно)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#5A5A40]/50 mb-1.5">Логин *</label>
                 <input
                   className="w-full px-4 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
                   placeholder="ivanov"

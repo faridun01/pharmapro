@@ -29,6 +29,7 @@ export const ProductRestockModal: React.FC<ProductRestockModalProps> = ({
 
   if (!state.open) return null;
 
+  const { suppliers } = usePharmacy();
   const selectedProduct = products.find((p) => p.id === state.productId);
 
   return (
@@ -55,6 +56,20 @@ export const ProductRestockModal: React.FC<ProductRestockModalProps> = ({
                 <option value="">Выберите товар</option>
                 {products.map((product) => (
                   <option key={product.id} value={product.id}>{product.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="block text-xs font-semibold uppercase tracking-widest text-[#5A5A40]/50 mb-1">Поставщик *</span>
+              <select
+                value={state.supplierId}
+                onChange={(e) => setState((prev) => ({ ...prev, supplierId: e.target.value }))}
+                className="w-full px-3 py-2.5 border border-[#5A5A40]/15 rounded-xl text-sm"
+                required
+              >
+                <option value="">Выберите поставщика</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             </label>
@@ -108,6 +123,7 @@ export const ProductRestockModal: React.FC<ProductRestockModalProps> = ({
               />
             </label>
           </div>
+
 
           {state.error && (
             <div className="p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100">

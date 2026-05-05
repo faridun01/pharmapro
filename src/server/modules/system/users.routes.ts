@@ -5,15 +5,15 @@ import { asyncHandler } from '../../common/http';
 import { db } from '../../infrastructure/prisma';
 import { ValidationError, NotFoundError } from '../../common/errors';
 import { auditService } from '../../services/audit.service';
+import { validatePassword } from '../../common/passwordPolicy';
 
 export const usersRouter = Router();
 
 const ALLOWED_ROLES = ['OWNER', 'ADMIN', 'CASHIER', 'PHARMACIST', 'WAREHOUSE_STAFF'] as const;
 type AllowedRole = typeof ALLOWED_ROLES[number];
 
-const normalizeEmail = (v: unknown) => String(v || '').trim().toLowerCase();
+const normalizeUsername = (v: unknown) => String(v || '').trim().toLowerCase();
 
-// GET /api/system/users — list all users (ADMIN/OWNER only)
 usersRouter.get(
   '/',
   authenticate,
@@ -24,7 +24,6 @@ usersRouter.get(
       select: {
         id: true,
         name: true,
-        email: true,
         username: true,
         role: true,
         isActive: true,
@@ -38,42 +37,44 @@ usersRouter.get(
   }),
 );
 
-// POST /api/system/users — create a new user (ADMIN/OWNER only)
 usersRouter.post(
   '/',
   authenticate,
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (req, res) => {
     const authedReq = req as AuthedRequest;
-    const { name, email, password, role, username, warehouseId } = req.body ?? {};
+    const { name, password, role, username, warehouseId } = req.body ?? {};
 
     const trimmedName = String(name || '').trim();
-    const normalizedEmail = normalizeEmail(email);
     const trimmedPassword = String(password || '');
+    const normalizedUsername = normalizeUsername(username);
     const normalizedRole = String(role || '').toUpperCase() as AllowedRole;
 
-    if (!trimmedName) throw new ValidationError('Имя обязательно');
-    if (!normalizedEmail || !normalizedEmail.includes('@')) throw new ValidationError('Некорректный email');
-    if (!trimmedPassword || trimmedPassword.length < 6) throw new ValidationError('Пароль должен быть не менее 6 символов');
+    if (!trimmedName) throw new ValidationError('Name is required');
+    if (!normalizedUsername) throw new ValidationError('Username is required');
+    validatePassword(trimmedPassword);
     if (!ALLOWED_ROLES.includes(normalizedRole)) {
-      throw new ValidationError(`Недопустимая роль. Доступные: ${ALLOWED_ROLES.join(', ')}`);
+      throw new ValidationError(`Invalid role. Available: ${ALLOWED_ROLES.join(', ')}`);
     }
-
-    // OWNER can only be created by OWNER
     if (normalizedRole === 'OWNER' && authedReq.user.role !== 'OWNER') {
-      throw new ValidationError('Только владелец может создавать другого владельца');
+      throw new ValidationError('Only OWNER can create another OWNER');
     }
 
-    const existing = await db.user.findFirst({ where: { email: normalizedEmail }, select: { id: true } });
-    if (existing) throw new ValidationError('Пользователь с таким email уже существует');
+
+    if (normalizedUsername) {
+      const existingUsername = await db.user.findUnique({
+        where: { username: normalizedUsername },
+        select: { id: true },
+      });
+      if (existingUsername) throw new ValidationError('User with this username already exists');
+    }
 
     const hashed = await bcrypt.hash(trimmedPassword, 12);
 
     const user = await db.user.create({
       data: {
         name: trimmedName,
-        email: normalizedEmail,
-        username: String(username || '').trim() || null,
+        username: normalizedUsername,
         password: hashed,
         role: normalizedRole,
         isActive: true,
@@ -82,7 +83,6 @@ usersRouter.post(
       select: {
         id: true,
         name: true,
-        email: true,
         username: true,
         role: true,
         isActive: true,
@@ -100,14 +100,13 @@ usersRouter.post(
       action: 'CREATE_USER',
       entity: 'USER',
       entityId: user.id,
-      newValue: { name: user.name, email: user.email, role: user.role },
+      newValue: { name: user.name, username: user.username, role: user.role },
     });
 
     res.status(201).json(user);
   }),
 );
 
-// PUT /api/system/users/:id — update user (ADMIN/OWNER only)
 usersRouter.put(
   '/:id',
   authenticate,
@@ -115,47 +114,49 @@ usersRouter.put(
   asyncHandler(async (req, res) => {
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
-    const { name, email, role, username, isActive, warehouseId, password } = req.body ?? {};
+    const { name, role, username, isActive, warehouseId, password } = req.body ?? {};
 
-    const existing = await db.user.findUnique({ where: { id }, select: { id: true, role: true, email: true, name: true } });
-    if (!existing) throw new NotFoundError('Пользователь не найден');
-
-    // Prevent ADMIN from editing OWNER
+    const existing = await db.user.findUnique({ where: { id }, select: { id: true, role: true, username: true, name: true } });
+    if (!existing) throw new NotFoundError('User not found');
     if (existing.role === 'OWNER' && authedReq.user.role !== 'OWNER') {
-      throw new ValidationError('Только владелец может редактировать владельца');
+      throw new ValidationError('Only OWNER can edit an OWNER');
     }
-    // Prevent self-deactivation
     if (id === authedReq.user.id && isActive === false) {
-      throw new ValidationError('Нельзя деактивировать собственный аккаунт');
+      throw new ValidationError('You cannot deactivate your own account');
     }
 
     const updateData: Record<string, any> = {};
 
     if (name !== undefined) {
       const trimmed = String(name || '').trim();
-      if (!trimmed) throw new ValidationError('Имя не может быть пустым');
+      if (!trimmed) throw new ValidationError('Name cannot be empty');
       updateData.name = trimmed;
     }
 
-    if (email !== undefined) {
-      const normalized = normalizeEmail(email);
-      if (!normalized || !normalized.includes('@')) throw new ValidationError('Некорректный email');
-      const dup = await db.user.findFirst({ where: { email: normalized, NOT: { id } }, select: { id: true } });
-      if (dup) throw new ValidationError('Этот email уже используется другим пользователем');
-      updateData.email = normalized;
-    }
+
 
     if (username !== undefined) {
-      updateData.username = String(username || '').trim() || null;
+      const normalized = normalizeUsername(username);
+      if (normalized) {
+        const dup = await db.user.findFirst({
+          where: {
+            username: { equals: normalized, mode: 'insensitive' },
+            NOT: { id },
+          },
+          select: { id: true },
+        });
+        if (dup) throw new ValidationError('This username is already used by another user');
+      }
+      updateData.username = normalized || null;
     }
 
     if (role !== undefined) {
       const normalizedRole = String(role || '').toUpperCase() as AllowedRole;
       if (!ALLOWED_ROLES.includes(normalizedRole)) {
-        throw new ValidationError(`Недопустимая роль. Доступные: ${ALLOWED_ROLES.join(', ')}`);
+        throw new ValidationError(`Invalid role. Available: ${ALLOWED_ROLES.join(', ')}`);
       }
       if (normalizedRole === 'OWNER' && authedReq.user.role !== 'OWNER') {
-        throw new ValidationError('Только владелец может назначить роль владельца');
+        throw new ValidationError('Only OWNER can assign the OWNER role');
       }
       updateData.role = normalizedRole;
     }
@@ -169,6 +170,7 @@ usersRouter.put(
     }
 
     if (password) {
+      validatePassword(String(password));
       updateData.password = await bcrypt.hash(String(password), 12);
     }
 
@@ -178,7 +180,6 @@ usersRouter.put(
       select: {
         id: true,
         name: true,
-        email: true,
         username: true,
         role: true,
         isActive: true,
@@ -196,7 +197,7 @@ usersRouter.put(
       action: 'UPDATE_USER',
       entity: 'USER',
       entityId: id,
-      oldValue: { name: existing.name, email: existing.email, role: existing.role },
+      oldValue: { name: existing.name, username: existing.username, role: existing.role },
       newValue: updateData,
     });
 
@@ -204,7 +205,6 @@ usersRouter.put(
   }),
 );
 
-// DELETE /api/system/users/:id — soft delete (isActive = false)
 usersRouter.delete(
   '/:id',
   authenticate,
@@ -213,13 +213,12 @@ usersRouter.delete(
     const authedReq = req as AuthedRequest;
     const { id } = req.params;
 
-    if (id === authedReq.user.id) throw new ValidationError('Нельзя удалить собственный аккаунт');
+    if (id === authedReq.user.id) throw new ValidationError('You cannot delete your own account');
 
     const existing = await db.user.findUnique({ where: { id }, select: { id: true, role: true, name: true } });
-    if (!existing) throw new NotFoundError('Пользователь не найден');
-
+    if (!existing) throw new NotFoundError('User not found');
     if (existing.role === 'OWNER' && authedReq.user.role !== 'OWNER') {
-      throw new ValidationError('Только владелец может деактивировать владельца');
+      throw new ValidationError('Only OWNER can deactivate an OWNER');
     }
 
     await db.user.update({ where: { id }, data: { isActive: false } });

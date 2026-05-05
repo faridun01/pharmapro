@@ -19,7 +19,7 @@ const canManageSystem = (role: string | undefined) => {
   return normalized === 'ADMIN' || normalized === 'OWNER';
 };
 
-const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+
 
 systemRouter.get('/ping', (_req, res) => {
   res.json({ ok: true, message: 'System service is healthy', timestamp: new Date().toISOString() });
@@ -31,7 +31,7 @@ systemRouter.get('/me/profile', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const user = await db.user.findUnique({
     where: { id: authedReq.user.id },
-    select: { id: true, name: true, email: true, role: true, username: true },
+    select: { id: true, name: true, role: true, username: true },
   });
   if (!user) {
     throw new ValidationError('User not found');
@@ -43,34 +43,21 @@ systemRouter.get('/me/profile', authenticate, asyncHandler(async (req, res) => {
 systemRouter.put('/me/profile', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const nextName = String(req.body?.name || '').trim();
-  const nextEmail = normalizeEmail(req.body?.email);
+
 
   if (!nextName) {
     throw new ValidationError('Name is required');
   }
-  if (!nextEmail || !nextEmail.includes('@')) {
-    throw new ValidationError('Valid email is required');
-  }
 
-  const duplicate = await db.user.findFirst({
-    where: {
-      email: nextEmail,
-      NOT: { id: authedReq.user.id },
-    },
-    select: { id: true },
-  });
-  if (duplicate) {
-    throw new ValidationError('Email is already used by another account');
-  }
+
 
   const updated = await db.user.update({
     where: { id: authedReq.user.id },
     data: {
       name: nextName,
-      email: nextEmail,
-      username: String(req.body?.username || '').trim() || null,
+      username: String(req.body?.username || '').trim() || undefined,
     },
-    select: { id: true, name: true, email: true, role: true, username: true },
+    select: { id: true, name: true, role: true, username: true },
   });
 
   res.json(updated);
@@ -162,7 +149,7 @@ systemRouter.get('/backup/export', authenticate, asyncHandler(async (req, res) =
 
   const payload = {
     exportedAt: new Date().toISOString(),
-    exportedBy: authedReq.user.email,
+    exportedBy: authedReq.user.username,
     data: {
       products,
       invoices,

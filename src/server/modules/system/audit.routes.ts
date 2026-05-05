@@ -60,7 +60,7 @@ auditRouter.get(
           // only show a truncated preview of old/new – never exposing passwords
           oldValue:  true,
           newValue:  true,
-          user: { select: { id: true, name: true, email: true } },
+          user: { select: { id: true, name: true } },
         },
       }),
     ]);
@@ -98,7 +98,7 @@ auditRouter.get(
   requireRole(['ADMIN', 'OWNER']),
   asyncHandler(async (_req, res) => {
     const users = await prisma.user.findMany({
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
     res.json(users);

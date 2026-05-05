@@ -99,7 +99,6 @@ export const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                       <th className="px-4 py-4 font-normal min-w-[200px]">Товар</th>
                       <th className="px-4 py-4 font-normal text-right">Кол-во</th>
                       <th className="px-4 py-4 font-normal text-right">Цена прод.</th>
-                      <th className="px-4 py-4 font-normal text-right">Себест. (ед)</th>
                       <th className="px-6 py-4 font-normal text-right">Прибыль</th>
                     </tr>
                   </thead>
@@ -113,7 +112,6 @@ export const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                           <td className="px-4 py-4 text-[#151619]">{getProductDisplayLabel(item.productId, item.productName)}</td>
                           <td className="px-4 py-4 text-right text-[#5A5A40]/60 tabular-nums">{formatPackQuantity(Number(item.quantity || 0))}</td>
                           <td className="px-4 py-4 text-right text-[#151619] tabular-nums font-normal">{Number(item.unitPrice || 0).toFixed(2)}</td>
-                          <td className="px-4 py-4 text-right text-sky-600/50 tabular-nums italic">{costPrice.toFixed(2)}</td>
                           <td className={`px-6 py-4 text-right tabular-nums ${profit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                              {profit.toFixed(2)}
                           </td>
@@ -127,7 +125,6 @@ export const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                         <td colSpan={2} className="px-6 py-5 text-[#5A5A40]/40">Итого по позициям</td>
                         <td className="px-4 py-5 text-right font-normal text-[#151619]">{items.reduce((s, it) => s + Number(it.quantity || 0), 0)}</td>
                         <td className="px-4 py-5 text-right font-normal text-[#151619]">—</td>
-                        <td className="px-4 py-5 text-right font-normal text-sky-600/70">{totalCost.toFixed(2)}</td>
                         <td className={`px-6 py-5 text-right font-normal ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{totalProfit.toFixed(2)}</td>
                      </tr>
                   </tfoot>

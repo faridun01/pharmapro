@@ -19,7 +19,7 @@ const getDesktopBridge = (): DesktopBridge | undefined => {
 };
 
 export const buildApiHeaders = async (contentType = true) => {
-  const token = window.sessionStorage.getItem('pharmapro_token') || localStorage.getItem('pharmapro_token');
+  const token = window.sessionStorage.getItem('pharmapro_token');
   const desktopHeaders = await getDesktopBridge()?.authHeaders?.();
 
   return {

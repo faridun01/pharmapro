@@ -73,7 +73,7 @@ type CloseShiftResult = {
 };
 
 function authHeaders() {
-  const token = localStorage.getItem('pharmapro_token');
+  const token = sessionStorage.getItem('pharmapro_token');
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),

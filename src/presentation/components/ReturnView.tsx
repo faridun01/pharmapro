@@ -198,7 +198,7 @@ function CreateReturnModal({
   );
 }
 
-export const ReturnView: React.FC = () => {
+export const ReturnView: React.FC<{ hideHeader?: boolean }> = ({ hideHeader }) => {
   const { t } = useTranslation();
   const currencyCode = useCurrencyCode();
   const { products, refreshProducts } = usePharmacy();
@@ -259,25 +259,27 @@ export const ReturnView: React.FC = () => {
     <div className="max-w-[1600px] mx-auto space-y-8 pb-12 animate-in fade-in duration-700 font-normal">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
-        <div className="flex items-center gap-5">
-           <div className="w-14 h-14 rounded-[1.5rem] bg-[#fcfbf7] border border-[#5A5A40]/5 flex items-center justify-center text-[#5A5A40]/60 shadow-sm">
-             <RefreshCw size={26} />
-           </div>
-           <div>
-             <h2 className="text-3xl font-normal text-[#151619] tracking-tight">Возвраты товаров</h2>
-             <p className="text-[#5A5A40]/50 mt-1 text-[10px] uppercase tracking-[0.2em] italic">Корректировка складских остатков и финансов</p>
-           </div>
+      {!hideHeader && (
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
+          <div className="flex items-center gap-5">
+             <div className="w-14 h-14 rounded-[1.5rem] bg-[#fcfbf7] border border-[#5A5A40]/5 flex items-center justify-center text-[#5A5A40]/60 shadow-sm">
+               <RefreshCw size={26} />
+             </div>
+             <div>
+               <h2 className="text-3xl font-normal text-[#151619] tracking-tight">Возвраты товаров</h2>
+               <p className="text-[#5A5A40]/50 mt-1 text-[10px] uppercase tracking-[0.2em] italic">Корректировка складских остатков и финансов</p>
+             </div>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={load} className="w-12 h-12 rounded-2xl bg-white border border-[#5A5A40]/10 flex items-center justify-center text-[#5A5A40]/40 hover:text-[#5A5A40] transition-colors shadow-sm">
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button onClick={() => setIsModalOpen(true)} className="px-6 py-3.5 rounded-2xl bg-[#5A5A40] text-white text-[10px] uppercase tracking-widest shadow-xl shadow-[#5A5A40]/10 hover:bg-[#4A4A30] transition-all flex items-center gap-2">
+              <Plus size={18} /> Создать возврат
+            </button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <button onClick={load} className="w-12 h-12 rounded-2xl bg-white border border-[#5A5A40]/10 flex items-center justify-center text-[#5A5A40]/40 hover:text-[#5A5A40] transition-colors shadow-sm">
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button onClick={() => setIsModalOpen(true)} className="px-6 py-3.5 rounded-2xl bg-[#5A5A40] text-white text-[10px] uppercase tracking-widest shadow-xl shadow-[#5A5A40]/10 hover:bg-[#4A4A30] transition-all flex items-center gap-2">
-            <Plus size={18} /> Создать возврат
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Stats row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

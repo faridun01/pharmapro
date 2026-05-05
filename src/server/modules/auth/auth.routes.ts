@@ -5,79 +5,103 @@ import { prisma } from '../../infrastructure/prisma';
 import { asyncHandler } from '../../common/http';
 import { ValidationError } from '../../common/errors';
 import { getJwtSecret } from '../../common/jwt';
+import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
+import { validatePassword } from '../../common/passwordPolicy';
 import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseStartupError } from '../../common/startup';
 
 export const authRouter = Router();
 
-// GET /initial-status — Checks if the system needs first-time setup
-authRouter.get('/initial-status', asyncHandler(async (req, res) => {
+const ALLOWED_ROLES = ['OWNER', 'ADMIN', 'CASHIER', 'PHARMACIST', 'WAREHOUSE_STAFF'] as const;
+
+const normalizeUsername = (value: unknown) => String(value || '').trim().toLowerCase();
+
+authRouter.get('/initial-status', asyncHandler(async (_req, res) => {
   const count = await prisma.user.count();
   res.json({ needsSetup: count === 0 });
 }));
 
-// POST /setup-admin — Creates the first OWNER user (only allowed if count is 0)
 authRouter.post('/setup-admin', asyncHandler(async (req, res) => {
-  const count = await prisma.user.count();
-  if (count > 0) {
-    throw new ValidationError('System is already initialized');
-  }
-
   const { password, name, login } = req.body ?? {};
   if (!login || !password || !name) {
-    throw new ValidationError('Имя, логин и пароль обязательны');
+    throw new ValidationError('name, login, and password are required');
   }
+
   validatePassword(String(password));
 
-  // Generate internal email to satisfy DB schema if login is not an email
-  const email = login.includes('@') ? login.toLowerCase() : `${login.toLowerCase()}@pharmapro.local`;
-  const username = login.toLowerCase();
+  const normalizedLogin = normalizeUsername(login);
+  const trimmedName = String(name).trim();
+  if (!normalizedLogin || !trimmedName) {
+    throw new ValidationError('name and login are required');
+  }
+
+  const user = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('pharmapro.setup-admin'))`;
+
+    const count = await tx.user.count();
+    if (count > 0) {
+      throw new ValidationError('System is already initialized');
+    }
+
+
+    const hashedPassword = await bcrypt.hash(String(password), 12);
+
+    return tx.user.create({
+      data: {
+
+        username: normalizedLogin,
+        password: hashedPassword,
+        name: trimmedName,
+        role: 'OWNER',
+        isActive: true,
+      },
+    });
+  });
+
+  res.status(201).json({ success: true, username: user.username });
+}));
+
+authRouter.post('/register', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const { password, name, role, username } = req.body ?? {};
+  const normalizedRole = String(role || 'CASHIER').toUpperCase();
+  const normalizedUsername = normalizeUsername(username);
+
+  if (!normalizedUsername || !password || !name) {
+    throw new ValidationError('username, password, and name are required');
+  }
+  validatePassword(String(password));
+  if (!ALLOWED_ROLES.includes(normalizedRole as (typeof ALLOWED_ROLES)[number])) {
+    throw new ValidationError('Invalid role');
+  }
+  if (normalizedRole === 'OWNER' && authedReq.user.role !== 'OWNER') {
+    throw new ValidationError('Only OWNER can create another OWNER');
+  }
+
+
+  const existingUsername = await prisma.user.findUnique({
+    where: { username: normalizedUsername },
+    select: { id: true },
+  });
+  if (existingUsername) {
+    throw new ValidationError('User with this username already exists');
+  }
 
   const hashedPassword = await bcrypt.hash(String(password), 12);
   const user = await prisma.user.create({
-    data: { 
-      email, 
-      username,
-      password: hashedPassword, 
-      name: String(name).trim(), 
-      role: 'OWNER', 
-      isActive: true 
+    data: {
+      username: normalizedUsername,
+      password: hashedPassword,
+      name: String(name).trim(),
+      role: normalizedRole as (typeof ALLOWED_ROLES)[number],
+      isActive: true,
     },
   });
 
-  res.status(201).json({ success: true, email: user.email });
-}));
-
-const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
-
-const validatePassword = (password: string) => {
-  if (password.length < 8) {
-    throw new ValidationError('Password must be at least 8 characters long');
-  }
-};
-
-authRouter.post('/register', asyncHandler(async (req, res) => {
-  const { password, name, role } = req.body ?? {};
-  const email = normalizeEmail(req.body?.email);
-  if (!email || !password || !name) {
-    throw new ValidationError('email, password, and name are required');
-  }
-  validatePassword(String(password));
-
-  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-  if (existing) {
-    throw new ValidationError('User with this email already exists');
-  }
-
-  const hashedPassword = await bcrypt.hash(String(password), 12);
-  const user = await prisma.user.create({
-    data: { email, password: hashedPassword, name: String(name).trim(), role: role || 'CASHIER' },
-  });
-
-  res.status(201).json({ id: user.id, email: user.email, name: user.name, role: user.role });
+  res.status(201).json({ id: user.id, username: user.username, name: user.name, role: user.role });
 }));
 
 authRouter.post('/login', asyncHandler(async (req, res) => {
-  const loginField = String(req.body?.login || req.body?.email || '').trim().toLowerCase();
+  const loginField = String(req.body?.login || req.body?.username || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
   if (!loginField || !password) {
     throw new ValidationError('login and password are required');
@@ -85,15 +109,9 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
 
   let candidates;
   try {
-    // Match by username (case-insensitive) or email.
-    // We fetch candidates and verify password against each to avoid false negatives
-    // when duplicate usernames exist in legacy/dev datasets.
     candidates = await prisma.user.findMany({
       where: {
-        OR: [
-          { email: loginField },
-          { username: { equals: loginField, mode: 'insensitive' } },
-        ],
+        username: loginField,
         isActive: true,
       },
       orderBy: { createdAt: 'asc' },
@@ -117,6 +135,8 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
-  const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, getJwtSecret(), { expiresIn: '1d' });
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, getJwtSecret(), { expiresIn: '1d' });
+  res.json({ token, user: { id: user.id, username: user.username, name: user.name, role: user.role } });
 }));

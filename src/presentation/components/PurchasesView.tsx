@@ -12,10 +12,13 @@ import {
   Calendar,
   RefreshCw,
   TrendingUp,
-  Package
+  Package,
+  Edit3,
+  Trash2
 } from 'lucide-react';
 import { usePharmacy } from '../context';
 import { buildApiHeaders } from '../../infrastructure/api';
+import { ImportInvoiceModal } from './ImportInvoiceModal';
 
 export const PurchasesView: React.FC = () => {
   const { suppliers } = usePharmacy();
@@ -25,6 +28,8 @@ export const PurchasesView: React.FC = () => {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; number: string } | null>(null);
 
   const fetchInvoices = async () => {
     setIsLoading(true);
@@ -47,6 +52,28 @@ export const PurchasesView: React.FC = () => {
     fetchInvoices();
   }, []);
 
+  const deleteInvoice = async (id: string) => {
+    setDeleteConfirm(null);
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/inventory/purchase-invoices/${id}`, {
+        method: 'DELETE',
+        headers: await buildApiHeaders()
+      });
+      if (response.ok) {
+        await fetchInvoices();
+        setSelectedInvoice(null);
+      } else {
+        const body = await response.json();
+        alert(`Ошибка удаления: ${body.error || 'Неизвестная ошибка'}`);
+      }
+    } catch (err) {
+      console.error('Delete failed:', err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const approveInvoice = async (id: string) => {
     setConfirmModal({ isOpen: false, id: null });
     setBusyId(id);
@@ -68,7 +95,6 @@ export const PurchasesView: React.FC = () => {
       setBusyId(null);
     }
   };
-
   const filteredInvoices = useMemo(() => {
     return invoices.filter(inv => 
       inv.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -234,7 +260,21 @@ export const PurchasesView: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
-                         <div className="flex justify-end">
+                         <div className="flex justify-end gap-2">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); setIsEditModalOpen(true); }}
+                              className="p-2 text-[#5A5A40]/40 hover:text-[#5A5A40] hover:bg-white rounded-xl transition-all"
+                            >
+                              <Edit3 size={16} />
+                            </button>
+                            {inv.status === 'DRAFT' && (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ id: inv.id, number: inv.invoiceNumber }); }}
+                                className="p-2 text-[#5A5A40]/40 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
                             <div className="w-8 h-8 rounded-full border border-[#5A5A40]/10 flex items-center justify-center group-hover:bg-[#5A5A40] group-hover:text-white transition-all">
                               <ChevronRight size={16} />
                             </div>
@@ -271,12 +311,30 @@ export const PurchasesView: React.FC = () => {
                     </div>
                  </div>
               </div>
-              <div className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] border-2 ${
-                selectedInvoice.status === 'POSTED' 
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                  : 'bg-amber-50 text-amber-700 border-amber-100'
-              }`}>
-                {selectedInvoice.status === 'POSTED' ? 'Проведено' : 'Ожидает решения'}
+              <div className="flex items-center gap-3">
+                <div className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] border-2 ${
+                  selectedInvoice.status === 'POSTED' 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                    : 'bg-amber-50 text-amber-700 border-amber-100'
+                }`}>
+                  {selectedInvoice.status === 'POSTED' ? 'Проведено' : 'Ожидает решения'}
+                </div>
+                <button 
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="p-3 bg-[#f5f5f0] text-[#5A5A40]/60 hover:text-[#5A5A40] rounded-2xl transition-all shadow-sm"
+                  title="Редактировать"
+                >
+                  <Edit3 size={20} />
+                </button>
+                {selectedInvoice.status === 'DRAFT' && (
+                  <button 
+                    onClick={() => setDeleteConfirm({ id: selectedInvoice.id, number: selectedInvoice.invoiceNumber })}
+                    className="p-3 bg-red-50 text-red-400 hover:text-red-600 rounded-2xl transition-all shadow-sm"
+                    title="Удалить"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -425,6 +483,30 @@ export const PurchasesView: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#000]/60 backdrop-blur-md animate-in fade-in duration-500" onClick={() => setDeleteConfirm(null)} />
+          <div className="relative w-full max-w-sm bg-white rounded-[3rem] shadow-2xl p-10 text-center animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto mb-6">
+              <Trash2 size={40} />
+            </div>
+            <h3 className="text-xl font-black text-[#5A5A40] mb-2">Удалить накладную?</h3>
+            <p className="text-sm text-[#5A5A40]/60 mb-8">Вы уверены, что хотите безвозвратно удалить накладную <span className="font-bold text-[#151619]">№{deleteConfirm.number}</span>?</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setDeleteConfirm(null)} className="py-4 bg-[#f5f5f0] text-[#5A5A40] rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-[#eaeaec] transition-all">Отмена</button>
+              <button onClick={() => deleteInvoice(deleteConfirm.id)} className="py-4 bg-red-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-600 transition-all shadow-lg shadow-red-200">Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import/Edit Modal */}
+      <ImportInvoiceModal 
+        isOpen={isEditModalOpen} 
+        onClose={() => { setIsEditModalOpen(false); fetchInvoices(); }} 
+        editInvoice={selectedInvoice}
+      />
     </div>
   );
 };

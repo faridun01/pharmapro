@@ -90,13 +90,9 @@ export const InvoicesView: React.FC<{
   }, [initialSearchTerm]);
 
   useEffect(() => {
-    if (invoices.length > 0) {
-      setInitialLoadPending(false);
-      return;
-    }
     setInitialLoadPending(true);
     refreshInvoices().finally(() => setInitialLoadPending(false));
-  }, [invoices.length, refreshInvoices]);
+  }, [refreshInvoices]);
 
   const isInitialInvoicesLoading = initialLoadPending && invoices.length === 0;
 
@@ -348,6 +344,12 @@ export const InvoicesView: React.FC<{
               <tbody className="divide-y divide-[#5A5A40]/5">
                 {isInitialInvoicesLoading ? (
                   <tr><td colSpan={7} className="p-8 text-center text-sm text-[#5A5A40]/40">Загрузка...</td></tr>
+                ) : filteredInvoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-sm text-[#5A5A40]/40">
+                      {invoices.length === 0 ? "История продаж пуста" : "По вашему запросу ничего не найдено"}
+                    </td>
+                  </tr>
                 ) : (
                   filteredInvoices
                         .slice(pageStartIndex, pageStartIndex + itemsPerPage)

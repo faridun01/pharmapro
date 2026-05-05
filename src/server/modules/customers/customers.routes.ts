@@ -22,7 +22,6 @@ customersRouter.get(
         OR: [
           { name:    { contains: search, mode: 'insensitive' } },
           { phone:   { contains: search } },
-          { email:   { contains: search, mode: 'insensitive' } },
           { taxId:   { contains: search } },
           { code:    { contains: search, mode: 'insensitive' } },
         ],
@@ -52,7 +51,6 @@ customersRouter.get(
       name:            c.name,
       legalName:       c.legalName,
       phone:           c.phone,
-      email:           c.email,
       address:         c.address,
       creditLimit:     Number(c.creditLimit || 0),
       defaultDiscount: Number(c.defaultDiscount || 0),
@@ -121,7 +119,7 @@ customersRouter.post(
   requireRole(['ADMIN', 'OWNER', 'CASHIER', 'PHARMACIST']),
   asyncHandler(async (req, res) => {
     const authedReq = req as AuthedRequest;
-    const { name, legalName, phone, email, address, taxId, creditLimit, defaultDiscount, paymentTermDays } = req.body ?? {};
+    const { name, legalName, phone, address, taxId, creditLimit, defaultDiscount, paymentTermDays } = req.body ?? {};
 
     const trimmedName = String(name || '').trim();
     if (!trimmedName) throw new ValidationError('Имя покупателя обязательно');
@@ -131,7 +129,7 @@ customersRouter.post(
         name: trimmedName,
         legalName:       String(legalName || '').trim() || null,
         phone:           String(phone || '').trim() || null,
-        email:           String(email || '').trim().toLowerCase() || null,
+
         address:         String(address || '').trim() || null,
         taxId:           String(taxId || '').trim() || null,
         creditLimit:     Number(creditLimit) || 0,
@@ -165,12 +163,12 @@ customersRouter.put(
     const existing = await db.customer.findUnique({ where: { id }, select: { id: true, name: true } });
     if (!existing) throw new NotFoundError('Покупатель не найден');
 
-    const { name, legalName, phone, email, address, taxId, creditLimit, defaultDiscount, paymentTermDays, isActive } = req.body ?? {};
+    const { name, legalName, phone, address, taxId, creditLimit, defaultDiscount, paymentTermDays, isActive } = req.body ?? {};
     const data: Record<string, any> = {};
     if (name !== undefined)            data.name            = String(name).trim();
     if (legalName !== undefined)       data.legalName       = String(legalName || '').trim() || null;
     if (phone !== undefined)           data.phone           = String(phone || '').trim() || null;
-    if (email !== undefined)           data.email           = String(email || '').trim().toLowerCase() || null;
+
     if (address !== undefined)         data.address         = String(address || '').trim() || null;
     if (taxId !== undefined)           data.taxId           = String(taxId || '').trim() || null;
     if (creditLimit !== undefined)     data.creditLimit     = Number(creditLimit) || 0;

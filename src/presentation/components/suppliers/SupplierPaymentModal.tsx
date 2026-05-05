@@ -45,11 +45,12 @@ export const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({
     setError(null);
     setBusyId(invoice.id);
     try {
+      const token = sessionStorage.getItem('pharmapro_token');
       const res = await fetch(`/api/suppliers/invoices/${invoice.id}/payments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(localStorage.getItem('pharmapro_token') ? { Authorization: `Bearer ${localStorage.getItem('pharmapro_token')}` } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           amount: Number(amount),

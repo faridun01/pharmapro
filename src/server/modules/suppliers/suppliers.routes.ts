@@ -315,7 +315,6 @@ suppliersRouter.post('/', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHa
     data: {
       name,
       contact: normalizeNullable(req.body?.contact),
-      email: normalizeNullable(req.body?.email),
       address: normalizeNullable(req.body?.address),
     },
   });
@@ -330,7 +329,6 @@ suppliersRouter.post('/', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHa
     newValue: {
       name: created.name,
       contact: created.contact,
-      email: created.email,
       address: created.address,
     },
   });
@@ -358,7 +356,6 @@ suppliersRouter.put('/:id', authenticate, requireRole(['ADMIN', 'OWNER']), async
     data: {
       name,
       contact: normalizeNullable(req.body?.contact),
-      email: normalizeNullable(req.body?.email),
       address: normalizeNullable(req.body?.address),
     },
   });
@@ -373,13 +370,11 @@ suppliersRouter.put('/:id', authenticate, requireRole(['ADMIN', 'OWNER']), async
     oldValue: {
       name: existing.name,
       contact: existing.contact,
-      email: existing.email,
       address: existing.address,
     },
     newValue: {
       name: updated.name,
       contact: updated.contact,
-      email: updated.email,
       address: updated.address,
     },
   });
@@ -412,7 +407,6 @@ suppliersRouter.delete('/:id', authenticate, requireRole(['ADMIN', 'OWNER']), as
     oldValue: {
       name: existing.name,
       contact: existing.contact,
-      email: existing.email,
       address: existing.address,
       isActive: true,
     },

@@ -7,6 +7,7 @@ import { readReportSettings, writeReportSettings } from './reportSettings.storag
 import { readSystemSettings, getDefaultUserPreferences } from '../system/systemSettings.storage';
 import { reportCache, CACHE_KEYS, CACHE_TTL } from '../../common/cache';
 import { reportService, ReportParamsSchema } from './report.service';
+import { alertsService } from '../../services/alerts.service';
 
 export const reportsRouter = Router();
 
@@ -208,6 +209,12 @@ reportsRouter.get('/debts', authenticate, asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
+reportsRouter.get('/alerts', authenticate, asyncHandler(async (_req, res) => {
+  const result = await alertsService.getDashboardAlerts();
+  res.json(result);
+}));
+
+
 reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const sysSettings = await readSystemSettings();
@@ -230,7 +237,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
   const chartMode = preset === 'month' ? 'day' : 'month';
 
-  const [products, salesInvoicesInRange, ordinaryOpenInvoices, batches, writeoffsMonth, monthlySalesInvoices, receivables, purchasePayables] = await Promise.all([
+  const [products, salesInvoicesInRange, ordinaryOpenInvoices, batches, writeoffsMonth, monthlySalesInvoices, receivables, purchasePayables, dashboardAlerts] = await Promise.all([
     db.product.findMany({
       where: { isActive: true },
       select: {
@@ -357,6 +364,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         dueDate: true,
       },
     }),
+    alertsService.getDashboardAlerts(),
   ]);
 
   const getInvoiceOutstanding = (invoice: { totalAmount?: number | null; receivables?: Array<{ remainingAmount?: number | null }>; payments?: Array<{ amount?: number | null }> }) => getInvoiceOutstandingAmount(invoice);
@@ -374,32 +382,18 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     })
     .sort((left, right) => (left.currentStock - left.minStock) - (right.currentStock - right.minStock));
 
-  const expiredBatchesCount = batches.filter(b => Number(b.quantity || 0) > 0 && b.expiryDate && new Date(b.expiryDate) < now).length;
-  const expiringBatchesCount = batches.filter(b => {
-    if (!b.expiryDate) return false;
-    const expDate = new Date(b.expiryDate);
-    return Number(b.quantity || 0) > 0 && expDate >= now && expDate <= expiryThresholdDate;
-  }).length;
-  
-  const expiringItems = batches
-    .map((batch) => {
-      if (!batch.expiryDate) return null;
-      const expiryDate = new Date(batch.expiryDate);
-      const daysLeft = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      // Only show items within user threshold
-      if (daysLeft > expiryThresholdDays) return null;
-      return {
-        id: batch.id,
-        name: batch.product?.name || 'Товар',
-        batchNumber: batch.batchNumber,
-        daysLeft,
-        severityRank: daysLeft <= 0 ? 0 : daysLeft <= (expiryThresholdDays / 2) ? 1 : 2,
-        severityLabel: daysLeft <= 0 ? 'Просрочено' : daysLeft <= (expiryThresholdDays / 2) ? 'Критично' : 'Скоро истекает',
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => (a?.severityRank || 0) - (b?.severityRank || 0))
+  const expiringSoonCount = dashboardAlerts.expiringCount;
+  const expiringItems = dashboardAlerts.alerts
+    .filter(a => a.type === 'EXPIRING')
+    .map(a => ({
+      id: a.entityId,
+      name: a.message.split(' of ')[1],
+      batchNumber: a.message.split(' ')[1],
+      severityRank: a.severity === 'CRITICAL' ? 1 : 2,
+      severityLabel: a.severity === 'CRITICAL' ? 'Критично' : 'Скоро истекает',
+    }))
     .slice(0, 5);
+
 
   const unpaidInvoices = ordinaryOpenInvoices.filter(inv => getInvoiceOutstanding(inv) > 0);
   const unpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + getInvoiceOutstanding(inv), 0);
@@ -467,12 +461,12 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const result = {
     range: { preset, from, to },
     lowStock: { count: lowStockProducts.length, items: lowStockProducts.slice(0, 10) },
-    expiry: { expired: expiredBatchesCount, expiringSoon: expiringBatchesCount },
+    expiry: { expired: dashboardAlerts.alerts.filter(a => a.type === 'EXPIRING' && a.severity === 'CRITICAL').length, expiringSoon: expiringSoonCount },
     invoices: { unpaidCount: unpaidInvoices.length, unpaidAmount, averageUnpaid: unpaidInvoices.length > 0 ? unpaidAmount / unpaidInvoices.length : 0 },
     revenue: { total: revenueInRange, averageDaily: avgDailyRevenue, recognizedInvoiceCount: salesInvoicesInRange.length },
     revenueTrend: { mode: chartMode, items: revenueTrend },
     finance: { outstandingOrdinarySales: unpaidAmount, totalDebtorOutstanding, writeOffAmountMonth, grossMarginMonth, payableTotal },
-    summary: { totalProducts: products.length, totalBatches: batches.length, alertCount: lowStockProducts.length + expiredBatchesCount + expiringBatchesCount },
+    summary: { totalProducts: products.length, totalBatches: batches.length, alertCount: dashboardAlerts.lowStockCount + dashboardAlerts.expiringCount },
     inventoryHighlights: { totalInventoryUnits: products.reduce((sum, p) => sum + Number(p.totalStock || 0), 0), lowStockItems: lowStockProducts.slice(0, 5), expiringItems }
   };
 

@@ -44,5 +44,7 @@ export type RestockModalState = {
   unit: string;
   costBasis: string;
   expiryDate: string;
+  supplierId?: string;
   error: string | null;
 };
+

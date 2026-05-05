@@ -7509,6 +7509,7 @@ export namespace Prisma {
     manufacturedDate: Date | null
     receivedAt: Date | null
     expiryDate: Date | null
+    countryOfOrigin: string | null
     status: $Enums.BatchStatus | null
     productId: string | null
     purchaseItemId: string | null
@@ -7534,6 +7535,7 @@ export namespace Prisma {
     manufacturedDate: Date | null
     receivedAt: Date | null
     expiryDate: Date | null
+    countryOfOrigin: string | null
     status: $Enums.BatchStatus | null
     productId: string | null
     purchaseItemId: string | null
@@ -7559,6 +7561,7 @@ export namespace Prisma {
     manufacturedDate: number
     receivedAt: number
     expiryDate: number
+    countryOfOrigin: number
     status: number
     productId: number
     purchaseItemId: number
@@ -7610,6 +7613,7 @@ export namespace Prisma {
     manufacturedDate?: true
     receivedAt?: true
     expiryDate?: true
+    countryOfOrigin?: true
     status?: true
     productId?: true
     purchaseItemId?: true
@@ -7635,6 +7639,7 @@ export namespace Prisma {
     manufacturedDate?: true
     receivedAt?: true
     expiryDate?: true
+    countryOfOrigin?: true
     status?: true
     productId?: true
     purchaseItemId?: true
@@ -7660,6 +7665,7 @@ export namespace Prisma {
     manufacturedDate?: true
     receivedAt?: true
     expiryDate?: true
+    countryOfOrigin?: true
     status?: true
     productId?: true
     purchaseItemId?: true
@@ -7772,6 +7778,7 @@ export namespace Prisma {
     manufacturedDate: Date
     receivedAt: Date
     expiryDate: Date
+    countryOfOrigin: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId: string | null
@@ -7816,6 +7823,7 @@ export namespace Prisma {
     manufacturedDate?: boolean
     receivedAt?: boolean
     expiryDate?: boolean
+    countryOfOrigin?: boolean
     status?: boolean
     productId?: boolean
     purchaseItemId?: boolean
@@ -7852,6 +7860,7 @@ export namespace Prisma {
     manufacturedDate?: boolean
     receivedAt?: boolean
     expiryDate?: boolean
+    countryOfOrigin?: boolean
     status?: boolean
     productId?: boolean
     purchaseItemId?: boolean
@@ -7881,6 +7890,7 @@ export namespace Prisma {
     manufacturedDate?: boolean
     receivedAt?: boolean
     expiryDate?: boolean
+    countryOfOrigin?: boolean
     status?: boolean
     productId?: boolean
     purchaseItemId?: boolean
@@ -7910,6 +7920,7 @@ export namespace Prisma {
     manufacturedDate?: boolean
     receivedAt?: boolean
     expiryDate?: boolean
+    countryOfOrigin?: boolean
     status?: boolean
     productId?: boolean
     purchaseItemId?: boolean
@@ -7917,7 +7928,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type BatchOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "batchNumber" | "quantity" | "initialQty" | "currentQty" | "reservedQty" | "availableQty" | "unit" | "costBasis" | "purchasePrice" | "wholesalePrice" | "retailPrice" | "supplierId" | "warehouseId" | "manufacturedDate" | "receivedAt" | "expiryDate" | "status" | "productId" | "purchaseItemId" | "createdAt" | "updatedAt", ExtArgs["result"]["batch"]>
+  export type BatchOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "batchNumber" | "quantity" | "initialQty" | "currentQty" | "reservedQty" | "availableQty" | "unit" | "costBasis" | "purchasePrice" | "wholesalePrice" | "retailPrice" | "supplierId" | "warehouseId" | "manufacturedDate" | "receivedAt" | "expiryDate" | "countryOfOrigin" | "status" | "productId" | "purchaseItemId" | "createdAt" | "updatedAt", ExtArgs["result"]["batch"]>
   export type BatchInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     supplier?: boolean | Batch$supplierArgs<ExtArgs>
     warehouse?: boolean | Batch$warehouseArgs<ExtArgs>
@@ -7976,6 +7987,7 @@ export namespace Prisma {
       manufacturedDate: Date
       receivedAt: Date
       expiryDate: Date
+      countryOfOrigin: string | null
       status: $Enums.BatchStatus
       productId: string
       purchaseItemId: string | null
@@ -8431,6 +8443,7 @@ export namespace Prisma {
     readonly manufacturedDate: FieldRef<"Batch", 'DateTime'>
     readonly receivedAt: FieldRef<"Batch", 'DateTime'>
     readonly expiryDate: FieldRef<"Batch", 'DateTime'>
+    readonly countryOfOrigin: FieldRef<"Batch", 'String'>
     readonly status: FieldRef<"Batch", 'BatchStatus'>
     readonly productId: FieldRef<"Batch", 'String'>
     readonly purchaseItemId: FieldRef<"Batch", 'String'>
@@ -10209,7 +10222,6 @@ export namespace Prisma {
   export type UserMinAggregateOutputType = {
     id: string | null
     username: string | null
-    email: string | null
     password: string | null
     name: string | null
     role: $Enums.UserRole | null
@@ -10223,7 +10235,6 @@ export namespace Prisma {
   export type UserMaxAggregateOutputType = {
     id: string | null
     username: string | null
-    email: string | null
     password: string | null
     name: string | null
     role: $Enums.UserRole | null
@@ -10237,7 +10248,6 @@ export namespace Prisma {
   export type UserCountAggregateOutputType = {
     id: number
     username: number
-    email: number
     password: number
     name: number
     role: number
@@ -10253,7 +10263,6 @@ export namespace Prisma {
   export type UserMinAggregateInputType = {
     id?: true
     username?: true
-    email?: true
     password?: true
     name?: true
     role?: true
@@ -10267,7 +10276,6 @@ export namespace Prisma {
   export type UserMaxAggregateInputType = {
     id?: true
     username?: true
-    email?: true
     password?: true
     name?: true
     role?: true
@@ -10281,7 +10289,6 @@ export namespace Prisma {
   export type UserCountAggregateInputType = {
     id?: true
     username?: true
-    email?: true
     password?: true
     name?: true
     role?: true
@@ -10367,8 +10374,7 @@ export namespace Prisma {
 
   export type UserGroupByOutputType = {
     id: string
-    username: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -10399,7 +10405,6 @@ export namespace Prisma {
   export type UserSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     username?: boolean
-    email?: boolean
     password?: boolean
     name?: boolean
     role?: boolean
@@ -10433,7 +10438,6 @@ export namespace Prisma {
   export type UserSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     username?: boolean
-    email?: boolean
     password?: boolean
     name?: boolean
     role?: boolean
@@ -10448,7 +10452,6 @@ export namespace Prisma {
   export type UserSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     username?: boolean
-    email?: boolean
     password?: boolean
     name?: boolean
     role?: boolean
@@ -10463,7 +10466,6 @@ export namespace Prisma {
   export type UserSelectScalar = {
     id?: boolean
     username?: boolean
-    email?: boolean
     password?: boolean
     name?: boolean
     role?: boolean
@@ -10474,7 +10476,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "email" | "password" | "name" | "role" | "isActive" | "warehouseId" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
+  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "password" | "name" | "role" | "isActive" | "warehouseId" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
   export type UserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     warehouse?: boolean | User$warehouseArgs<ExtArgs>
     movements?: boolean | User$movementsArgs<ExtArgs>
@@ -10529,8 +10531,7 @@ export namespace Prisma {
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
-      username: string | null
-      email: string
+      username: string
       password: string
       name: string
       role: $Enums.UserRole
@@ -10983,7 +10984,6 @@ export namespace Prisma {
   interface UserFieldRefs {
     readonly id: FieldRef<"User", 'String'>
     readonly username: FieldRef<"User", 'String'>
-    readonly email: FieldRef<"User", 'String'>
     readonly password: FieldRef<"User", 'String'>
     readonly name: FieldRef<"User", 'String'>
     readonly role: FieldRef<"User", 'UserRole'>
@@ -11881,7 +11881,6 @@ export namespace Prisma {
     id: string | null
     name: string | null
     contact: string | null
-    email: string | null
     address: string | null
     contractNumber: string | null
     contractDate: Date | null
@@ -11895,7 +11894,6 @@ export namespace Prisma {
     id: string | null
     name: string | null
     contact: string | null
-    email: string | null
     address: string | null
     contractNumber: string | null
     contractDate: Date | null
@@ -11909,7 +11907,6 @@ export namespace Prisma {
     id: number
     name: number
     contact: number
-    email: number
     address: number
     contractNumber: number
     contractDate: number
@@ -11933,7 +11930,6 @@ export namespace Prisma {
     id?: true
     name?: true
     contact?: true
-    email?: true
     address?: true
     contractNumber?: true
     contractDate?: true
@@ -11947,7 +11943,6 @@ export namespace Prisma {
     id?: true
     name?: true
     contact?: true
-    email?: true
     address?: true
     contractNumber?: true
     contractDate?: true
@@ -11961,7 +11956,6 @@ export namespace Prisma {
     id?: true
     name?: true
     contact?: true
-    email?: true
     address?: true
     contractNumber?: true
     contractDate?: true
@@ -12062,7 +12056,6 @@ export namespace Prisma {
     id: string
     name: string
     contact: string | null
-    email: string | null
     address: string | null
     contractNumber: string | null
     contractDate: Date | null
@@ -12095,7 +12088,6 @@ export namespace Prisma {
     id?: boolean
     name?: boolean
     contact?: boolean
-    email?: boolean
     address?: boolean
     contractNumber?: boolean
     contractDate?: boolean
@@ -12118,7 +12110,6 @@ export namespace Prisma {
     id?: boolean
     name?: boolean
     contact?: boolean
-    email?: boolean
     address?: boolean
     contractNumber?: boolean
     contractDate?: boolean
@@ -12132,7 +12123,6 @@ export namespace Prisma {
     id?: boolean
     name?: boolean
     contact?: boolean
-    email?: boolean
     address?: boolean
     contractNumber?: boolean
     contractDate?: boolean
@@ -12146,7 +12136,6 @@ export namespace Prisma {
     id?: boolean
     name?: boolean
     contact?: boolean
-    email?: boolean
     address?: boolean
     contractNumber?: boolean
     contractDate?: boolean
@@ -12156,7 +12145,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type SupplierOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "contact" | "email" | "address" | "contractNumber" | "contractDate" | "paymentTermDays" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["supplier"]>
+  export type SupplierOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "contact" | "address" | "contractNumber" | "contractDate" | "paymentTermDays" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["supplier"]>
   export type SupplierInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     batches?: boolean | Supplier$batchesArgs<ExtArgs>
     aliases?: boolean | Supplier$aliasesArgs<ExtArgs>
@@ -12187,7 +12176,6 @@ export namespace Prisma {
       id: string
       name: string
       contact: string | null
-      email: string | null
       address: string | null
       contractNumber: string | null
       contractDate: Date | null
@@ -12629,7 +12617,6 @@ export namespace Prisma {
     readonly id: FieldRef<"Supplier", 'String'>
     readonly name: FieldRef<"Supplier", 'String'>
     readonly contact: FieldRef<"Supplier", 'String'>
-    readonly email: FieldRef<"Supplier", 'String'>
     readonly address: FieldRef<"Supplier", 'String'>
     readonly contractNumber: FieldRef<"Supplier", 'String'>
     readonly contractDate: FieldRef<"Supplier", 'DateTime'>
@@ -36003,6 +35990,7 @@ export namespace Prisma {
     batchNumber: string | null
     manufacturedDate: Date | null
     expiryDate: Date | null
+    countryOfOrigin: string | null
     quantity: number | null
     purchasePrice: number | null
     wholesalePrice: number | null
@@ -36018,6 +36006,7 @@ export namespace Prisma {
     batchNumber: string | null
     manufacturedDate: Date | null
     expiryDate: Date | null
+    countryOfOrigin: string | null
     quantity: number | null
     purchasePrice: number | null
     wholesalePrice: number | null
@@ -36033,6 +36022,7 @@ export namespace Prisma {
     batchNumber: number
     manufacturedDate: number
     expiryDate: number
+    countryOfOrigin: number
     quantity: number
     purchasePrice: number
     wholesalePrice: number
@@ -36068,6 +36058,7 @@ export namespace Prisma {
     batchNumber?: true
     manufacturedDate?: true
     expiryDate?: true
+    countryOfOrigin?: true
     quantity?: true
     purchasePrice?: true
     wholesalePrice?: true
@@ -36083,6 +36074,7 @@ export namespace Prisma {
     batchNumber?: true
     manufacturedDate?: true
     expiryDate?: true
+    countryOfOrigin?: true
     quantity?: true
     purchasePrice?: true
     wholesalePrice?: true
@@ -36098,6 +36090,7 @@ export namespace Prisma {
     batchNumber?: true
     manufacturedDate?: true
     expiryDate?: true
+    countryOfOrigin?: true
     quantity?: true
     purchasePrice?: true
     wholesalePrice?: true
@@ -36200,6 +36193,7 @@ export namespace Prisma {
     batchNumber: string | null
     manufacturedDate: Date | null
     expiryDate: Date | null
+    countryOfOrigin: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice: number | null
@@ -36234,6 +36228,7 @@ export namespace Prisma {
     batchNumber?: boolean
     manufacturedDate?: boolean
     expiryDate?: boolean
+    countryOfOrigin?: boolean
     quantity?: boolean
     purchasePrice?: boolean
     wholesalePrice?: boolean
@@ -36253,6 +36248,7 @@ export namespace Prisma {
     batchNumber?: boolean
     manufacturedDate?: boolean
     expiryDate?: boolean
+    countryOfOrigin?: boolean
     quantity?: boolean
     purchasePrice?: boolean
     wholesalePrice?: boolean
@@ -36270,6 +36266,7 @@ export namespace Prisma {
     batchNumber?: boolean
     manufacturedDate?: boolean
     expiryDate?: boolean
+    countryOfOrigin?: boolean
     quantity?: boolean
     purchasePrice?: boolean
     wholesalePrice?: boolean
@@ -36287,6 +36284,7 @@ export namespace Prisma {
     batchNumber?: boolean
     manufacturedDate?: boolean
     expiryDate?: boolean
+    countryOfOrigin?: boolean
     quantity?: boolean
     purchasePrice?: boolean
     wholesalePrice?: boolean
@@ -36295,7 +36293,7 @@ export namespace Prisma {
     lineTotal?: boolean
   }
 
-  export type PurchaseInvoiceItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "purchaseInvoiceId" | "productId" | "batchNumber" | "manufacturedDate" | "expiryDate" | "quantity" | "purchasePrice" | "wholesalePrice" | "retailPrice" | "lineDiscount" | "lineTotal", ExtArgs["result"]["purchaseInvoiceItem"]>
+  export type PurchaseInvoiceItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "purchaseInvoiceId" | "productId" | "batchNumber" | "manufacturedDate" | "expiryDate" | "countryOfOrigin" | "quantity" | "purchasePrice" | "wholesalePrice" | "retailPrice" | "lineDiscount" | "lineTotal", ExtArgs["result"]["purchaseInvoiceItem"]>
   export type PurchaseInvoiceItemInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     purchaseInvoice?: boolean | PurchaseInvoiceDefaultArgs<ExtArgs>
     product?: boolean | ProductDefaultArgs<ExtArgs>
@@ -36325,6 +36323,7 @@ export namespace Prisma {
       batchNumber: string | null
       manufacturedDate: Date | null
       expiryDate: Date | null
+      countryOfOrigin: string | null
       quantity: number
       purchasePrice: number
       wholesalePrice: number | null
@@ -36763,6 +36762,7 @@ export namespace Prisma {
     readonly batchNumber: FieldRef<"PurchaseInvoiceItem", 'String'>
     readonly manufacturedDate: FieldRef<"PurchaseInvoiceItem", 'DateTime'>
     readonly expiryDate: FieldRef<"PurchaseInvoiceItem", 'DateTime'>
+    readonly countryOfOrigin: FieldRef<"PurchaseInvoiceItem", 'String'>
     readonly quantity: FieldRef<"PurchaseInvoiceItem", 'Int'>
     readonly purchasePrice: FieldRef<"PurchaseInvoiceItem", 'Float'>
     readonly wholesalePrice: FieldRef<"PurchaseInvoiceItem", 'Float'>
@@ -49036,7 +49036,6 @@ export namespace Prisma {
     name: string | null
     legalName: string | null
     phone: string | null
-    email: string | null
     address: string | null
     taxId: string | null
     managerName: string | null
@@ -49054,7 +49053,6 @@ export namespace Prisma {
     name: string | null
     legalName: string | null
     phone: string | null
-    email: string | null
     address: string | null
     taxId: string | null
     managerName: string | null
@@ -49072,7 +49070,6 @@ export namespace Prisma {
     name: number
     legalName: number
     phone: number
-    email: number
     address: number
     taxId: number
     managerName: number
@@ -49104,7 +49101,6 @@ export namespace Prisma {
     name?: true
     legalName?: true
     phone?: true
-    email?: true
     address?: true
     taxId?: true
     managerName?: true
@@ -49122,7 +49118,6 @@ export namespace Prisma {
     name?: true
     legalName?: true
     phone?: true
-    email?: true
     address?: true
     taxId?: true
     managerName?: true
@@ -49140,7 +49135,6 @@ export namespace Prisma {
     name?: true
     legalName?: true
     phone?: true
-    email?: true
     address?: true
     taxId?: true
     managerName?: true
@@ -49245,7 +49239,6 @@ export namespace Prisma {
     name: string
     legalName: string | null
     phone: string | null
-    email: string | null
     address: string | null
     taxId: string | null
     managerName: string | null
@@ -49282,7 +49275,6 @@ export namespace Prisma {
     name?: boolean
     legalName?: boolean
     phone?: boolean
-    email?: boolean
     address?: boolean
     taxId?: boolean
     managerName?: boolean
@@ -49305,7 +49297,6 @@ export namespace Prisma {
     name?: boolean
     legalName?: boolean
     phone?: boolean
-    email?: boolean
     address?: boolean
     taxId?: boolean
     managerName?: boolean
@@ -49323,7 +49314,6 @@ export namespace Prisma {
     name?: boolean
     legalName?: boolean
     phone?: boolean
-    email?: boolean
     address?: boolean
     taxId?: boolean
     managerName?: boolean
@@ -49341,7 +49331,6 @@ export namespace Prisma {
     name?: boolean
     legalName?: boolean
     phone?: boolean
-    email?: boolean
     address?: boolean
     taxId?: boolean
     managerName?: boolean
@@ -49353,7 +49342,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type CustomerOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "legalName" | "phone" | "email" | "address" | "taxId" | "managerName" | "creditLimit" | "defaultDiscount" | "paymentTermDays" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["customer"]>
+  export type CustomerOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "legalName" | "phone" | "address" | "taxId" | "managerName" | "creditLimit" | "defaultDiscount" | "paymentTermDays" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["customer"]>
   export type CustomerInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     invoices?: boolean | Customer$invoicesArgs<ExtArgs>
     receivables?: boolean | Customer$receivablesArgs<ExtArgs>
@@ -49378,7 +49367,6 @@ export namespace Prisma {
       name: string
       legalName: string | null
       phone: string | null
-      email: string | null
       address: string | null
       taxId: string | null
       managerName: string | null
@@ -49820,7 +49808,6 @@ export namespace Prisma {
     readonly name: FieldRef<"Customer", 'String'>
     readonly legalName: FieldRef<"Customer", 'String'>
     readonly phone: FieldRef<"Customer", 'String'>
-    readonly email: FieldRef<"Customer", 'String'>
     readonly address: FieldRef<"Customer", 'String'>
     readonly taxId: FieldRef<"Customer", 'String'>
     readonly managerName: FieldRef<"Customer", 'String'>
@@ -52738,6 +52725,7 @@ export namespace Prisma {
     manufacturedDate: 'manufacturedDate',
     receivedAt: 'receivedAt',
     expiryDate: 'expiryDate',
+    countryOfOrigin: 'countryOfOrigin',
     status: 'status',
     productId: 'productId',
     purchaseItemId: 'purchaseItemId',
@@ -52764,7 +52752,6 @@ export namespace Prisma {
   export const UserScalarFieldEnum: {
     id: 'id',
     username: 'username',
-    email: 'email',
     password: 'password',
     name: 'name',
     role: 'role',
@@ -52782,7 +52769,6 @@ export namespace Prisma {
     id: 'id',
     name: 'name',
     contact: 'contact',
-    email: 'email',
     address: 'address',
     contractNumber: 'contractNumber',
     contractDate: 'contractDate',
@@ -53088,6 +53074,7 @@ export namespace Prisma {
     batchNumber: 'batchNumber',
     manufacturedDate: 'manufacturedDate',
     expiryDate: 'expiryDate',
+    countryOfOrigin: 'countryOfOrigin',
     quantity: 'quantity',
     purchasePrice: 'purchasePrice',
     wholesalePrice: 'wholesalePrice',
@@ -53260,7 +53247,6 @@ export namespace Prisma {
     name: 'name',
     legalName: 'legalName',
     phone: 'phone',
-    email: 'email',
     address: 'address',
     taxId: 'taxId',
     managerName: 'managerName',
@@ -53936,6 +53922,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFilter<"Batch"> | Date | string
     receivedAt?: DateTimeFilter<"Batch"> | Date | string
     expiryDate?: DateTimeFilter<"Batch"> | Date | string
+    countryOfOrigin?: StringNullableFilter<"Batch"> | string | null
     status?: EnumBatchStatusFilter<"Batch"> | $Enums.BatchStatus
     productId?: StringFilter<"Batch"> | string
     purchaseItemId?: StringNullableFilter<"Batch"> | string | null
@@ -53971,6 +53958,7 @@ export namespace Prisma {
     manufacturedDate?: SortOrder
     receivedAt?: SortOrder
     expiryDate?: SortOrder
+    countryOfOrigin?: SortOrderInput | SortOrder
     status?: SortOrder
     productId?: SortOrder
     purchaseItemId?: SortOrderInput | SortOrder
@@ -54009,6 +53997,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFilter<"Batch"> | Date | string
     receivedAt?: DateTimeFilter<"Batch"> | Date | string
     expiryDate?: DateTimeFilter<"Batch"> | Date | string
+    countryOfOrigin?: StringNullableFilter<"Batch"> | string | null
     status?: EnumBatchStatusFilter<"Batch"> | $Enums.BatchStatus
     productId?: StringFilter<"Batch"> | string
     purchaseItemId?: StringNullableFilter<"Batch"> | string | null
@@ -54044,6 +54033,7 @@ export namespace Prisma {
     manufacturedDate?: SortOrder
     receivedAt?: SortOrder
     expiryDate?: SortOrder
+    countryOfOrigin?: SortOrderInput | SortOrder
     status?: SortOrder
     productId?: SortOrder
     purchaseItemId?: SortOrderInput | SortOrder
@@ -54077,6 +54067,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeWithAggregatesFilter<"Batch"> | Date | string
     receivedAt?: DateTimeWithAggregatesFilter<"Batch"> | Date | string
     expiryDate?: DateTimeWithAggregatesFilter<"Batch"> | Date | string
+    countryOfOrigin?: StringNullableWithAggregatesFilter<"Batch"> | string | null
     status?: EnumBatchStatusWithAggregatesFilter<"Batch"> | $Enums.BatchStatus
     productId?: StringWithAggregatesFilter<"Batch"> | string
     purchaseItemId?: StringNullableWithAggregatesFilter<"Batch"> | string | null
@@ -54159,8 +54150,7 @@ export namespace Prisma {
     OR?: UserWhereInput[]
     NOT?: UserWhereInput | UserWhereInput[]
     id?: StringFilter<"User"> | string
-    username?: StringNullableFilter<"User"> | string | null
-    email?: StringFilter<"User"> | string
+    username?: StringFilter<"User"> | string
     password?: StringFilter<"User"> | string
     name?: StringFilter<"User"> | string
     role?: EnumUserRoleFilter<"User"> | $Enums.UserRole
@@ -54192,8 +54182,7 @@ export namespace Prisma {
 
   export type UserOrderByWithRelationInput = {
     id?: SortOrder
-    username?: SortOrderInput | SortOrder
-    email?: SortOrder
+    username?: SortOrder
     password?: SortOrder
     name?: SortOrder
     role?: SortOrder
@@ -54225,11 +54214,10 @@ export namespace Prisma {
 
   export type UserWhereUniqueInput = Prisma.AtLeast<{
     id?: string
-    email?: string
+    username?: string
     AND?: UserWhereInput | UserWhereInput[]
     OR?: UserWhereInput[]
     NOT?: UserWhereInput | UserWhereInput[]
-    username?: StringNullableFilter<"User"> | string | null
     password?: StringFilter<"User"> | string
     name?: StringFilter<"User"> | string
     role?: EnumUserRoleFilter<"User"> | $Enums.UserRole
@@ -54257,12 +54245,11 @@ export namespace Prisma {
     transfersReceived?: StockTransferListRelationFilter
     ocrDraftApprovals?: OcrImportDraftListRelationFilter
     backupsCreated?: BackupMetadataListRelationFilter
-  }, "id" | "email">
+  }, "id" | "username">
 
   export type UserOrderByWithAggregationInput = {
     id?: SortOrder
-    username?: SortOrderInput | SortOrder
-    email?: SortOrder
+    username?: SortOrder
     password?: SortOrder
     name?: SortOrder
     role?: SortOrder
@@ -54281,8 +54268,7 @@ export namespace Prisma {
     OR?: UserScalarWhereWithAggregatesInput[]
     NOT?: UserScalarWhereWithAggregatesInput | UserScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"User"> | string
-    username?: StringNullableWithAggregatesFilter<"User"> | string | null
-    email?: StringWithAggregatesFilter<"User"> | string
+    username?: StringWithAggregatesFilter<"User"> | string
     password?: StringWithAggregatesFilter<"User"> | string
     name?: StringWithAggregatesFilter<"User"> | string
     role?: EnumUserRoleWithAggregatesFilter<"User"> | $Enums.UserRole
@@ -54300,7 +54286,6 @@ export namespace Prisma {
     id?: StringFilter<"Supplier"> | string
     name?: StringFilter<"Supplier"> | string
     contact?: StringNullableFilter<"Supplier"> | string | null
-    email?: StringNullableFilter<"Supplier"> | string | null
     address?: StringNullableFilter<"Supplier"> | string | null
     contractNumber?: StringNullableFilter<"Supplier"> | string | null
     contractDate?: DateTimeNullableFilter<"Supplier"> | Date | string | null
@@ -54322,7 +54307,6 @@ export namespace Prisma {
     id?: SortOrder
     name?: SortOrder
     contact?: SortOrderInput | SortOrder
-    email?: SortOrderInput | SortOrder
     address?: SortOrderInput | SortOrder
     contractNumber?: SortOrderInput | SortOrder
     contractDate?: SortOrderInput | SortOrder
@@ -54347,7 +54331,6 @@ export namespace Prisma {
     NOT?: SupplierWhereInput | SupplierWhereInput[]
     name?: StringFilter<"Supplier"> | string
     contact?: StringNullableFilter<"Supplier"> | string | null
-    email?: StringNullableFilter<"Supplier"> | string | null
     address?: StringNullableFilter<"Supplier"> | string | null
     contractNumber?: StringNullableFilter<"Supplier"> | string | null
     contractDate?: DateTimeNullableFilter<"Supplier"> | Date | string | null
@@ -54369,7 +54352,6 @@ export namespace Prisma {
     id?: SortOrder
     name?: SortOrder
     contact?: SortOrderInput | SortOrder
-    email?: SortOrderInput | SortOrder
     address?: SortOrderInput | SortOrder
     contractNumber?: SortOrderInput | SortOrder
     contractDate?: SortOrderInput | SortOrder
@@ -54391,7 +54373,6 @@ export namespace Prisma {
     id?: StringWithAggregatesFilter<"Supplier"> | string
     name?: StringWithAggregatesFilter<"Supplier"> | string
     contact?: StringNullableWithAggregatesFilter<"Supplier"> | string | null
-    email?: StringNullableWithAggregatesFilter<"Supplier"> | string | null
     address?: StringNullableWithAggregatesFilter<"Supplier"> | string | null
     contractNumber?: StringNullableWithAggregatesFilter<"Supplier"> | string | null
     contractDate?: DateTimeNullableWithAggregatesFilter<"Supplier"> | Date | string | null
@@ -56013,6 +55994,7 @@ export namespace Prisma {
     batchNumber?: StringNullableFilter<"PurchaseInvoiceItem"> | string | null
     manufacturedDate?: DateTimeNullableFilter<"PurchaseInvoiceItem"> | Date | string | null
     expiryDate?: DateTimeNullableFilter<"PurchaseInvoiceItem"> | Date | string | null
+    countryOfOrigin?: StringNullableFilter<"PurchaseInvoiceItem"> | string | null
     quantity?: IntFilter<"PurchaseInvoiceItem"> | number
     purchasePrice?: FloatFilter<"PurchaseInvoiceItem"> | number
     wholesalePrice?: FloatNullableFilter<"PurchaseInvoiceItem"> | number | null
@@ -56031,6 +56013,7 @@ export namespace Prisma {
     batchNumber?: SortOrderInput | SortOrder
     manufacturedDate?: SortOrderInput | SortOrder
     expiryDate?: SortOrderInput | SortOrder
+    countryOfOrigin?: SortOrderInput | SortOrder
     quantity?: SortOrder
     purchasePrice?: SortOrder
     wholesalePrice?: SortOrderInput | SortOrder
@@ -56052,6 +56035,7 @@ export namespace Prisma {
     batchNumber?: StringNullableFilter<"PurchaseInvoiceItem"> | string | null
     manufacturedDate?: DateTimeNullableFilter<"PurchaseInvoiceItem"> | Date | string | null
     expiryDate?: DateTimeNullableFilter<"PurchaseInvoiceItem"> | Date | string | null
+    countryOfOrigin?: StringNullableFilter<"PurchaseInvoiceItem"> | string | null
     quantity?: IntFilter<"PurchaseInvoiceItem"> | number
     purchasePrice?: FloatFilter<"PurchaseInvoiceItem"> | number
     wholesalePrice?: FloatNullableFilter<"PurchaseInvoiceItem"> | number | null
@@ -56070,6 +56054,7 @@ export namespace Prisma {
     batchNumber?: SortOrderInput | SortOrder
     manufacturedDate?: SortOrderInput | SortOrder
     expiryDate?: SortOrderInput | SortOrder
+    countryOfOrigin?: SortOrderInput | SortOrder
     quantity?: SortOrder
     purchasePrice?: SortOrder
     wholesalePrice?: SortOrderInput | SortOrder
@@ -56093,6 +56078,7 @@ export namespace Prisma {
     batchNumber?: StringNullableWithAggregatesFilter<"PurchaseInvoiceItem"> | string | null
     manufacturedDate?: DateTimeNullableWithAggregatesFilter<"PurchaseInvoiceItem"> | Date | string | null
     expiryDate?: DateTimeNullableWithAggregatesFilter<"PurchaseInvoiceItem"> | Date | string | null
+    countryOfOrigin?: StringNullableWithAggregatesFilter<"PurchaseInvoiceItem"> | string | null
     quantity?: IntWithAggregatesFilter<"PurchaseInvoiceItem"> | number
     purchasePrice?: FloatWithAggregatesFilter<"PurchaseInvoiceItem"> | number
     wholesalePrice?: FloatNullableWithAggregatesFilter<"PurchaseInvoiceItem"> | number | null
@@ -56943,7 +56929,6 @@ export namespace Prisma {
     name?: StringFilter<"Customer"> | string
     legalName?: StringNullableFilter<"Customer"> | string | null
     phone?: StringNullableFilter<"Customer"> | string | null
-    email?: StringNullableFilter<"Customer"> | string | null
     address?: StringNullableFilter<"Customer"> | string | null
     taxId?: StringNullableFilter<"Customer"> | string | null
     managerName?: StringNullableFilter<"Customer"> | string | null
@@ -56965,7 +56950,6 @@ export namespace Prisma {
     name?: SortOrder
     legalName?: SortOrderInput | SortOrder
     phone?: SortOrderInput | SortOrder
-    email?: SortOrderInput | SortOrder
     address?: SortOrderInput | SortOrder
     taxId?: SortOrderInput | SortOrder
     managerName?: SortOrderInput | SortOrder
@@ -56990,7 +56974,6 @@ export namespace Prisma {
     name?: StringFilter<"Customer"> | string
     legalName?: StringNullableFilter<"Customer"> | string | null
     phone?: StringNullableFilter<"Customer"> | string | null
-    email?: StringNullableFilter<"Customer"> | string | null
     address?: StringNullableFilter<"Customer"> | string | null
     taxId?: StringNullableFilter<"Customer"> | string | null
     managerName?: StringNullableFilter<"Customer"> | string | null
@@ -57012,7 +56995,6 @@ export namespace Prisma {
     name?: SortOrder
     legalName?: SortOrderInput | SortOrder
     phone?: SortOrderInput | SortOrder
-    email?: SortOrderInput | SortOrder
     address?: SortOrderInput | SortOrder
     taxId?: SortOrderInput | SortOrder
     managerName?: SortOrderInput | SortOrder
@@ -57038,7 +57020,6 @@ export namespace Prisma {
     name?: StringWithAggregatesFilter<"Customer"> | string
     legalName?: StringNullableWithAggregatesFilter<"Customer"> | string | null
     phone?: StringNullableWithAggregatesFilter<"Customer"> | string | null
-    email?: StringNullableWithAggregatesFilter<"Customer"> | string | null
     address?: StringNullableWithAggregatesFilter<"Customer"> | string | null
     taxId?: StringNullableWithAggregatesFilter<"Customer"> | string | null
     managerName?: StringNullableWithAggregatesFilter<"Customer"> | string | null
@@ -57470,6 +57451,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -57503,6 +57485,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -57532,6 +57515,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -57565,6 +57549,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -57596,6 +57581,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -57619,6 +57605,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -57642,6 +57629,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -57719,8 +57707,7 @@ export namespace Prisma {
 
   export type UserCreateInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -57751,8 +57738,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -57783,8 +57769,7 @@ export namespace Prisma {
 
   export type UserUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -57815,8 +57800,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -57847,8 +57831,7 @@ export namespace Prisma {
 
   export type UserCreateManyInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -57861,8 +57844,7 @@ export namespace Prisma {
 
   export type UserUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -57874,8 +57856,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -57890,7 +57871,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -57912,7 +57892,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -57934,7 +57913,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -57956,7 +57934,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -57978,7 +57955,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -57992,7 +57968,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -58006,7 +57981,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -59691,6 +59665,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -59709,6 +59684,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -59723,6 +59699,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -59741,6 +59718,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -59757,6 +59735,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -59770,6 +59749,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -59785,6 +59765,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -60664,7 +60645,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -60686,7 +60666,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -60708,7 +60687,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -60730,7 +60708,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -60752,7 +60729,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -60770,7 +60746,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -60788,7 +60763,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -61452,6 +61426,7 @@ export namespace Prisma {
     manufacturedDate?: SortOrder
     receivedAt?: SortOrder
     expiryDate?: SortOrder
+    countryOfOrigin?: SortOrder
     status?: SortOrder
     productId?: SortOrder
     purchaseItemId?: SortOrder
@@ -61489,6 +61464,7 @@ export namespace Prisma {
     manufacturedDate?: SortOrder
     receivedAt?: SortOrder
     expiryDate?: SortOrder
+    countryOfOrigin?: SortOrder
     status?: SortOrder
     productId?: SortOrder
     purchaseItemId?: SortOrder
@@ -61514,6 +61490,7 @@ export namespace Prisma {
     manufacturedDate?: SortOrder
     receivedAt?: SortOrder
     expiryDate?: SortOrder
+    countryOfOrigin?: SortOrder
     status?: SortOrder
     productId?: SortOrder
     purchaseItemId?: SortOrder
@@ -61775,7 +61752,6 @@ export namespace Prisma {
   export type UserCountOrderByAggregateInput = {
     id?: SortOrder
     username?: SortOrder
-    email?: SortOrder
     password?: SortOrder
     name?: SortOrder
     role?: SortOrder
@@ -61789,7 +61765,6 @@ export namespace Prisma {
   export type UserMaxOrderByAggregateInput = {
     id?: SortOrder
     username?: SortOrder
-    email?: SortOrder
     password?: SortOrder
     name?: SortOrder
     role?: SortOrder
@@ -61803,7 +61778,6 @@ export namespace Prisma {
   export type UserMinOrderByAggregateInput = {
     id?: SortOrder
     username?: SortOrder
-    email?: SortOrder
     password?: SortOrder
     name?: SortOrder
     role?: SortOrder
@@ -61873,7 +61847,6 @@ export namespace Prisma {
     id?: SortOrder
     name?: SortOrder
     contact?: SortOrder
-    email?: SortOrder
     address?: SortOrder
     contractNumber?: SortOrder
     contractDate?: SortOrder
@@ -61891,7 +61864,6 @@ export namespace Prisma {
     id?: SortOrder
     name?: SortOrder
     contact?: SortOrder
-    email?: SortOrder
     address?: SortOrder
     contractNumber?: SortOrder
     contractDate?: SortOrder
@@ -61905,7 +61877,6 @@ export namespace Prisma {
     id?: SortOrder
     name?: SortOrder
     contact?: SortOrder
-    email?: SortOrder
     address?: SortOrder
     contractNumber?: SortOrder
     contractDate?: SortOrder
@@ -63083,6 +63054,7 @@ export namespace Prisma {
     batchNumber?: SortOrder
     manufacturedDate?: SortOrder
     expiryDate?: SortOrder
+    countryOfOrigin?: SortOrder
     quantity?: SortOrder
     purchasePrice?: SortOrder
     wholesalePrice?: SortOrder
@@ -63107,6 +63079,7 @@ export namespace Prisma {
     batchNumber?: SortOrder
     manufacturedDate?: SortOrder
     expiryDate?: SortOrder
+    countryOfOrigin?: SortOrder
     quantity?: SortOrder
     purchasePrice?: SortOrder
     wholesalePrice?: SortOrder
@@ -63122,6 +63095,7 @@ export namespace Prisma {
     batchNumber?: SortOrder
     manufacturedDate?: SortOrder
     expiryDate?: SortOrder
+    countryOfOrigin?: SortOrder
     quantity?: SortOrder
     purchasePrice?: SortOrder
     wholesalePrice?: SortOrder
@@ -63715,7 +63689,6 @@ export namespace Prisma {
     name?: SortOrder
     legalName?: SortOrder
     phone?: SortOrder
-    email?: SortOrder
     address?: SortOrder
     taxId?: SortOrder
     managerName?: SortOrder
@@ -63739,7 +63712,6 @@ export namespace Prisma {
     name?: SortOrder
     legalName?: SortOrder
     phone?: SortOrder
-    email?: SortOrder
     address?: SortOrder
     taxId?: SortOrder
     managerName?: SortOrder
@@ -63757,7 +63729,6 @@ export namespace Prisma {
     name?: SortOrder
     legalName?: SortOrder
     phone?: SortOrder
-    email?: SortOrder
     address?: SortOrder
     taxId?: SortOrder
     managerName?: SortOrder
@@ -69221,6 +69192,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -69253,6 +69225,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     purchaseItemId?: string | null
     createdAt?: Date | string
@@ -69436,6 +69409,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -69452,6 +69426,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -69750,6 +69725,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFilter<"Batch"> | Date | string
     receivedAt?: DateTimeFilter<"Batch"> | Date | string
     expiryDate?: DateTimeFilter<"Batch"> | Date | string
+    countryOfOrigin?: StringNullableFilter<"Batch"> | string | null
     status?: EnumBatchStatusFilter<"Batch"> | $Enums.BatchStatus
     productId?: StringFilter<"Batch"> | string
     purchaseItemId?: StringNullableFilter<"Batch"> | string | null
@@ -69941,6 +69917,7 @@ export namespace Prisma {
     batchNumber?: StringNullableFilter<"PurchaseInvoiceItem"> | string | null
     manufacturedDate?: DateTimeNullableFilter<"PurchaseInvoiceItem"> | Date | string | null
     expiryDate?: DateTimeNullableFilter<"PurchaseInvoiceItem"> | Date | string | null
+    countryOfOrigin?: StringNullableFilter<"PurchaseInvoiceItem"> | string | null
     quantity?: IntFilter<"PurchaseInvoiceItem"> | number
     purchasePrice?: FloatFilter<"PurchaseInvoiceItem"> | number
     wholesalePrice?: FloatNullableFilter<"PurchaseInvoiceItem"> | number | null
@@ -70080,7 +70057,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -70101,7 +70077,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -70262,6 +70237,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -70279,6 +70255,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -70483,7 +70460,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -70504,7 +70480,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -70683,6 +70658,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -70700,6 +70676,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -70846,6 +70823,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -70878,6 +70856,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -70897,8 +70876,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutMovementsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -70928,8 +70906,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutMovementsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -70989,6 +70966,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -71021,6 +70999,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71046,8 +71025,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutMovementsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -71077,8 +71055,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutMovementsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -72436,6 +72413,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -72467,6 +72445,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -72923,8 +72902,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutInvoicesInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -72954,8 +72932,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutInvoicesInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -73159,7 +73136,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -73180,7 +73156,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -73244,8 +73219,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutInvoicesInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -73275,8 +73249,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutInvoicesInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -73412,7 +73385,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -73433,7 +73405,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -73633,6 +73604,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -73665,6 +73637,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -73853,6 +73826,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -73885,6 +73859,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -73899,8 +73874,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutAuditLogsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -73930,8 +73904,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutAuditLogsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -73977,8 +73950,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutAuditLogsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -74008,8 +73980,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutAuditLogsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -74039,8 +74010,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutWarehouseInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -74070,8 +74040,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutWarehouseInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -74125,6 +74094,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -74156,6 +74126,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -74500,8 +74471,7 @@ export namespace Prisma {
     OR?: UserScalarWhereInput[]
     NOT?: UserScalarWhereInput | UserScalarWhereInput[]
     id?: StringFilter<"User"> | string
-    username?: StringNullableFilter<"User"> | string | null
-    email?: StringFilter<"User"> | string
+    username?: StringFilter<"User"> | string
     password?: StringFilter<"User"> | string
     name?: StringFilter<"User"> | string
     role?: EnumUserRoleFilter<"User"> | $Enums.UserRole
@@ -75036,8 +75006,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutTransfersCreatedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -75067,8 +75036,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutTransfersCreatedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -75103,8 +75071,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutTransfersReceivedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -75134,8 +75101,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutTransfersReceivedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -75315,8 +75281,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutTransfersCreatedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -75346,8 +75311,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutTransfersCreatedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -75388,8 +75352,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutTransfersReceivedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -75419,8 +75382,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutTransfersReceivedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -75596,6 +75558,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -75628,6 +75591,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -75800,6 +75764,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -75832,6 +75797,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -75944,7 +75910,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -75965,7 +75930,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -75993,7 +75957,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -76014,7 +75977,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -76036,8 +75998,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutReturnsApprovedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -76067,8 +76028,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutReturnsApprovedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -76103,8 +76063,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutReturnsCreatedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -76134,8 +76093,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutReturnsCreatedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -76325,7 +76283,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -76346,7 +76303,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -76380,7 +76336,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -76401,7 +76356,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -76429,8 +76383,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutReturnsApprovedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -76460,8 +76413,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutReturnsApprovedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -76502,8 +76454,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutReturnsCreatedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -76533,8 +76484,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutReturnsCreatedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -76724,6 +76674,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -76756,6 +76707,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -76942,6 +76894,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -76974,6 +76927,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -77037,8 +76991,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutWriteOffsCreatedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -77068,8 +77021,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutWriteOffsCreatedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -77104,8 +77056,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutWriteOffsApprovedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -77135,8 +77086,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutWriteOffsApprovedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -77265,8 +77215,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutWriteOffsCreatedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -77296,8 +77245,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutWriteOffsCreatedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -77338,8 +77286,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutWriteOffsApprovedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -77369,8 +77316,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutWriteOffsApprovedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -77546,6 +77492,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -77578,6 +77525,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -77750,6 +77698,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -77782,6 +77731,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -77845,8 +77795,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutShiftsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -77876,8 +77825,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutShiftsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -78058,8 +78006,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutShiftsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -78089,8 +78036,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutShiftsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -78189,8 +78135,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutCashMovementsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -78220,8 +78165,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutCashMovementsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -78310,8 +78254,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutCashMovementsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -78341,8 +78284,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutCashMovementsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -78457,8 +78399,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutPriceChangesInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -78488,8 +78429,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutPriceChangesInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -78626,8 +78566,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutPriceChangesInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -78657,8 +78596,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutPriceChangesInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -79253,7 +79191,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -79274,7 +79211,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -79347,8 +79283,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutPurchaseInvoicesInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -79378,8 +79313,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutPurchaseInvoicesInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -79417,6 +79351,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -79433,6 +79368,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -79545,7 +79481,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -79566,7 +79501,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -79651,8 +79585,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutPurchaseInvoicesInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -79682,8 +79615,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutPurchaseInvoicesInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -79903,6 +79835,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -79935,6 +79868,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     createdAt?: Date | string
@@ -80117,7 +80051,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -80138,7 +80071,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -80252,8 +80184,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutPaymentsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -80283,8 +80214,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutPaymentsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -80323,7 +80253,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -80344,7 +80273,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -80379,7 +80307,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -80400,7 +80327,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -80532,8 +80458,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutPaymentsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -80563,8 +80488,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutPaymentsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -80609,7 +80533,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -80630,7 +80553,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -80649,7 +80571,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -80670,7 +80591,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -80750,7 +80670,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -80771,7 +80690,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -80926,7 +80844,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -80947,7 +80864,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -81075,7 +80991,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -81096,7 +81011,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -81469,7 +81383,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -81490,7 +81403,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -81514,8 +81426,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutOcrDocumentsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -81545,8 +81456,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutOcrDocumentsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -81763,7 +81673,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -81784,7 +81693,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -81814,8 +81722,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutOcrDocumentsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -81845,8 +81752,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutOcrDocumentsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -82284,8 +82190,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutOcrDraftApprovalsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -82315,8 +82220,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutOcrDraftApprovalsInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -82411,8 +82315,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutOcrDraftApprovalsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -82442,8 +82345,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutOcrDraftApprovalsInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -82473,8 +82375,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutBackupsCreatedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -82504,8 +82405,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutBackupsCreatedInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -82551,8 +82451,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutBackupsCreatedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -82582,8 +82481,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutBackupsCreatedInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -82662,8 +82560,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutExpensesInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -82693,8 +82590,7 @@ export namespace Prisma {
 
   export type UserUncheckedCreateWithoutExpensesInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -82795,8 +82691,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutExpensesInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -82826,8 +82721,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutExpensesInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -82859,7 +82753,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -82880,7 +82773,6 @@ export namespace Prisma {
     id?: string
     name: string
     contact?: string | null
-    email?: string | null
     address?: string | null
     contractNumber?: string | null
     contractDate?: Date | string | null
@@ -82917,7 +82809,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -82938,7 +82829,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     contact?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     contractNumber?: NullableStringFieldUpdateOperationsInput | string | null
     contractDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -83271,7 +83161,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -83292,7 +83181,6 @@ export namespace Prisma {
     name: string
     legalName?: string | null
     phone?: string | null
-    email?: string | null
     address?: string | null
     taxId?: string | null
     managerName?: string | null
@@ -83382,7 +83270,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83403,7 +83290,6 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     legalName?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     taxId?: NullableStringFieldUpdateOperationsInput | string | null
     managerName?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83434,6 +83320,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -83466,6 +83353,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -83510,6 +83398,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -83542,6 +83431,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83572,6 +83462,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     purchaseItemId?: string | null
     createdAt?: Date | string
@@ -83632,6 +83523,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -83703,6 +83595,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -83735,6 +83628,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -83765,6 +83659,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -83920,6 +83815,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -83936,6 +83832,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -83951,6 +83848,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -85341,6 +85239,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -85459,6 +85358,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -85490,6 +85390,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -85520,6 +85421,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86022,8 +85924,7 @@ export namespace Prisma {
 
   export type UserCreateManyWarehouseInput = {
     id?: string
-    username?: string | null
-    email: string
+    username: string
     password: string
     name: string
     role: $Enums.UserRole
@@ -86050,6 +85951,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     purchaseItemId?: string | null
@@ -86160,8 +86062,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutWarehouseInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -86191,8 +86092,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateWithoutWarehouseInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -86222,8 +86122,7 @@ export namespace Prisma {
 
   export type UserUncheckedUpdateManyWithoutWarehouseInput = {
     id?: StringFieldUpdateOperationsInput | string
-    username?: NullableStringFieldUpdateOperationsInput | string | null
-    email?: StringFieldUpdateOperationsInput | string
+    username?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
@@ -86249,6 +86148,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -86280,6 +86180,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86310,6 +86211,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     purchaseItemId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -87444,6 +87346,7 @@ export namespace Prisma {
     batchNumber?: string | null
     manufacturedDate?: Date | string | null
     expiryDate?: Date | string | null
+    countryOfOrigin?: string | null
     quantity: number
     purchasePrice: number
     wholesalePrice?: number | null
@@ -87486,6 +87389,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -87502,6 +87406,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -87517,6 +87422,7 @@ export namespace Prisma {
     batchNumber?: NullableStringFieldUpdateOperationsInput | string | null
     manufacturedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     purchasePrice?: FloatFieldUpdateOperationsInput | number
     wholesalePrice?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -87630,6 +87536,7 @@ export namespace Prisma {
     manufacturedDate: Date | string
     receivedAt?: Date | string
     expiryDate: Date | string
+    countryOfOrigin?: string | null
     status: $Enums.BatchStatus
     productId: string
     createdAt?: Date | string
@@ -87652,6 +87559,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -87684,6 +87592,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -87714,6 +87623,7 @@ export namespace Prisma {
     manufacturedDate?: DateTimeFieldUpdateOperationsInput | Date | string
     receivedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiryDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    countryOfOrigin?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBatchStatusFieldUpdateOperationsInput | $Enums.BatchStatus
     productId?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string

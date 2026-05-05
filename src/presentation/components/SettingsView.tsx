@@ -40,7 +40,6 @@ import {
 
 type UserProfileForm = {
   name: string;
-  email: string;
   username: string;
 };
 
@@ -67,7 +66,6 @@ export const SettingsView: React.FC = () => {
 
   const [profileForm, setProfileForm] = useState<UserProfileForm>({
     name: '',
-    email: '',
     username: '',
   });
   const [passwordForm, setPasswordForm] = useState<PasswordForm>({
@@ -220,7 +218,6 @@ export const SettingsView: React.FC = () => {
 
         setProfileForm({
           name: String(profileBody.name || ''),
-          email: String(profileBody.email || ''),
           username: String(profileBody.username || ''),
         });
 
@@ -491,7 +488,7 @@ export const SettingsView: React.FC = () => {
                 <div className="space-y-8">
                   <header>
                     <h3 className="text-xl font-normal text-[#151619] tracking-tight mb-2">Личная информация</h3>
-                    <p className="text-xs text-[#5A5A40]/50 italic">Проверьте имя и email, чтобы чеки, отчеты и действия в системе сохранялись с правильными данными.</p>
+                    <p className="text-xs text-[#5A5A40]/50 italic">Проверьте имя и логин, чтобы чеки, отчеты и действия в системе сохранялись с правильными данными.</p>
                   </header>
                   <div className="space-y-4">
                     <div className="space-y-1.5 focus-within:translate-x-1 transition-transform">
@@ -502,14 +499,7 @@ export const SettingsView: React.FC = () => {
                         onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} 
                       />
                     </div>
-                    <div className="space-y-1.5 focus-within:translate-x-1 transition-transform">
-                      <label className="text-[9px] uppercase tracking-widest text-[#5A5A40]/40 font-normal px-1">Электронная почта</label>
-                      <input 
-                        className="w-full px-5 py-3.5 bg-[#f8f7f2] border border-transparent rounded-[1.2rem] text-sm font-normal outline-none focus:bg-white focus:border-[#5A5A40]/20 transition-all font-normal" 
-                        value={profileForm.email} 
-                        onChange={(e) => setProfileForm((s) => ({ ...s, email: e.target.value }))} 
-                      />
-                    </div>
+
                     <div className="space-y-1.5 focus-within:translate-x-1 transition-transform">
                       <label className="text-[9px] uppercase tracking-widest text-[#5A5A40]/40 font-normal px-1">Логин</label>
                       <input 
@@ -903,10 +893,10 @@ export const SettingsView: React.FC = () => {
 
                           <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/10">
                              <div className="flex items-center gap-3">
-                                <CircleCheck size={18} className={systemStatus?.backupDirExists ? 'text-emerald-400' : 'text-amber-400'} />
+                                <CircleCheck size={18} className={systemStatus?.backupDirReady ? 'text-emerald-400' : 'text-red-400'} />
                                 <span className="text-xs font-normal">Папка бэкапов</span>
                              </div>
-                             <span className={`text-[9px] uppercase font-black px-2 py-0.5 rounded-md ${systemStatus?.backupDirExists ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                             <span className={`text-[9px] uppercase font-black px-2 py-0.5 rounded-md ${systemStatus?.backupDirReady ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
                                {systemStatus?.backupDirExists ? 'OK' : 'Будет создана'}
                              </span>
                           </div>
@@ -915,6 +905,11 @@ export const SettingsView: React.FC = () => {
                        {systemStatus?.pgDumpPath && (
                          <div className="p-3 bg-white/5 rounded-xl text-[10px] text-white/30 font-mono break-all">
                            Path: {systemStatus.pgDumpPath}
+                         </div>
+                       )}
+                       {systemStatus?.backupDir && (
+                         <div className="p-3 bg-white/5 rounded-xl text-[10px] text-white/30 font-mono break-all">
+                           Backup: {systemStatus.backupDir}
                          </div>
                        )}
                     </div>

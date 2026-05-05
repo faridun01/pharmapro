@@ -14,7 +14,7 @@ export const useCurrencyCode = () => {
 
   useEffect(() => {
     let ignore = false;
-    const token = window.sessionStorage.getItem('pharmapro_token') || window.localStorage.getItem('pharmapro_token');
+    const token = window.sessionStorage.getItem('pharmapro_token');
 
     const loadCurrencyCode = async () => {
       try {

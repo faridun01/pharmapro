@@ -61,6 +61,26 @@ const APP_PORT = Number(process.env.PORT || 3921);
 const DEV_SERVER_URL = 'http://127.0.0.1:3000';
 const desktopAuthSecret = randomBytes(24).toString('hex');
 const appStartupStartedAt = Date.now();
+const DISK_D_BACKUP_DIR = 'D:\\PharmaPro Backups';
+const resolveBackupDir = () => {
+  try {
+    if (fs.existsSync('D:\\')) {
+      return DISK_D_BACKUP_DIR;
+    }
+  } catch {
+    // Fall back to the system folders below.
+  }
+
+  try {
+    return path.join(app.getPath('documents'), 'PharmaPro Backups');
+  } catch {
+    try {
+      return path.join(app.getPath('userData'), 'backups');
+    } catch {
+      return path.join(process.cwd(), 'backups');
+    }
+  }
+};
 
 let mainWindow = null;
 let backendProcess = null;
@@ -341,6 +361,7 @@ const startInternalBackend = async () => {
       // process (ELECTRON_RUN_AS_NODE=1) has asar fs-patching active and can
       // read files from inside the asar archive.
       PHARMAPRO_DIST_PATH: path.join(app.getAppPath(), 'dist'),
+      PHARMAPRO_RUNTIME_ROOT: path.join(process.resourcesPath, 'app.asar.unpacked'),
       // Tell the backend's env.ts where to find the .env file so dotenv.config()
       // can load DATABASE_URL even in standalone (non-project-root) deployments.
       ...(runtimeEnvFile ? { PHARMAPRO_ENV_FILE: runtimeEnvFile } : {}),
@@ -654,7 +675,7 @@ ipcMain.handle('desktop:perform-backup', async () => {
     const [, user, password, host, port, dbname] = parts;
 
     // Resolve Target Directory
-    const backupDir = 'D:\\pharmapro_backups';
+    const backupDir = resolveBackupDir();
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
     }
@@ -719,12 +740,14 @@ ipcMain.handle('desktop:perform-backup', async () => {
 
 // --- System Diagnostics (Step 15) ---
 ipcMain.handle('desktop:check-system-status', async () => {
+  const backupDir = resolveBackupDir();
   const status = {
     pgDumpFound: false,
     pgDumpPath: '',
     diskDReady: false,
+    backupDirReady: false,
     backupDirExists: false,
-    backupDir: 'D:\\pharmapro_backups'
+    backupDir
   };
 
   const commonPaths = [
@@ -746,14 +769,17 @@ ipcMain.handle('desktop:check-system-status', async () => {
   }
 
   try {
-    if (fs.existsSync('D:\\')) {
-      status.diskDReady = true;
-      if (fs.existsSync(status.backupDir)) {
-        status.backupDirExists = true;
-      }
-    }
-  } catch (e) {
+    status.diskDReady = fs.existsSync('D:\\');
+  } catch {
     status.diskDReady = false;
+  }
+
+  try {
+    fs.mkdirSync(status.backupDir, { recursive: true });
+    status.backupDirReady = true;
+    status.backupDirExists = fs.existsSync(status.backupDir);
+  } catch (e) {
+    status.backupDirReady = false;
   }
 
   return status;

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { buildApiHeaders } from '../../infrastructure/api';
 
-type AuditUser = { id: string; name: string; email: string };
+type AuditUser = { id: string; name: string };
 
 type AuditEntry = {
   id: string;
@@ -127,7 +127,6 @@ const DetailModal: React.FC<{ entry: AuditEntry; onClose: () => void }> = ({ ent
                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><User size={20}/></div>
                  <div className="min-w-0">
                     <p className="text-sm font-normal text-[#151619] truncate">{entry.user.name}</p>
-                    <p className="text-[10px] text-[#5A5A40]/40 lowercase">{entry.user.email}</p>
                  </div>
               </div>
             </div>
@@ -225,11 +224,10 @@ export const AuditLogPanel: React.FC = () => {
       'Объект': e.entity,
       'ID': e.entityId,
       'Сотрудник': e.user.name,
-      'Эл. почта': e.user.email
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.sheet_add_aoa(ws, [['ЖУРНАЛ АУДИТА • ' + new Date().toLocaleDateString()]], { origin: 'A1' });
-    ws['!cols'] = [{ wch: 22 }, { wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 25 }];
+    ws['!cols'] = [{ wch: 22 }, { wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 25 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Audit');
     XLSX.writeFile(wb, `Audit_${new Date().toISOString().slice(0, 10)}.xlsx`);

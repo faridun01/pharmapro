@@ -135,3 +135,42 @@ inventoryRouter.post('/purchase-invoices/:id/approve', authenticate, requireRole
   const result = await inventoryService.approvePurchaseInvoice(req.params.id, authedReq.user.id);
   res.json(result);
 }));
+
+// PUT /purchase-invoices/:id — PHARMACIST, ADMIN, OWNER
+inventoryRouter.put('/purchase-invoices/:id', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const body = req.body ?? {};
+
+  const result = await inventoryService.updatePurchaseInvoice(req.params.id, {
+    supplierId: String(body.supplierId),
+    invoiceNumber: String(body.invoiceNumber),
+    invoiceDate: new Date(body.invoiceDate),
+    discountAmount: parseNonNegative(body.discountAmount ?? 0, 'discountAmount'),
+    taxAmount: parseNonNegative(body.taxAmount ?? 0, 'taxAmount'),
+    status: body.status === 'POSTED' ? 'POSTED' : 'DRAFT',
+    comment: body.comment,
+    items: Array.isArray(body.items)
+      ? body.items.map((item: any, idx: number) => ({
+        productId: String(item.productId),
+        batchNumber: String(item.batchNumber),
+        quantity: parsePositiveInt(item.quantity, `items[${idx}].quantity`),
+        unit: String(item.unit || 'units'),
+        costBasis: parseNonNegative(item.costBasis ?? item.purchasePrice ?? 0, `items[${idx}].costBasis`),
+        wholesalePrice: item.wholesalePrice == null ? null : parseNonNegative(item.wholesalePrice, `items[${idx}].wholesalePrice`),
+        manufacturedDate: new Date(item.manufacturedDate),
+        expiryDate: new Date(item.expiryDate),
+        countryOfOrigin: item.countryOfOrigin,
+      }))
+      : [],
+  }, authedReq.user.id);
+
+  res.json(result);
+}));
+
+// DELETE /purchase-invoices/:id — ADMIN, OWNER only
+inventoryRouter.delete('/purchase-invoices/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const result = await inventoryService.deletePurchaseInvoice(req.params.id, authedReq.user.id);
+  res.json(result);
+}));
+

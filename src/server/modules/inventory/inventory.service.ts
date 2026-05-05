@@ -14,6 +14,7 @@ export type RestockItemInput = {
   supplierId?: string | null;
   manufacturedDate: Date;
   expiryDate: Date;
+  countryOfOrigin?: string | null;
 };
 
 export type PurchaseInvoiceImportItemInput = {
@@ -25,6 +26,7 @@ export type PurchaseInvoiceImportItemInput = {
   wholesalePrice?: number | null;
   manufacturedDate: Date;
   expiryDate: Date;
+  countryOfOrigin?: string | null;
 };
 
 export type PurchaseInvoiceImportInput = {
@@ -49,12 +51,12 @@ export class InventoryService {
     if (!input.productId) throw new ValidationError('productId is required');
     if (!input.batchNumber) throw new ValidationError('batchNumber is required');
     if (!input.quantity || input.quantity <= 0) throw new ValidationError('quantity must be a positive number');
+    if (!input.supplierId) throw new ValidationError('supplierId is required');
 
     const result = await db.$transaction(async (tx: any) => {
       const product = await tx.product.findUnique({
         where: { id: input.productId },
       });
-
       if (!product) throw new NotFoundError(`Product ${input.productId} not found`);
 
       const warehouse = await tx.warehouse.findFirst({
@@ -64,87 +66,50 @@ export class InventoryService {
         orderBy: { createdAt: 'asc' },
       });
 
-      const batch = await tx.batch.create({
+      if (!warehouse) throw new ValidationError('No warehouse configured for manual restock');
+
+      const invoiceNumber = `MAN-${Date.now()}`;
+      const totalAmount = round(Number(input.costBasis) * Number(input.quantity));
+
+      const purchaseInvoice = await tx.purchaseInvoice.create({
         data: {
-          batchNumber: input.batchNumber,
-          quantity: input.quantity,
-          initialQty: input.quantity,
-          currentQty: input.quantity,
-          reservedQty: 0,
-          availableQty: input.quantity,
-          unit: input.unit,
-          costBasis: input.costBasis,
-          purchasePrice: input.costBasis,
-          retailPrice: null,
-          supplierId: input.supplierId || null,
-          warehouseId: warehouse?.id ?? null,
-          manufacturedDate: input.manufacturedDate,
-          receivedAt: new Date(),
-          expiryDate: input.expiryDate,
-          status: computeBatchStatus(input.expiryDate),
-          productId: input.productId,
+          invoiceNumber,
+          supplierId: input.supplierId,
+          warehouseId: warehouse.id,
+          invoiceDate: new Date(),
+          status: 'POSTED',
+          totalAmount,
+          discountAmount: 0,
+          taxAmount: 0,
+          paymentStatus: 'PAID',
+          comment: `Manual restock: ${input.batchNumber}`,
+          createdById: userId,
         },
       });
 
-      await tx.batchMovement.create({
-        data: {
-          batchId: batch.id,
-          type: 'RESTOCK',
-          quantity: input.quantity,
-          description: `Manual restock for batch ${input.batchNumber}`,
-          userId,
-        },
-      });
+      await this._processPurchaseItem(tx, purchaseInvoice, input, input.supplierId, warehouse.id, userId);
 
-      const updatedProduct = await tx.product.update({
-        where: { id: product.id },
-        data: {
-          totalStock: { increment: input.quantity },
-          costPrice: input.costBasis || product.costPrice,
-        },
+      const updatedBatch = await tx.batch.findFirst({
+        where: { batchNumber: input.batchNumber, productId: input.productId },
+        orderBy: { createdAt: 'desc' }
       });
-
-      await tx.product.update({
-        where: { id: product.id },
-        data: {
-          status: mapProductStatus(updatedProduct.totalStock, product.minStock),
-        },
-      });
-
-      if (warehouse) {
-        await tx.warehouseStock.upsert({
-          where: {
-            warehouseId_productId: {
-              warehouseId: warehouse.id,
-              productId: product.id,
-            },
-          },
-          update: {
-            quantity: { increment: input.quantity },
-          },
-          create: {
-            warehouseId: warehouse.id,
-            productId: product.id,
-            quantity: input.quantity,
-          },
-        });
-      }
 
       await auditService.log({
         userId,
         module: 'inventory',
         action: 'RESTOCK_PRODUCT',
         entity: 'BATCH',
-        entityId: batch.id,
+        entityId: updatedBatch?.id || input.batchNumber,
         newValue: {
           productId: input.productId,
           batchNumber: input.batchNumber,
           quantity: input.quantity,
           costBasis: input.costBasis,
+          invoiceId: purchaseInvoice.id
         },
       });
 
-      return { batch, product: updatedProduct };
+      return { batch: updatedBatch, product: await tx.product.findUnique({ where: { id: product.id } }) };
     });
 
     // Invalidate caches after inventory changes
@@ -153,6 +118,7 @@ export class InventoryService {
 
     return result;
   }
+
 
   async adjustBatchQuantity(batchId: string, newQuantity: number, userId: string, reason?: string) {
     if (!batchId) throw new ValidationError('batchId is required');
@@ -310,6 +276,103 @@ export class InventoryService {
     });
 
     // Invalidate caches after inventory changes
+    reportCache.invalidatePattern(/^metrics:/);
+    reportCache.invalidatePattern(/^report:/);
+
+    return result;
+  }
+
+  async deletePurchaseInvoice(invoiceId: string, userId: string) {
+    if (!invoiceId) throw new ValidationError('invoiceId is required');
+
+    const result = await db.$transaction(async (tx: any) => {
+      const invoice = await tx.purchaseInvoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+          items: {
+            include: {
+              batches: true
+            }
+          }
+        }
+      });
+
+      if (!invoice) throw new NotFoundError(`Purchase invoice ${invoiceId} not found`);
+
+      // If POSTED, we must roll back stock
+      if (invoice.status === 'POSTED') {
+        for (const item of invoice.items) {
+          for (const batch of item.batches) {
+            // Check if any stock from this batch was sold
+            const soldQty = Number(batch.initialQty) - Number(batch.currentQty);
+            if (soldQty > 0) {
+              throw new ValidationError(`Cannot delete invoice: ${item.batchNumber} has sales or movements (${soldQty} units sold)`);
+            }
+
+            // Roll back stock in Product
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                totalStock: { decrement: batch.quantity }
+              }
+            });
+
+            // Roll back warehouse stock
+            if (batch.warehouseId) {
+              await tx.warehouseStock.update({
+                where: {
+                  warehouseId_productId: {
+                    warehouseId: batch.warehouseId,
+                    productId: item.productId
+                  }
+                },
+                data: {
+                  quantity: { decrement: batch.quantity }
+                }
+              });
+            }
+
+            // Delete batch movements
+            await tx.batchMovement.deleteMany({
+              where: { batchId: batch.id }
+            });
+
+            // Delete the batch itself
+            await tx.batch.delete({ where: { id: batch.id } });
+          }
+        }
+
+        // Delete associated Payable
+        await tx.payable.deleteMany({
+          where: { purchaseInvoiceId: invoiceId }
+        });
+      }
+
+      // Delete items
+      await tx.purchaseInvoiceItem.deleteMany({
+        where: { purchaseInvoiceId: invoiceId }
+      });
+
+      // Delete the invoice
+      await tx.purchaseInvoice.delete({ where: { id: invoiceId } });
+
+      await auditService.log({
+        userId,
+        module: 'inventory',
+        action: 'DELETE_PURCHASE_INVOICE',
+        entity: 'PURCHASE_INVOICE',
+        entityId: invoiceId,
+        oldValue: {
+          invoiceNumber: invoice.invoiceNumber,
+          status: invoice.status,
+          totalAmount: invoice.totalAmount
+        },
+        newValue: null
+      }, tx);
+
+      return { id: invoiceId, success: true };
+    });
+
     reportCache.invalidatePattern(/^metrics:/);
     reportCache.invalidatePattern(/^report:/);
 
@@ -683,6 +746,7 @@ export class InventoryService {
         batchNumber: batchNo,
         manufacturedDate: item.manufacturedDate || new Date(),
         expiryDate: item.expiryDate || new Date(),
+        countryOfOrigin: item.countryOfOrigin || null,
         quantity: qty,
         purchasePrice: price,
         wholesalePrice: Number(item.wholesalePrice) || null,
@@ -708,6 +772,7 @@ export class InventoryService {
         manufacturedDate: item.manufacturedDate || new Date(),
         receivedAt: invoice.invoiceDate || new Date(),
         expiryDate: item.expiryDate || new Date(),
+        countryOfOrigin: item.countryOfOrigin || null,
         status: computeBatchStatus(item.expiryDate),
         productId: product.id,
         purchaseItemId: purchaseItem.id,
@@ -791,6 +856,196 @@ export class InventoryService {
       return updated;
     });
   }
+
+  async updatePurchaseInvoice(invoiceId: string, input: PurchaseInvoiceImportInput, userId: string) {
+    if (!invoiceId) throw new ValidationError('invoiceId is required');
+    if (!input.supplierId) throw new ValidationError('supplierId is required');
+    if (!input.items.length) throw new ValidationError('At least one item is required');
+
+    const result = await db.$transaction(async (tx: any) => {
+      const oldInvoice = await tx.purchaseInvoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+          items: {
+            include: {
+              batches: true
+            }
+          }
+        }
+      });
+
+      if (!oldInvoice) throw new NotFoundError('Purchase invoice not found');
+
+      // If it was POSTED, we need to handle stock changes carefully.
+      // Easiest is to roll back and re-apply if NOTHING WAS SOLD.
+      if (oldInvoice.status === 'POSTED') {
+        for (const item of oldInvoice.items) {
+          for (const batch of item.batches) {
+            const soldQty = Number(batch.initialQty) - Number(batch.currentQty);
+            if (soldQty > 0) {
+              throw new ValidationError(`Cannot edit POSTED invoice: ${item.batchNumber} has sales (${soldQty} units sold)`);
+            }
+            
+            // Roll back
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { totalStock: { decrement: batch.quantity } }
+            });
+
+            if (batch.warehouseId) {
+               await tx.warehouseStock.update({
+                 where: { warehouseId_productId: { warehouseId: batch.warehouseId, productId: item.productId } },
+                 data: { quantity: { decrement: batch.quantity } }
+               });
+            }
+
+            await tx.batchMovement.deleteMany({ where: { batchId: batch.id } });
+            await tx.batch.delete({ where: { id: batch.id } });
+          }
+        }
+        
+        // Delete Payable
+        await tx.payable.deleteMany({ where: { purchaseInvoiceId: invoiceId } });
+      }
+
+      // Delete old items
+      await tx.purchaseInvoiceItem.deleteMany({ where: { purchaseInvoiceId: invoiceId } });
+
+      // Update invoice metadata
+      const grossTotal = round(input.items.reduce((sum, item) => sum + (Number(item.costBasis) * Number(item.quantity)), 0));
+      const discountAmount = round(input.discountAmount ?? 0);
+      const taxAmount = round(input.taxAmount ?? 0);
+      const totalAmount = round(Math.max(0, grossTotal - discountAmount + taxAmount));
+
+      const updatedInvoice = await tx.purchaseInvoice.update({
+        where: { id: invoiceId },
+        data: {
+          supplierId: input.supplierId,
+          invoiceNumber: input.invoiceNumber,
+          invoiceDate: input.invoiceDate,
+          totalAmount,
+          discountAmount,
+          taxAmount,
+          comment: input.comment || null,
+          status: input.status === 'POSTED' ? 'POSTED' : 'DRAFT',
+        },
+      });
+
+      // Re-process items
+      if (updatedInvoice.status === 'POSTED') {
+        for (const item of input.items) {
+          await this._processPurchaseItem(tx, updatedInvoice, item, updatedInvoice.supplierId, updatedInvoice.warehouseId, userId);
+        }
+        
+        // Re-create Payable
+        if (updatedInvoice.totalAmount > 0) {
+          await tx.payable.create({
+            data: {
+              supplierId: updatedInvoice.supplierId,
+              purchaseInvoiceId: updatedInvoice.id,
+              originalAmount: updatedInvoice.totalAmount,
+              paidAmount: 0,
+              remainingAmount: updatedInvoice.totalAmount,
+              status: 'OPEN',
+            },
+          });
+        }
+      } else {
+        for (const item of input.items) {
+          await tx.purchaseInvoiceItem.create({
+            data: {
+              purchaseInvoiceId: updatedInvoice.id,
+              productId: item.productId,
+              batchNumber: item.batchNumber,
+              manufacturedDate: item.manufacturedDate,
+              expiryDate: item.expiryDate,
+              countryOfOrigin: item.countryOfOrigin || null,
+              quantity: item.quantity,
+              purchasePrice: item.costBasis,
+              wholesalePrice: item.wholesalePrice ?? null,
+              lineTotal: Number(item.costBasis) * Number(item.quantity),
+            },
+          });
+        }
+      }
+
+      await auditService.log({
+        userId,
+        module: 'inventory',
+        action: 'UPDATE_PURCHASE_INVOICE',
+        entity: 'PURCHASE_INVOICE',
+        entityId: invoiceId,
+        oldValue: { invoiceNumber: oldInvoice.invoiceNumber, status: oldInvoice.status },
+        newValue: { invoiceNumber: updatedInvoice.invoiceNumber, status: updatedInvoice.status }
+      }, tx);
+
+      return updatedInvoice;
+    });
+
+    reportCache.invalidatePattern(/^metrics:/);
+    reportCache.invalidatePattern(/^report:/);
+
+    return result;
+  }
+  async recalculateTotalStock(productId: string) {
+    if (!productId) throw new ValidationError('productId is required');
+
+    return await db.$transaction(async (tx: any) => {
+      // 1. Sum up all non-expired batches for this product across all warehouses
+      const batchStats = await tx.batch.aggregate({
+        where: { productId },
+        _sum: {
+          quantity: true,
+        }
+      });
+
+      const totalQuantity = Number(batchStats._sum.quantity || 0);
+
+      // 2. Update Product.totalStock
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { minStock: true }
+      });
+
+      if (!product) throw new NotFoundError('Product not found');
+
+      const updatedProduct = await tx.product.update({
+        where: { id: productId },
+        data: {
+          totalStock: totalQuantity,
+          status: mapProductStatus(totalQuantity, product.minStock)
+        }
+      });
+
+      // 3. Recalculate WarehouseStock per warehouse
+      const warehouseBatches = await tx.batch.groupBy({
+        by: ['warehouseId'],
+        where: { productId, NOT: { warehouseId: null } },
+        _sum: { quantity: true }
+      });
+
+      for (const group of warehouseBatches) {
+        if (!group.warehouseId) continue;
+        await tx.warehouseStock.upsert({
+          where: {
+            warehouseId_productId: {
+              warehouseId: group.warehouseId,
+              productId: productId
+            }
+          },
+          update: { quantity: Number(group._sum.quantity || 0) },
+          create: {
+            warehouseId: group.warehouseId,
+            productId: productId,
+            quantity: Number(group._sum.quantity || 0)
+          }
+        });
+      }
+
+      return updatedProduct;
+    });
+  }
 }
 
 export const inventoryService = new InventoryService();
+

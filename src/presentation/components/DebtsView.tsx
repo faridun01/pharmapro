@@ -15,7 +15,7 @@ import {
 import { usePharmacy } from '../context';
 import { buildApiHeaders } from '../../infrastructure/api';
 
-export const DebtsView: React.FC = () => {
+export const DebtsView: React.FC<{ hideHeader?: boolean }> = ({ hideHeader }) => {
   const { refreshInvoices } = usePharmacy();
   const [debts, setDebts] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);

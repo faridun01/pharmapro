@@ -10,6 +10,7 @@ export const BootSplash: React.FC<{
   onSaveConfig?: (url: string) => Promise<void>;
 }> = ({ isVisible, statusMessage = 'Инициализация...', errorMessage, onRetry, onSaveConfig }) => {
   const [showConfig, setShowConfig] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
   const [config, setConfig] = React.useState({
     host: 'localhost',
     port: '5432',
@@ -20,11 +21,22 @@ export const BootSplash: React.FC<{
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!onSaveConfig) return;
-    
-    const url = `postgresql://${config.user}:${config.password}@${config.host}:${config.port}/${config.database}`;
-    await onSaveConfig(url);
-    setShowConfig(false);
+    if (!onSaveConfig || isSaving) return;
+
+    const user = encodeURIComponent(config.user);
+    const password = encodeURIComponent(config.password);
+    const host = config.host.trim();
+    const port = config.port.trim();
+    const database = config.database.trim();
+    const url = `postgresql://${user}:${password}@${host}:${port}/${database}`;
+
+    try {
+      setIsSaving(true);
+      await onSaveConfig(url);
+      setShowConfig(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -131,9 +143,10 @@ export const BootSplash: React.FC<{
                     </button>
                     <button 
                       type="submit"
+                      disabled={isSaving}
                       className="flex-1 py-3 bg-[#5A5A40] text-white font-black uppercase tracking-widest text-[8px] rounded-2xl hover:bg-[#6e6e4f] transition-colors shadow-lg shadow-[#5A5A40]/20"
                     >
-                      Применить
+                      {isSaving ? 'Сохранение...' : 'Применить'}
                     </button>
                   </div>
                 </motion.form>
