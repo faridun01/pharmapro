@@ -57,8 +57,8 @@ export const ReportsView: React.FC = () => {
       });
 
       if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.message || 'Failed to fetch report data');
+        setReport(null);
+        return;
       }
 
       const raw = await resp.json();
