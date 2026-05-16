@@ -29,9 +29,7 @@ Useful dev commands:
 
 Example `.env` value:
 
-`DATABASE_URL="postgresql://postgres:postgres@localhost:5432/pharmapro?schema=public"`
-
-If startup logs `Database bootstrap skipped`, PostgreSQL is not reachable with the credentials currently configured in `.env`.
+`DATABASE_URL="postgresql://postgres:*****@localhost:****/*****?schema=public"`
 
 ## Production Build
 
