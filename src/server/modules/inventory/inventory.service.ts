@@ -144,6 +144,78 @@ const normalizePurchaseItem = (item: PurchaseInvoiceUpdateItemInput | PurchaseIn
   };
 };
 
+const getBatchLinkedUsageCount = async (tx: any, batchId: string) => {
+  const [linkedInvoiceItems, linkedReservations, linkedReturns, linkedWriteOffs, linkedTransfers] = await Promise.all([
+    tx.invoiceItem.count({ where: { batchId } }),
+    tx.reservation.count({ where: { batchId } }),
+    tx.returnItem.count({ where: { batchId } }),
+    tx.writeOffItem.count({ where: { batchId } }),
+    tx.stockTransferItem.count({ where: { batchId } }),
+  ]);
+
+  return linkedInvoiceItems + linkedReservations + linkedReturns + linkedWriteOffs + linkedTransfers;
+};
+
+const removeUnusedPurchaseBatch = async (tx: any, batch: any, userId: string, description: string) => {
+  const stockToRemove = Math.max(0, Number(batch.currentQty ?? batch.quantity ?? 0));
+  const usedQuantity = Math.max(0, Number(batch.initialQty ?? stockToRemove) - Number(batch.currentQty ?? stockToRemove));
+  const linkedRecords = await getBatchLinkedUsageCount(tx, batch.id);
+
+  if (usedQuantity > 0 || linkedRecords > 0) {
+    throw new ValidationError(`Cannot remove batch ${batch.batchNumber}: it already has sales or stock operations`);
+  }
+
+  await tx.batchMovement.create({
+    data: {
+      batchId: batch.id,
+      type: 'ADJUSTMENT',
+      quantity: stockToRemove,
+      description,
+      userId,
+    },
+  });
+
+  await tx.batch.delete({ where: { id: batch.id } });
+
+  const product = batch.product ?? await tx.product.findUnique({ where: { id: batch.productId } });
+  if (product) {
+    const nextTotalStock = Math.max(0, Number(product.totalStock || 0) - stockToRemove);
+    await tx.product.update({
+      where: { id: product.id },
+      data: {
+        totalStock: nextTotalStock,
+        status: mapProductStatus(nextTotalStock, product.minStock),
+      },
+    });
+  }
+
+  if (batch.warehouseId) {
+    const warehouseStock = await tx.warehouseStock.findUnique({
+      where: {
+        warehouseId_productId: {
+          warehouseId: batch.warehouseId,
+          productId: batch.productId,
+        },
+      },
+    });
+
+    if (warehouseStock) {
+      const nextWarehouseQty = Math.max(0, Number(warehouseStock.quantity || 0) - stockToRemove);
+      await tx.warehouseStock.update({
+        where: {
+          warehouseId_productId: {
+            warehouseId: batch.warehouseId,
+            productId: batch.productId,
+          },
+        },
+        data: { quantity: nextWarehouseQty },
+      });
+    }
+  }
+
+  return stockToRemove;
+};
+
 export class InventoryService {
   async listPurchaseInvoices(options: { supplierId?: string; search?: string; page?: number; pageSize?: number } = {}) {
     const page = Math.max(1, Math.floor(Number(options.page || 1)));
@@ -736,15 +808,7 @@ export class InventoryService {
         if (incomingIds.has(existingItem.id)) continue;
 
         for (const batch of existingItem.batches) {
-          const [linkedInvoiceItems, linkedReservations, linkedReturns, linkedWriteOffs, linkedTransfers] = await Promise.all([
-            tx.invoiceItem.count({ where: { batchId: batch.id } }),
-            tx.reservation.count({ where: { batchId: batch.id } }),
-            tx.returnItem.count({ where: { batchId: batch.id } }),
-            tx.writeOffItem.count({ where: { batchId: batch.id } }),
-            tx.stockTransferItem.count({ where: { batchId: batch.id } }),
-          ]);
-
-          const linkedRecords = linkedInvoiceItems + linkedReservations + linkedReturns + linkedWriteOffs + linkedTransfers;
+          const linkedRecords = await getBatchLinkedUsageCount(tx, batch.id);
           if (linkedRecords > 0) {
             throw new ValidationError(`Cannot remove ${existingItem.product.name}: its batch already has sales or stock operations`);
           }
