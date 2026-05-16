@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 
-const PORTS = [3000, 24678];
+const PORTS = [3000, 3921, 24678];
 
 function safeExec(command) {
   try {

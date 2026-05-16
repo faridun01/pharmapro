@@ -61,6 +61,7 @@ enum InvoiceStatus {
   PENDING
   CANCELLED
   RETURNED
+  PARTIALLY_RETURNED
 }
 
 enum ReturnType {

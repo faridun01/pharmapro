@@ -64,6 +64,55 @@ inventoryRouter.post('/purchase-invoices', authenticate, asyncHandler(async (req
   res.status(201).json(result);
 }));
 
+inventoryRouter.get('/purchase-invoices', authenticate, asyncHandler(async (req, res) => {
+  const result = await inventoryService.listPurchaseInvoices({
+    supplierId: typeof req.query.supplierId === 'string' && req.query.supplierId ? req.query.supplierId : undefined,
+    search: typeof req.query.search === 'string' ? req.query.search : undefined,
+    page: req.query.page ? Number(req.query.page) : undefined,
+    pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+  });
+
+  res.json(result);
+}));
+
+inventoryRouter.get('/purchase-invoices/:id', authenticate, asyncHandler(async (req, res) => {
+  const result = await inventoryService.getPurchaseInvoice(String(req.params.id));
+  res.json(result);
+}));
+
+inventoryRouter.put('/purchase-invoices/:id', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const body = req.body ?? {};
+
+  const result = await inventoryService.updatePurchaseInvoice(
+    String(req.params.id),
+    {
+      supplierId: String(body.supplierId),
+      invoiceNumber: typeof body.invoiceNumber === 'string' ? body.invoiceNumber : undefined,
+      invoiceDate: new Date(body.invoiceDate),
+      discountAmount: parseNonNegative(body.discountAmount ?? 0, 'discountAmount'),
+      taxAmount: parseNonNegative(body.taxAmount ?? 0, 'taxAmount'),
+      comment: typeof body.comment === 'string' ? body.comment : undefined,
+      items: Array.isArray(body.items)
+        ? body.items.map((item: any, idx: number) => ({
+          id: item.id ? String(item.id) : undefined,
+          productId: String(item.productId),
+          batchNumber: String(item.batchNumber),
+          quantity: parsePositiveInt(item.quantity, `items[${idx}].quantity`),
+          unit: String(item.unit || 'units'),
+          costBasis: parseNonNegative(item.costBasis ?? 0, `items[${idx}].costBasis`),
+          wholesalePrice: item.wholesalePrice == null ? null : parseNonNegative(item.wholesalePrice, `items[${idx}].wholesalePrice`),
+          manufacturedDate: new Date(item.manufacturedDate),
+          expiryDate: new Date(item.expiryDate),
+        }))
+        : [],
+    },
+    authedReq.user.id,
+  );
+
+  res.json(result);
+}));
+
 inventoryRouter.patch('/batches/:id/quantity', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const body = req.body ?? {};

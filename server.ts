@@ -1,4 +1,3 @@
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import express from 'express';
 import dotenv from 'dotenv';
@@ -9,6 +8,7 @@ import { logStartupError } from './src/server/common/startup';
 dotenv.config();
 
 const isDev = process.env.NODE_ENV !== 'production';
+const DEV_API_PORT = Number(process.env.DEV_API_PORT || 3921);
 
 // Conditional logger - only logs in development
 const log = {
@@ -28,16 +28,9 @@ const log = {
 };
 
 const app = createApp();
-const PORT = Number(process.env.PORT || 3000);
+const PORT = isDev ? DEV_API_PORT : Number(process.env.PORT || 3000);
 
-if (isDev) {
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-  });
-  app.use(vite.middlewares);
-  log.info('Vite dev server attached');
-} else {
+if (!isDev) {
   const distPath = path.join(process.cwd(), 'dist');
   app.use(express.static(distPath));
   app.get('*', (_req, res) => {
@@ -52,7 +45,7 @@ if (isDev) {
 }
 
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`PharmaPro server running on http://localhost:${PORT}`);
+  console.log(`[${new Date().toISOString()}] PharmaPro ${isDev ? 'API server' : 'server'} running on http://localhost:${PORT}`);
   try {
     await ensureAdminUser();
   } catch (err) {

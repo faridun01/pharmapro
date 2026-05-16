@@ -4,6 +4,7 @@ import { usePharmacy } from '../context';
 import { lazyNamedImport } from '../../lib/lazyLoadComponents';
 import { buildApiHeaders } from '../../infrastructure/api';
 import { formatProductDisplayName } from '../../lib/productDisplay';
+import { markRuntimeOnce } from '../../lib/runtimeMarks';
 import { 
   TrendingUp, 
   Package, 
@@ -75,6 +76,13 @@ export const DashboardView: React.FC<{ onOpenInvoicePayment?: (invoiceId?: strin
     const timer = window.setTimeout(() => setShowChart(true), 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    markRuntimeOnce('dashboard-view-mounted', {
+      selectedPeriodPreset,
+      userId: user?.id,
+    });
+  }, [selectedPeriodPreset, user?.id]);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,22 +1,28 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { usePharmacy } from '../context';
 import { LogIn, ShieldCheck } from 'lucide-react';
+import { markRuntimeOnce } from '../../lib/runtimeMarks';
 
-export const LoginView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+export const LoginView: React.FC<{
+  embedded?: boolean;
+  onLogin: (login: string, password: string) => Promise<void>;
+}> = ({ embedded = false, onLogin }) => {
   const { t } = useTranslation();
-  const { login } = usePharmacy();
   const [loginField, setLoginField] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    markRuntimeOnce('login-view-mounted');
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      await login(loginField, password);
+      await onLogin(loginField, password);
     } catch (err: any) {
       setError(err.message || t('Login failed'));
     } finally {

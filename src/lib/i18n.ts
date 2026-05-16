@@ -1,6 +1,10 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
+window.pharmaproDesktop?.markRuntime?.('i18n-module-evaluated', {
+  ts: Date.now(),
+});
+
 const resources = {
   en: {
     translation: {}
@@ -413,6 +417,10 @@ i18n.use(initReactI18next).init({
   interpolation: {
     escapeValue: false
   }
+});
+
+window.pharmaproDesktop?.markRuntime?.('i18n-init-complete', {
+  ts: Date.now(),
 });
 
 export default i18n;

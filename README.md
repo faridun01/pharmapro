@@ -25,6 +25,12 @@ Setup:
 6. Start the app:
    `npm run electron:dev`
 
+Useful dev commands:
+
+1. `npm run dev` starts only the local API backend on `3921`
+2. `npm run dev:web` starts only the Vite frontend on `3000`
+3. `npm run electron:dev` starts both plus Electron
+
 Example `.env` value:
 
 `DATABASE_URL="postgresql://postgres:postgres@localhost:5432/pharmapro?schema=public"`
