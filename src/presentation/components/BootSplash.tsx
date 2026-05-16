@@ -50,8 +50,6 @@ export const BootSplash: React.FC<{
   return (
     <div className={`pharma-splash ${compact ? 'pharma-splash--compact' : ''}`}>
       <div className="pharma-splash__backdrop">
-        <div className="pharma-splash__orb pharma-splash__orb--left" />
-        <div className="pharma-splash__orb pharma-splash__orb--right" />
         <div className="pharma-splash__cross pharma-splash__cross--top" />
         <div className="pharma-splash__cross pharma-splash__cross--bottom" />
         <div className="pharma-splash__grid" />

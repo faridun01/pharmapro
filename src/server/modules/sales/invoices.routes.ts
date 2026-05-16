@@ -6,6 +6,7 @@ import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { computeProductStatus } from '../../common/productStatus';
 import { resolveCustomerDueDate } from '../../common/customerTerms';
+import { reportCache } from '../../common/cache';
 
 export const invoicesRouter = Router();
 
@@ -743,6 +744,128 @@ invoicesRouter.post('/:id/return', authenticate, asyncHandler(async (req, res) =
   });
 
   res.status(201).json(result);
+}));
+
+invoicesRouter.post('/:id/cancel', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const invoiceId = req.params.id;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+
+  if (!canDeleteInvoice(authedReq.user.role)) {
+    throw new ValidationError('Only ADMIN or OWNER can cancel invoices');
+  }
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      items: true,
+      returns: { select: { id: true } },
+    },
+  });
+
+  if (!invoice) throw new NotFoundError('Invoice not found');
+  if (invoice.status === 'CANCELLED') throw new ValidationError('Invoice is already cancelled');
+  if (invoice.status === 'RETURNED' || invoice.returns.length > 0) {
+    throw new ValidationError('Invoice with returns cannot be cancelled. Use return documents instead.');
+  }
+
+  const updatedInvoice = await prisma.$transaction(async (tx) => {
+    for (const item of invoice.items) {
+      const batch = await tx.batch.findUnique({ where: { id: item.batchId } });
+      if (!batch) continue;
+
+      const nextQty = Math.max(0, Number(batch.quantity || 0) + item.quantity);
+      const nextCurrent = Math.max(0, Number(batch.currentQty || batch.quantity || 0) + item.quantity);
+      const nextAvailable = Math.max(0, Number(batch.availableQty || batch.quantity || 0) + item.quantity);
+
+      await tx.batch.update({
+        where: { id: batch.id },
+        data: {
+          quantity: nextQty,
+          currentQty: nextCurrent,
+          availableQty: nextAvailable,
+        },
+      });
+
+      const product = await tx.product.findUnique({ where: { id: item.productId } });
+      if (product) {
+        const nextStock = Math.max(0, Number(product.totalStock || 0) + item.quantity);
+        await tx.product.update({
+          where: { id: product.id },
+          data: {
+            totalStock: nextStock,
+            status: computeProductStatus(nextStock, product.minStock),
+          },
+        });
+      }
+
+      if (batch.warehouseId) {
+        await tx.warehouseStock.upsert({
+          where: {
+            warehouseId_productId: {
+              warehouseId: batch.warehouseId,
+              productId: item.productId,
+            },
+          },
+          update: { quantity: { increment: item.quantity } },
+          create: {
+            warehouseId: batch.warehouseId,
+            productId: item.productId,
+            quantity: item.quantity,
+          },
+        });
+      }
+
+      await tx.batchMovement.create({
+        data: {
+          batchId: item.batchId,
+          type: 'ADJUSTMENT',
+          quantity: item.quantity,
+          description: `Invoice cancelled: ${invoice.invoiceNo}`,
+          userId: authedReq.user.id,
+        },
+      });
+    }
+
+    await tx.payment.deleteMany({ where: { invoiceId } });
+    await tx.receivable.deleteMany({ where: { invoiceId } });
+
+    const savedInvoice = await tx.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: 'CANCELLED',
+        paymentStatus: 'CANCELLED',
+        comment: [invoice.comment, reason ? `Cancelled: ${reason}` : 'Cancelled'].filter(Boolean).join('\n'),
+      },
+      include: { items: true },
+    });
+
+    await auditService.log({
+      userId: authedReq.user.id,
+      userRole: authedReq.user.role as any,
+      module: 'sales',
+      action: 'CANCEL_INVOICE',
+      entity: 'INVOICE',
+      entityId: invoiceId,
+      oldValue: {
+        invoiceNo: invoice.invoiceNo,
+        status: invoice.status,
+        totalAmount: invoice.totalAmount,
+        items: invoice.items.length,
+      },
+      newValue: {
+        status: 'CANCELLED',
+        reason: reason || null,
+      },
+    }, tx);
+
+    return savedInvoice;
+  });
+
+  reportCache.invalidatePattern(/^metrics:/);
+  reportCache.invalidatePattern(/^report:/);
+
+  res.json(updatedInvoice);
 }));
 
 invoicesRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {

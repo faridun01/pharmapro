@@ -1129,6 +1129,176 @@ export class InventoryService {
     return result;
   }
 
+  async removePurchaseInvoiceItem(purchaseInvoiceId: string, itemId: string, userId: string) {
+    if (!purchaseInvoiceId) throw new ValidationError('purchaseInvoiceId is required');
+    if (!itemId) throw new ValidationError('purchaseInvoiceItemId is required');
+
+    const result = await prisma.$transaction(async (tx) => {
+      const invoice = await tx.purchaseInvoice.findUnique({
+        where: { id: purchaseInvoiceId },
+        include: {
+          items: {
+            include: {
+              product: true,
+              batches: {
+                include: {
+                  product: true,
+                },
+              },
+            },
+          },
+          payments: true,
+        },
+      });
+
+      if (!invoice) throw new NotFoundError('Purchase invoice not found');
+      if (invoice.status === 'CANCELLED') throw new ValidationError('Purchase invoice is already cancelled');
+
+      const item = invoice.items.find((candidate) => candidate.id === itemId);
+      if (!item) throw new NotFoundError('Purchase invoice item not found');
+      if (invoice.items.length <= 1) {
+        throw new ValidationError('Cannot remove the last item. Cancel the purchase invoice instead.');
+      }
+
+      for (const batch of item.batches) {
+        await removeUnusedPurchaseBatch(tx, batch, userId, `Removed from purchase invoice ${invoice.invoiceNumber}`);
+      }
+
+      await tx.purchaseInvoiceItem.delete({ where: { id: item.id } });
+
+      const remainingItems = await tx.purchaseInvoiceItem.findMany({ where: { purchaseInvoiceId: invoice.id } });
+      const grossTotal = remainingItems.reduce((sum, row) => sum + Number(row.lineTotal || 0), 0);
+      const totalAmount = Math.max(0, grossTotal - Number(invoice.discountAmount || 0) + Number(invoice.taxAmount || 0));
+      const paidAmount = invoice.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      const nextPaymentStatus = paidAmount >= totalAmount ? 'PAID' : paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID';
+
+      const updatedInvoice = await tx.purchaseInvoice.update({
+        where: { id: invoice.id },
+        data: {
+          totalAmount,
+          paymentStatus: nextPaymentStatus,
+        },
+        include: purchaseInvoiceInclude,
+      });
+
+      await tx.payable.updateMany({
+        where: { purchaseInvoiceId: invoice.id },
+        data: {
+          originalAmount: totalAmount,
+          paidAmount,
+          remainingAmount: Math.max(0, totalAmount - paidAmount),
+          status: totalAmount - paidAmount <= 0 ? 'PAID' : paidAmount > 0 ? 'PARTIAL' : 'OPEN',
+        },
+      });
+
+      await auditService.log({
+        userId,
+        module: 'inventory',
+        action: 'REMOVE_PURCHASE_INVOICE_ITEM',
+        entity: 'PURCHASE_INVOICE',
+        entityId: invoice.id,
+        oldValue: {
+          itemId: item.id,
+          productId: item.productId,
+          productName: item.product.name,
+          quantity: item.quantity,
+          lineTotal: item.lineTotal,
+        },
+        newValue: {
+          totalAmount,
+          itemCount: remainingItems.length,
+        },
+      }, tx);
+
+      return updatedInvoice;
+    });
+
+    reportCache.invalidatePattern(/^metrics:/);
+    reportCache.invalidatePattern(/^report:/);
+
+    return result;
+  }
+
+  async cancelPurchaseInvoice(purchaseInvoiceId: string, userId: string, reason?: string) {
+    if (!purchaseInvoiceId) throw new ValidationError('purchaseInvoiceId is required');
+
+    const result = await prisma.$transaction(async (tx) => {
+      const invoice = await tx.purchaseInvoice.findUnique({
+        where: { id: purchaseInvoiceId },
+        include: {
+          items: {
+            include: {
+              product: true,
+              batches: {
+                include: {
+                  product: true,
+                },
+              },
+            },
+          },
+          payments: true,
+        },
+      });
+
+      if (!invoice) throw new NotFoundError('Purchase invoice not found');
+      if (invoice.status === 'CANCELLED') throw new ValidationError('Purchase invoice is already cancelled');
+      if (invoice.payments.length > 0) {
+        throw new ValidationError('Cannot cancel a purchase invoice with payments. Remove or reverse payments first.');
+      }
+
+      for (const item of invoice.items) {
+        for (const batch of item.batches) {
+          await removeUnusedPurchaseBatch(tx, batch, userId, `Cancelled purchase invoice ${invoice.invoiceNumber}`);
+        }
+      }
+
+      await tx.payable.updateMany({
+        where: { purchaseInvoiceId: invoice.id },
+        data: {
+          paidAmount: 0,
+          remainingAmount: 0,
+          status: 'WRITTEN_OFF',
+        },
+      });
+
+      const updatedInvoice = await tx.purchaseInvoice.update({
+        where: { id: invoice.id },
+        data: {
+          status: 'CANCELLED',
+          paymentStatus: 'CANCELLED',
+          totalAmount: 0,
+          comment: [invoice.comment, reason ? `Cancelled: ${reason}` : 'Cancelled'].filter(Boolean).join('\n'),
+        },
+        include: purchaseInvoiceInclude,
+      });
+
+      await auditService.log({
+        userId,
+        module: 'inventory',
+        action: 'CANCEL_PURCHASE_INVOICE',
+        entity: 'PURCHASE_INVOICE',
+        entityId: invoice.id,
+        oldValue: {
+          invoiceNumber: invoice.invoiceNumber,
+          status: invoice.status,
+          totalAmount: invoice.totalAmount,
+          itemCount: invoice.items.length,
+        },
+        newValue: {
+          status: 'CANCELLED',
+          reason: reason || null,
+        },
+      }, tx);
+
+      return updatedInvoice;
+    });
+
+    reportCache.invalidatePattern(/^metrics:/);
+    reportCache.invalidatePattern(/^report:/);
+
+    return result;
+  }
+
   async editBatch(
     batchId: string,
     updates: {

@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { Minus, Square, X } from 'lucide-react';
 import { User } from './core/domain';
 import { LoginView } from './presentation/components/LoginView';
+import { BootSplash } from './presentation/components/BootSplash';
 import { clearStoredAuthSession, getStoredAuthUser, loginWithPassword } from './lib/authSession';
 
 window.pharmaproDesktop?.markRuntime?.('app-module-evaluated', {
@@ -67,7 +68,18 @@ const AppLoader: React.FC<{
 
 const App: React.FC = () => {
   const [user, setUser] = React.useState<User | null>(() => getStoredAuthUser());
+  const [isBootSplashVisible, setIsBootSplashVisible] = React.useState(true);
   const desktopControls = window.pharmaproDesktop?.controls;
+
+  React.useEffect(() => {
+    window.pharmaproDesktop?.markRuntime?.('boot-splash-mounted');
+    const timer = window.setTimeout(() => {
+      setIsBootSplashVisible(false);
+      window.pharmaproDesktop?.markRuntime?.('boot-splash-hidden');
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const handleLogin = async (login: string, password: string) => {
     const authSession = await loginWithPassword(login, password);
@@ -78,6 +90,17 @@ const App: React.FC = () => {
     clearStoredAuthSession();
     setUser(null);
   };
+
+  if (isBootSplashVisible) {
+    return (
+      <div className="h-screen flex flex-col bg-[#f5f5f0] overflow-hidden">
+        {desktopControls ? <DesktopTitlebar controls={desktopControls} /> : null}
+        <div className="flex-1 min-h-0">
+          <BootSplash durationMs={3000} />
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -91,7 +114,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <Suspense fallback={<AppLoader label="Загружаем панель" />}>
+    <Suspense fallback={<BootSplash title="PharmaPro" subtitle="Загружаем рабочую панель" compact durationMs={1200} />}>
       <AuthenticatedApp onSignedOut={handleSignedOut} />
     </Suspense>
   );

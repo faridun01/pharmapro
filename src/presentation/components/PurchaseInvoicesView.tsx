@@ -121,6 +121,7 @@ export const PurchaseInvoicesView: React.FC = () => {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [busyAction, setBusyAction] = useState('');
   const [form, setForm] = useState<InvoiceForm>({
     supplierId: '',
     invoiceNumber: '',
@@ -285,6 +286,53 @@ export const PurchaseInvoicesView: React.FC = () => {
     }
   };
 
+  const removeInvoiceItem = async (itemId: string) => {
+    if (!selected) return;
+    if (!window.confirm('Удалить товар из приходной накладной? Остаток по этой партии будет откатан.')) return;
+
+    setBusyAction(`item:${itemId}`);
+    setError('');
+    try {
+      const response = await fetch(`/api/inventory/purchase-invoices/${selected.id}/items/${itemId}`, {
+        method: 'DELETE',
+        headers: await buildApiHeaders(),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Не удалось удалить товар из накладной');
+      setSelected(payload);
+      await Promise.all([loadInvoices(), refreshProducts()]);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось удалить товар из накладной');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const cancelInvoice = async () => {
+    if (!selected) return;
+    const reason = window.prompt('Причина отмены приходной накладной', 'Ошибка в приходе') || '';
+    if (!window.confirm('Отменить приходную накладную? Все неиспользованные партии из этой накладной будут списаны с остатка.')) return;
+
+    setBusyAction('cancel');
+    setError('');
+    try {
+      const response = await fetch(`/api/inventory/purchase-invoices/${selected.id}/cancel`, {
+        method: 'POST',
+        headers: await buildApiHeaders(),
+        body: JSON.stringify({ reason }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Не удалось отменить приходную накладную');
+      setSelected(payload);
+      setEditOpen(false);
+      await Promise.all([loadInvoices(), refreshProducts()]);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось отменить приходную накладную');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="rounded-[24px] border border-[#5A5A40]/10 bg-white px-5 py-4 shadow-sm">
@@ -420,14 +468,24 @@ export const PurchaseInvoicesView: React.FC = () => {
                     <span className="inline-flex items-center gap-1"><Calendar size={13} />{new Date(selected.invoiceDate).toLocaleDateString('ru-RU')}</span>
                   </div>
                 </div>
-                <button
-                  onClick={() => openEditForm(selected)}
-                  disabled={detailsLoading}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#5A5A40] text-white text-sm font-semibold disabled:opacity-50"
-                >
-                  <Edit3 size={15} />
-                  Изменить
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openEditForm(selected)}
+                    disabled={detailsLoading || selected.status === 'CANCELLED'}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#5A5A40] text-white text-sm font-semibold disabled:opacity-50"
+                  >
+                    <Edit3 size={15} />
+                    Изменить
+                  </button>
+                  <button
+                    onClick={cancelInvoice}
+                    disabled={busyAction === 'cancel' || selected.status === 'CANCELLED'}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50"
+                  >
+                    <X size={15} />
+                    Отменить
+                  </button>
+                </div>
               </div>
 
               <div className="p-5 space-y-4">
@@ -457,7 +515,17 @@ export const PurchaseInvoicesView: React.FC = () => {
                             <p className="text-sm font-bold text-[#5A5A40]">{item.product.name}</p>
                             <p className="text-[11px] text-[#5A5A40]/45 mt-0.5">{item.product.sku} · партия {item.batchNumber || batch?.batchNumber || '—'}</p>
                           </div>
-                          <span className="rounded-full bg-[#f5f5f0] px-3 py-1 text-[10px] font-bold text-[#5A5A40]/65">{batch?.status || '—'}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-[#f5f5f0] px-3 py-1 text-[10px] font-bold text-[#5A5A40]/65">{batch?.status || '—'}</span>
+                            <button
+                              onClick={() => void removeInvoiceItem(item.id)}
+                              disabled={busyAction === `item:${item.id}` || selected.status === 'CANCELLED' || selected.items.length <= 1}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 disabled:opacity-35"
+                              title="Удалить товар из накладной"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-[#5A5A40]/70">
                           <p>Приход: <span className="font-bold text-[#5A5A40]">{item.quantity}</span></p>

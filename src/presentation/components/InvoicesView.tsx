@@ -93,6 +93,7 @@ export const InvoicesView: React.FC<{
     error: string | null;
   } | null>(null);
   const [deleteInvoiceTarget, setDeleteInvoiceTarget] = useState<any | null>(null);
+  const [cancelInvoiceTarget, setCancelInvoiceTarget] = useState<any | null>(null);
   const [editModal, setEditModal] = useState<{
     open: boolean;
     invoiceId: string;
@@ -711,6 +712,26 @@ export const InvoicesView: React.FC<{
     }
   };
 
+  const cancelInvoice = async (invoice: any) => {
+    try {
+      setBusyId(invoice.id);
+      setActionError(null);
+      const res = await fetch(`/api/invoices/${invoice.id}/cancel`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ reason: 'Отмена продажи из истории' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Не удалось отменить накладную');
+      setCancelInvoiceTarget(null);
+      await runRefreshTasks(refreshInvoices, refreshProducts);
+    } catch (e: any) {
+      setActionError(e.message || 'Не удалось отменить накладную');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const addInvoicePayment = useCallback((invoice: any) => {
     const paymentStatus = String(invoice.paymentStatus || 'UNPAID');
     if (!['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'].includes(paymentStatus)) {
@@ -1197,6 +1218,14 @@ export const InvoicesView: React.FC<{
                         <RotateCcw size={14} />
                       </button>
                       <button
+                        onClick={() => setCancelInvoiceTarget(invoice)}
+                        disabled={busyId === invoice.id || isEditLocked(invoice.status)}
+                        className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-red-700 hover:bg-red-50 rounded-md transition-all disabled:opacity-40"
+                        title="Отменить накладную"
+                      >
+                        <X size={14} />
+                      </button>
+                      <button
                         onClick={() => setDeleteInvoiceTarget(invoice)}
                         disabled={busyId === invoice.id || isEditLocked(invoice.status)}
                         className="flex h-8 w-8 items-center justify-center text-[#5A5A40]/30 hover:text-red-700 hover:bg-red-50 rounded-md transition-all disabled:opacity-40"
@@ -1546,6 +1575,24 @@ export const InvoicesView: React.FC<{
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setDeleteInvoiceTarget(null)} className="py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors">Отмена</button>
                 <button onClick={() => deleteInvoice(deleteInvoiceTarget)} disabled={busyId === deleteInvoiceTarget.id} className="py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors">{busyId === deleteInvoiceTarget.id ? 'Удаляю...' : 'Удалить'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelInvoiceTarget && (
+        <div className="fixed inset-0 z-100 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#5A5A40]/10 overflow-hidden">
+            <div className="px-6 py-4 bg-red-600 text-white flex items-center justify-between">
+              <h3 className="text-base font-bold">Отмена накладной</h3>
+              <button onClick={() => setCancelInvoiceTarget(null)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              <p className="text-sm text-[#5A5A40]/80">Отменить накладную <span className="font-semibold">{cancelInvoiceTarget.invoiceNo || cancelInvoiceTarget.id}</span>? Остатки будут возвращены, платежи и долг будут сняты, а чек останется в истории как CANCELLED.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setCancelInvoiceTarget(null)} className="py-2.5 rounded-xl border border-[#5A5A40]/15 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors">Нет</button>
+                <button onClick={() => cancelInvoice(cancelInvoiceTarget)} disabled={busyId === cancelInvoiceTarget.id} className="py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors">{busyId === cancelInvoiceTarget.id ? 'Отменяю...' : 'Отменить'}</button>
               </div>
             </div>
           </div>

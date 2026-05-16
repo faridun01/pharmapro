@@ -113,6 +113,28 @@ inventoryRouter.put('/purchase-invoices/:id', authenticate, asyncHandler(async (
   res.json(result);
 }));
 
+inventoryRouter.delete('/purchase-invoices/:id/items/:itemId', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const result = await inventoryService.removePurchaseInvoiceItem(
+    String(req.params.id),
+    String(req.params.itemId),
+    authedReq.user.id,
+  );
+
+  res.json(result);
+}));
+
+inventoryRouter.post('/purchase-invoices/:id/cancel', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const result = await inventoryService.cancelPurchaseInvoice(
+    String(req.params.id),
+    authedReq.user.id,
+    typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+  );
+
+  res.json(result);
+}));
+
 inventoryRouter.patch('/batches/:id/quantity', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const body = req.body ?? {};

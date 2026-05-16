@@ -376,6 +376,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     prisma.payment.findMany({
       where: {
         paymentDate: { gte: from, lte: to },
+        status: { not: 'CANCELLED' },
       },
       select: {
         invoiceId: true,
@@ -388,6 +389,13 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     prisma.receivable.findMany({
       where: {
         createdAt: { lte: to },
+        status: { notIn: ['PAID', 'WRITTEN_OFF'] },
+        remainingAmount: { gt: 0 },
+        invoice: {
+          is: {
+            status: { not: 'CANCELLED' },
+          },
+        },
       },
       select: {
         originalAmount: true,
@@ -400,6 +408,13 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     prisma.payable.findMany({
       where: {
         createdAt: { lte: to },
+        status: { notIn: ['PAID', 'WRITTEN_OFF'] },
+        remainingAmount: { gt: 0 },
+        purchaseInvoice: {
+          is: {
+            status: { not: 'CANCELLED' },
+          },
+        },
       },
       select: {
         originalAmount: true,
@@ -418,7 +433,10 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
       },
     }),
     prisma.purchaseInvoice.findMany({
-      where: { invoiceDate: { gte: from, lte: to } },
+      where: {
+        invoiceDate: { gte: from, lte: to },
+        status: { not: 'CANCELLED' },
+      },
       select: {
         totalAmount: true,
         discountAmount: true,
@@ -445,7 +463,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
           lte: new Date(),
         },
         paymentType: { not: 'CREDIT' },
-        status: { notIn: ['CANCELLED', 'RETURNED'] },
+        status: { not: 'CANCELLED' },
       },
       select: {
         id: true,
@@ -485,7 +503,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
     }),
   ]);
 
-  const recognizedInvoices = invoices.filter((inv) => inv.status !== 'CANCELLED' && inv.status !== 'RETURNED');
+  const recognizedInvoices = invoices.filter((inv) => inv.status !== 'CANCELLED');
   const paidInvoices = recognizedInvoices.filter((inv) => inv.paymentStatus === 'PAID');
   const revenueGross = payments
     .filter((payment) => payment.direction === 'IN' && payment.invoiceId)
@@ -833,7 +851,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const chartMode = preset === 'month' ? 'day' : 'month';
 
   // Fetch needed data for dashboard
-  const [products, salesInvoicesInRange, salesPaymentsInRange, ordinaryOpenInvoices, creditInvoices, batches, writeoffsMonth, monthlySalesInvoices] = await Promise.all([
+  const [products, salesInvoicesInRange, salesPaymentsInRange, ordinaryOpenInvoices, creditInvoices, batches, writeoffsMonth, monthlySalesInvoices, customerReturnsInRange, customerReturnsMonth] = await Promise.all([
     prisma.product.findMany({
       where: { isActive: true },
       select: {
@@ -877,7 +895,13 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
       where: {
         paymentDate: { gte: from, lte: to },
         direction: 'IN',
+        status: { not: 'CANCELLED' },
         invoiceId: { not: null },
+        invoice: {
+          is: {
+            status: { notIn: ['CANCELLED', 'RETURNED'] },
+          },
+        },
       },
       select: {
         amount: true,
@@ -967,7 +991,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
       where: {
         createdAt: { gte: monthStart, lte: monthEnd },
         paymentType: { not: 'CREDIT' },
-        status: { notIn: ['CANCELLED', 'RETURNED'] },
+        status: { not: 'CANCELLED' },
       },
       select: {
         id: true,
@@ -980,6 +1004,42 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
                 costBasis: true,
               },
             },
+          },
+        },
+      },
+    }),
+    prisma.return.findMany({
+      where: {
+        createdAt: { gte: from, lte: to },
+        type: 'CUSTOMER',
+        status: 'COMPLETED',
+      },
+      select: {
+        totalAmount: true,
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            batch: { select: { costBasis: true } },
+          },
+        },
+      },
+    }),
+    prisma.return.findMany({
+      where: {
+        createdAt: { gte: monthStart, lte: monthEnd },
+        type: 'CUSTOMER',
+        status: 'COMPLETED',
+      },
+      select: {
+        totalAmount: true,
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            batch: { select: { costBasis: true } },
           },
         },
       },
@@ -1059,7 +1119,24 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const totalDebtorOutstanding = debtorOpenInvoices.reduce((sum, invoice) => sum + getInvoiceOutstanding(invoice), 0);
   const totalDebtorCustomersCount = new Set(debtorOpenInvoices.map((invoice) => getDebtorCustomerKey(invoice))).size;
 
-  const revenueInRange = salesPaymentsInRange.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const getReturnAmount = (returns: typeof customerReturnsInRange) => returns.reduce((sum, ret) => {
+    const itemTotal = ret.items.reduce((itemSum, item) => {
+      const lineTotal = Number(item.lineTotal || 0);
+      if (lineTotal > 0) return itemSum + lineTotal;
+      return itemSum + Number(item.quantity || 0) * Number(item.unitPrice || 0);
+    }, 0);
+    return sum + Math.max(Number(ret.totalAmount || 0), itemTotal);
+  }, 0);
+
+  const getReturnedCogs = (returns: typeof customerReturnsInRange) => returns.reduce((sum, ret) => {
+    return sum + ret.items.reduce((itemSum, item) => {
+      return itemSum + Number(item.quantity || 0) * Number(item.batch?.costBasis || 0);
+    }, 0);
+  }, 0);
+
+  const grossRevenueInRange = salesPaymentsInRange.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const customerReturnsAmountInRange = getReturnAmount(customerReturnsInRange);
+  const revenueInRange = Math.max(0, grossRevenueInRange - customerReturnsAmountInRange);
   const rangeDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1);
   const avgDailyRevenue = revenueInRange / rangeDays;
 
@@ -1073,12 +1150,13 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
     return sum + Math.max(Number(writeoff.totalAmount || 0), itemsTotal);
   }, 0);
 
-  const grossMarginMonth = monthlySalesInvoices.reduce((sum, invoice) => {
+  const grossMarginMonthBeforeReturns = monthlySalesInvoices.reduce((sum, invoice) => {
     const invoiceCost = invoice.items.reduce((itemSum, item) => {
       return itemSum + Number(item.quantity || 0) * Number(item.batch?.costBasis || 0);
     }, 0);
     return sum + (Number(invoice.totalAmount || 0) - invoiceCost);
   }, 0);
+  const grossMarginMonth = grossMarginMonthBeforeReturns - getReturnAmount(customerReturnsMonth) + getReturnedCogs(customerReturnsMonth);
 
   const overdueReceivables = debtorOpenInvoices
     .map((invoice) => {
