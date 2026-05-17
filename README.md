@@ -57,7 +57,7 @@ Notes:
 
 Create or reset the first production admin explicitly with:
 
-`npm run bootstrap:admin -- --username owner --password "StrongPassword123" --name "Owner" --role OWNER`
+`npm run bootstrap:admin -- --username owner --password "admin123" --name "Owner" --role OWNER`
 
 You may still pass `--email owner@example.com`; when `--username` is omitted, the script uses the email prefix (`owner`) as the username.
 
