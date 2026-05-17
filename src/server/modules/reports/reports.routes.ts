@@ -109,10 +109,10 @@ const getInvoicePaidAmount = (invoice: { totalAmount?: number | null; payments?:
 
 const getInvoiceOutstandingAmount = (invoice: {
   totalAmount?: number | null;
-  receivables?: Array<{ remainingAmount?: number | null }>;
+  receivable?: { remainingAmount?: number | null } | null;
   payments?: Array<{ amount?: number | null }>;
 }) => {
-  const receivableRemaining = Number(invoice.receivables?.[0]?.remainingAmount ?? NaN);
+  const receivableRemaining = Number(invoice.receivable?.remainingAmount ?? NaN);
   if (Number.isFinite(receivableRemaining)) {
     return Math.max(0, receivableRemaining);
   }
@@ -311,7 +311,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
         createdAt: true,
         totalAmount: true,
         taxAmount: true,
-        receivables: {
+        receivable: {
           select: {
             remainingAmount: true,
           },
@@ -472,7 +472,7 @@ reportsRouter.get('/finance', authenticate, asyncHandler(async (req, res) => {
         customer: true,
         paymentType: true,
         totalAmount: true,
-        receivables: {
+        receivable: {
           select: {
             remainingAmount: true,
           },
@@ -878,7 +878,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         customer: true,
         customerId: true,
         createdAt: true,
-        receivables: {
+        receivable: {
           select: {
             remainingAmount: true,
             dueDate: true,
@@ -922,7 +922,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         createdAt: true,
         totalAmount: true,
         paymentStatus: true,
-        receivables: {
+        receivable: {
           select: {
             remainingAmount: true,
             dueDate: true,
@@ -946,7 +946,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
         customer: true,
         customerId: true,
         totalAmount: true,
-        receivables: {
+        receivable: {
           select: {
             remainingAmount: true,
             dueDate: true,
@@ -1051,7 +1051,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
   const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   const tomorrowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
 
-  const getInvoiceOutstanding = (invoice: { totalAmount?: number | null; receivables?: Array<{ remainingAmount?: number | null }>; payments?: Array<{ amount?: number | null }> }) => getInvoiceOutstandingAmount(invoice);
+  const getInvoiceOutstanding = (invoice: { totalAmount?: number | null; receivable?: { remainingAmount?: number | null } | null; payments?: Array<{ amount?: number | null }> }) => getInvoiceOutstandingAmount(invoice);
 
   // Calculate low stock products
   const lowStockProducts = products
@@ -1160,7 +1160,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
 
   const overdueReceivables = debtorOpenInvoices
     .map((invoice) => {
-      const receivable = invoice.receivables?.[0];
+      const receivable = invoice.receivable;
       const remainingAmount = getInvoiceOutstanding(invoice);
       if (remainingAmount <= 0) return null;
       const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
@@ -1180,7 +1180,7 @@ reportsRouter.get('/metrics/dashboard', authenticate, asyncHandler(async (req, r
 
   const dueTomorrowReceivables = debtorOpenInvoices
     .map((invoice) => {
-      const receivable = invoice.receivables?.[0];
+      const receivable = invoice.receivable;
       const remainingAmount = getInvoiceOutstanding(invoice);
       if (remainingAmount <= 0) return null;
       const dueDate = receivable?.dueDate ? new Date(receivable.dueDate) : null;
@@ -1364,3 +1364,4 @@ reportsRouter.get('/metrics/inventory-status', authenticate, asyncHandler(async 
 
   res.json(result);
 }));
+

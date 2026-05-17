@@ -25,3 +25,4 @@ export const resolveCustomerDueDate = async (
 
   return buildDueDateFromTerm(baseDate, customer?.paymentTermDays);
 };
+

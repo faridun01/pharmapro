@@ -61,6 +61,26 @@ const APP_PORT = Number(process.env.PORT || 3921);
 const DEV_SERVER_URL = 'http://127.0.0.1:3000';
 const desktopAuthSecret = randomBytes(24).toString('hex');
 const appStartupStartedAt = Date.now();
+const DISK_D_BACKUP_DIR = 'D:\\PharmaPro Backups';
+const resolveBackupDir = () => {
+  try {
+    if (fs.existsSync('D:\\')) {
+      return DISK_D_BACKUP_DIR;
+    }
+  } catch {
+    // Fall back to the system folders below.
+  }
+
+  try {
+    return path.join(app.getPath('documents'), 'PharmaPro Backups');
+  } catch {
+    try {
+      return path.join(app.getPath('userData'), 'backups');
+    } catch {
+      return path.join(process.cwd(), 'backups');
+    }
+  }
+};
 
 let mainWindow = null;
 let backendProcess = null;
@@ -212,23 +232,21 @@ const warmDevRendererAssets = async () => {
 
   await waitForHttpOk(DEV_SERVER_URL, 15000);
 
-  for (const target of targets) {
+  writeRuntimeLog('dev-warm-start', { count: targets.length });
+
+  await Promise.all(targets.map(async (target) => {
     const targetUrl = new URL(target, viteBaseUrl).toString();
     const startedAt = Date.now();
     try {
       await fetchText(targetUrl);
-      writeRuntimeLog('dev-warm-hit', {
-        target,
-        elapsedMs: Date.now() - startedAt,
-      });
+      const elapsedMs = Date.now() - startedAt;
+      writeRuntimeLog('dev-warm-hit', { target, elapsedMs });
+      console.log(`[warmup] ✓ ${target} (${elapsedMs}ms)`);
     } catch (error) {
-      writeRuntimeLog('dev-warm-hit-failed', {
-        target,
-        message: error?.message,
-        elapsedMs: Date.now() - startedAt,
-      });
+      writeRuntimeLog('dev-warm-hit-failed', { target, message: error?.message });
+      console.warn(`[warmup] ✗ ${target} failed: ${error?.message}`);
     }
-  }
+  }));
 
   writeRuntimeLog('dev-warm-complete', {
     elapsedMs: Date.now() - warmStartedAt,
@@ -343,6 +361,7 @@ const startInternalBackend = async () => {
       // process (ELECTRON_RUN_AS_NODE=1) has asar fs-patching active and can
       // read files from inside the asar archive.
       PHARMAPRO_DIST_PATH: path.join(app.getAppPath(), 'dist'),
+      PHARMAPRO_RUNTIME_ROOT: path.join(process.resourcesPath, 'app.asar.unpacked'),
       // Tell the backend's env.ts where to find the .env file so dotenv.config()
       // can load DATABASE_URL even in standalone (non-project-root) deployments.
       ...(runtimeEnvFile ? { PHARMAPRO_ENV_FILE: runtimeEnvFile } : {}),
@@ -376,8 +395,8 @@ function createWindow() {
       additionalArguments: [`--pharmapro-started-at=${appStartupStartedAt}`],
     },
     icon: windowIcon,
-    title: 'PharmaPro Management System',
-    backgroundColor: '#f5f5f0',
+    title: '3C: Pharma Management System',
+    backgroundColor: '#151619',
     show: false,
   });
 
@@ -590,4 +609,181 @@ ipcMain.handle('desktop:get-auth-headers', () => {
 
 ipcMain.on('runtime:mark', (_event, payload) => {
   writeRuntimeLog('runtime-mark', payload || {});
+});
+ipcMain.handle('desktop:save-db-config', async (_event, databaseUrl) => {
+  writeRuntimeLog('config-save-request', { url: databaseUrl?.replace(/:([^:@]+)@/, ':***@') });
+  
+  try {
+    const userDataDir = app.getPath('userData');
+    const envPath = path.join(userDataDir, '.env');
+    
+    // We strictly manage the .env file in userData for custom settings.
+    // If it exists, we update it; if not, we create it.
+    let content = '';
+    if (fs.existsSync(envPath)) {
+      content = fs.readFileSync(envPath, 'utf8');
+    }
+    
+    const lines = content.split('\n');
+    const dbUrlLine = `DATABASE_URL="${databaseUrl}"`;
+    const newLines = lines.filter(line => !line.startsWith('DATABASE_URL='));
+    newLines.push(dbUrlLine);
+    
+    fs.mkdirSync(userDataDir, { recursive: true });
+    fs.writeFileSync(envPath, newLines.join('\n').trim(), 'utf8');
+    
+    writeRuntimeLog('config-saved', { path: envPath });
+
+    // Restart the backend
+    if (backendProcess && !backendProcess.killed) {
+      writeRuntimeLog('backend-restart-killing-old', { pid: backendProcess.pid });
+      backendProcess.kill();
+      // Wait a moment for the process to die and port to clear
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    await startInternalBackend();
+    return { success: true };
+  } catch (error) {
+    writeRuntimeLog('config-save-failed', { error: error?.message });
+    return { success: false, error: error?.message };
+  }
+});
+
+ipcMain.on('runtime:mark', (_event, payload) => {
+  writeRuntimeLog('runtime-mark', payload || {});
+});
+
+// --- Backup Management (Step 12) ---
+ipcMain.handle('desktop:perform-backup', async () => {
+  writeRuntimeLog('backup-request', { ts: Date.now() });
+  
+  try {
+    const envFile = resolveRuntimeEnvPath();
+    let dbUrl = process.env.DATABASE_URL;
+    
+    if (envFile && fs.existsSync(envFile)) {
+      const content = fs.readFileSync(envFile, 'utf8');
+      const match = content.match(/DATABASE_URL=["']?([^"'\n]+)["']?/);
+      if (match) dbUrl = match[1];
+    }
+
+    if (!dbUrl) throw new Error('DATABASE_URL not found');
+
+    // Parse postgresql://user:pass@host:port/dbname
+    const urlPattern = /postgresql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/([^?]+)/;
+    const parts = dbUrl.match(urlPattern);
+    if (!parts) throw new Error('Invalid DATABASE_URL format');
+
+    const [, user, password, host, port, dbname] = parts;
+
+    // Resolve Target Directory
+    const backupDir = resolveBackupDir();
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const fileName = `backup_${timestamp}.sql`;
+    const fullPath = path.join(backupDir, fileName);
+
+    // Prepare pg_dump command
+    // Note: We try 'pg_dump' from PATH first, then common Windows paths
+    let pgDumpPath = 'pg_dump';
+    const commonPaths = [
+       'C:\\Program Files\\PostgreSQL\\18\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\14\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\13\\bin\\pg_dump.exe',
+       'C:\\Program Files\\PostgreSQL\\18\\pgAdmin 4\\runtime\\pg_dump.exe'
+    ];
+
+    for (const cp of commonPaths) {
+      if (fs.existsSync(cp)) {
+        pgDumpPath = cp;
+        break;
+      }
+    }
+
+    writeRuntimeLog('backup-executing', { pgDumpPath, target: fullPath });
+
+    return new Promise((resolve, reject) => {
+      // Use PGPASSWORD env var to avoid prompt
+      const child = spawn(pgDumpPath, [
+        '-h', host,
+        '-p', port,
+        '-U', user,
+        '-f', fullPath,
+        dbname
+      ], {
+        env: { ...process.env, PGPASSWORD: password },
+        shell: false
+      });
+
+      let stderr = '';
+      child.stderr.on('data', (data) => { stderr += data.toString(); });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          writeRuntimeLog('backup-success', { path: fullPath });
+          resolve({ success: true, path: fullPath });
+        } else {
+          writeRuntimeLog('backup-failed', { code, stderr });
+          reject(new Error(`pg_dump failed (code ${code}): ${stderr}`));
+        }
+      });
+    });
+  } catch (error) {
+    writeRuntimeLog('backup-error', { message: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// --- System Diagnostics (Step 15) ---
+ipcMain.handle('desktop:check-system-status', async () => {
+  const backupDir = resolveBackupDir();
+  const status = {
+    pgDumpFound: false,
+    pgDumpPath: '',
+    diskDReady: false,
+    backupDirReady: false,
+    backupDirExists: false,
+    backupDir
+  };
+
+  const commonPaths = [
+    'C:\\Program Files\\PostgreSQL\\18\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\14\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\13\\bin\\pg_dump.exe',
+    'C:\\Program Files\\PostgreSQL\\18\\pgAdmin 4\\runtime\\pg_dump.exe'
+  ];
+
+  for (const cp of commonPaths) {
+    if (fs.existsSync(cp)) {
+      status.pgDumpFound = true;
+      status.pgDumpPath = cp;
+      break;
+    }
+  }
+
+  try {
+    status.diskDReady = fs.existsSync('D:\\');
+  } catch {
+    status.diskDReady = false;
+  }
+
+  try {
+    fs.mkdirSync(status.backupDir, { recursive: true });
+    status.backupDirReady = true;
+    status.backupDirExists = fs.existsSync(status.backupDir);
+  } catch (e) {
+    status.backupDirReady = false;
+  }
+
+  return status;
 });

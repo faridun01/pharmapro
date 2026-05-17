@@ -2,220 +2,11 @@ import { Router } from 'express';
 import { authenticate, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { prisma } from '../../infrastructure/prisma';
+import { buildStockIntegrityReport, applyStockIntegrityFix } from '../../services/stockIntegrity.service';
 
 export const devRouter = Router();
 
-const buildStockIntegrityReport = async () => {
-  const [products, warehouseStocks] = await Promise.all([
-    prisma.product.findMany({
-      where: { isActive: true },
-      include: {
-        batches: {
-          where: {},
-          select: {
-            id: true,
-            batchNumber: true,
-            quantity: true,
-            currentQty: true,
-            availableQty: true,
-            reservedQty: true,
-            warehouseId: true,
-          },
-        },
-      },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.warehouseStock.findMany({
-      select: {
-        warehouseId: true,
-        productId: true,
-        quantity: true,
-      },
-    }),
-  ]);
-
-  const issues: Array<Record<string, any>> = [];
-
-  for (const product of products) {
-    let batchQtySum = 0;
-    let batchCurrentSum = 0;
-    let batchAvailableSum = 0;
-    let batchReservedSum = 0;
-
-    for (const batch of product.batches) {
-      const qty = Number(batch.quantity || 0);
-      const current = Number(batch.currentQty || 0);
-      const available = Number(batch.availableQty || 0);
-      const reserved = Number(batch.reservedQty || 0);
-
-      batchQtySum += qty;
-      batchCurrentSum += current;
-      batchAvailableSum += available;
-      batchReservedSum += reserved;
-
-      if (current !== available + reserved) {
-        issues.push({
-          type: 'BATCH_MISMATCH',
-          productId: product.id,
-          productName: product.name,
-          batchId: batch.id,
-          batchNumber: batch.batchNumber,
-          currentQty: current,
-          availableQty: available,
-          reservedQty: reserved,
-          message: 'currentQty must equal availableQty + reservedQty',
-        });
-      }
-
-      if (qty !== current) {
-        issues.push({
-          type: 'BATCH_QTY_MISMATCH',
-          productId: product.id,
-          productName: product.name,
-          batchId: batch.id,
-          batchNumber: batch.batchNumber,
-          quantity: qty,
-          currentQty: current,
-          message: 'quantity must equal currentQty for active inventory model',
-        });
-      }
-    }
-
-    const relatedStocks = warehouseStocks.filter((s) => s.productId === product.id);
-    const warehouseStockSum = relatedStocks.reduce((sum, s) => sum + Number(s.quantity || 0), 0);
-
-    if (Number(product.totalStock || 0) !== batchQtySum) {
-      issues.push({
-        type: 'PRODUCT_TOTAL_MISMATCH',
-        productId: product.id,
-        productName: product.name,
-        productTotalStock: Number(product.totalStock || 0),
-        batchQtySum,
-        message: 'product.totalStock must equal sum(batch.quantity)',
-      });
-    }
-
-    if (warehouseStockSum !== batchQtySum) {
-      issues.push({
-        type: 'WAREHOUSE_STOCK_MISMATCH',
-        productId: product.id,
-        productName: product.name,
-        batchQtySum,
-        warehouseStockSum,
-        message: 'sum(warehouse_stock) must equal sum(batch.quantity)',
-      });
-    }
-
-    if (batchCurrentSum !== batchAvailableSum + batchReservedSum) {
-      issues.push({
-        type: 'PRODUCT_BATCH_FIELDS_MISMATCH',
-        productId: product.id,
-        productName: product.name,
-        batchCurrentSum,
-        batchAvailableSum,
-        batchReservedSum,
-        message: 'sum(currentQty) must equal sum(availableQty) + sum(reservedQty)',
-      });
-    }
-  }
-
-  return {
-    checkedProducts: products.length,
-    checkedWarehouseStockRows: warehouseStocks.length,
-    issuesCount: issues.length,
-    issues,
-  };
-};
-
-const applyStockIntegrityFix = async () => {
-  const [products, warehouseStocks, warehouses] = await Promise.all([
-    prisma.product.findMany({
-      where: { isActive: true },
-      include: {
-        batches: {
-          select: {
-            id: true,
-            quantity: true,
-            currentQty: true,
-            availableQty: true,
-            reservedQty: true,
-            warehouseId: true,
-          },
-        },
-      },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.warehouseStock.findMany({
-      select: {
-        warehouseId: true,
-        productId: true,
-      },
-    }),
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    Promise.resolve([] as never[]),
-  ]);
-
-  await prisma.$transaction(async (tx) => {
-    for (const product of products) {
-      let batchQtySum = 0;
-      // Group batch quantities per warehouse to preserve multi-warehouse distribution
-      const warehouseQtyMap = new Map<string, number>();
-
-      for (const batch of product.batches) {
-        const qty = Math.max(0, Number(batch.quantity || 0));
-        const reserved = Math.max(0, Number(batch.reservedQty || 0));
-        const targetReserved = Math.min(reserved, qty);
-        const targetCurrent = qty;
-        const targetAvailable = Math.max(0, qty - targetReserved);
-
-        batchQtySum += qty;
-
-        if (batch.warehouseId) {
-          warehouseQtyMap.set(
-            batch.warehouseId,
-            (warehouseQtyMap.get(batch.warehouseId) ?? 0) + qty,
-          );
-        }
-
-        await tx.batch.update({
-          where: { id: batch.id },
-          data: {
-            quantity: qty,
-            currentQty: targetCurrent,
-            reservedQty: targetReserved,
-            availableQty: targetAvailable,
-          },
-        });
-      }
-
-      await tx.product.update({
-        where: { id: product.id },
-        data: { totalStock: batchQtySum },
-      });
-
-      // Sync each warehouse stock row to match its own batches — no cross-warehouse redistribution
-      for (const [warehouseId, qty] of warehouseQtyMap.entries()) {
-        await tx.warehouseStock.upsert({
-          where: { warehouseId_productId: { warehouseId, productId: product.id } },
-          update: { quantity: qty },
-          create: { warehouseId, productId: product.id, quantity: qty },
-        });
-      }
-
-      // Zero out stale warehouse rows that no longer have any batches assigned
-      const activeWarehouseIds = new Set(warehouseQtyMap.keys());
-      const staleRows = warehouseStocks.filter(
-        (row) => row.productId === product.id && !activeWarehouseIds.has(row.warehouseId),
-      );
-      for (const stale of staleRows) {
-        await tx.warehouseStock.updateMany({
-          where: { warehouseId: stale.warehouseId, productId: product.id },
-          data: { quantity: 0 },
-        });
-      }
-    }
-  });
-};
+// Logic moved to stockIntegrity.service.ts
 
 type DemoProduct = {
   name: string;
@@ -277,7 +68,7 @@ async function ensureDefaultWarehouse() {
   let warehouse = await prisma.warehouse.findFirst({ where: { isDefault: true } });
   if (!warehouse) {
     warehouse = await prisma.warehouse.create({
-      data: { code: 'MAIN', name: 'Main Warehouse', isDefault: true, isActive: true },
+      data: { code: 'MAIN', name: 'Аптечный склад', isDefault: true, isActive: true },
     });
   }
   return warehouse;
@@ -289,9 +80,8 @@ const DEMO_DEBTOR_ACCOUNTS = [
     name: 'City General Pharmacy',
     legalName: 'City General Pharmacy LLC',
     phone: '+998901111111',
-    email: 'buyer1@citypharm.local',
-    address: 'Tashkent, Yunusabad district',
-    managerName: 'Dilshod Karimov',
+    address: 'Душанбе, район Исмоили Сомони',
+    managerName: 'Абдуллоев Исмоил',
     creditLimit: 15000000,
     defaultDiscount: 5,
     paymentTermDays: 14,
@@ -301,7 +91,6 @@ const DEMO_DEBTOR_ACCOUNTS = [
     name: 'HealthPlus Clinic',
     legalName: 'HealthPlus Clinic LLC',
     phone: '+998902222222',
-    email: 'procurement@healthplus.local',
     address: 'Tashkent, Chilanzar district',
     managerName: 'Malika Rakhimova',
     creditLimit: 8000000,
@@ -315,10 +104,10 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
   const warehouse = await ensureDefaultWarehouse();
 
   const user = await prisma.user.findUnique({ where: { id: authedReq.user.id } })
-    ?? await prisma.user.findFirst({ where: { email: authedReq.user.email } })
+    ?? await prisma.user.findFirst({ where: { username: authedReq.user.username } })
     ?? await prisma.user.create({
       data: {
-        email: authedReq.user.email,
+        username: authedReq.user.username || 'admin',
         password: 'dev-password',
         name: 'Dev Admin',
         role: 'ADMIN',
@@ -329,10 +118,9 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
   if (!supplier) {
     supplier = await prisma.supplier.create({
       data: {
-        name: 'Demo Supplier',
-        contact: '+7 (900) 000-00-00',
-        email: 'demo@supplier.local',
-        address: 'Москва, Тестовая, 1',
+        name: 'Демо поставщик',
+        contact: '+992900000000',
+        address: 'Душанбе, Тестовая, 1',
       },
     });
   }
@@ -341,13 +129,12 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
   let updated = 0;
 
   for (const debtorAccount of DEMO_DEBTOR_ACCOUNTS) {
-    await prisma.customer.upsert({
+    await (prisma as any).customer.upsert({
       where: { code: debtorAccount.code },
       update: {
         name: debtorAccount.name,
         legalName: debtorAccount.legalName,
         phone: debtorAccount.phone,
-        email: debtorAccount.email,
         address: debtorAccount.address,
         managerName: debtorAccount.managerName,
         creditLimit: debtorAccount.creditLimit,
@@ -360,7 +147,6 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
         name: debtorAccount.name,
         legalName: debtorAccount.legalName,
         phone: debtorAccount.phone,
-        email: debtorAccount.email,
         address: debtorAccount.address,
         managerName: debtorAccount.managerName,
         creditLimit: debtorAccount.creditLimit,
@@ -487,7 +273,7 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
           paymentStatus: 'PARTIALLY_PAID',
           totalAmount: sampleProducts.reduce((sum, product) => sum + product.costPrice * 50, 0),
           createdById: user.id,
-          comment: 'Demo purchase invoice',
+          comment: 'Демо закупочный инвойс',
           items: {
             create: sampleProducts.map((product, index) => ({
               productId: product.id,
@@ -506,19 +292,19 @@ devRouter.post('/seed-demo', authenticate, asyncHandler(async (req, res) => {
     }
   }
 
-  const primaryDebtorAccount = await prisma.customer.findUnique({
+  const primaryDebtorAccount = await (prisma as any).customer.findUnique({
     where: { code: 'CUST-001' },
     select: { id: true },
   });
 
   if (primaryDebtorAccount) {
-    const receivableExists = await prisma.receivable.findFirst({
+    const receivableExists = await (prisma as any).receivable.findFirst({
       where: { customerId: primaryDebtorAccount.id },
       select: { id: true },
     });
 
     if (!receivableExists) {
-      await prisma.receivable.create({
+      await (prisma as any).receivable.create({
         data: {
           customerId: primaryDebtorAccount.id,
           originalAmount: 2500000,
@@ -560,7 +346,11 @@ devRouter.post('/reset-operations', authenticate, asyncHandler(async (_req, res)
 
 devRouter.get('/stock-integrity', authenticate, asyncHandler(async (_req, res) => {
   const report = await buildStockIntegrityReport();
-  res.json({ ok: report.issuesCount === 0, ...report });
+  res.json({
+    ok: report.issuesCount === 0,
+    healthy: report.issuesCount === 0,
+    ...report
+  });
 }));
 
 devRouter.post('/stock-integrity/fix', authenticate, asyncHandler(async (req, res) => {
@@ -572,5 +362,10 @@ devRouter.post('/stock-integrity/fix', authenticate, asyncHandler(async (req, re
 
   await applyStockIntegrityFix();
   const report = await buildStockIntegrityReport();
-  res.json({ ok: report.issuesCount === 0, repaired: true, ...report });
+  res.json({
+    ok: report.issuesCount === 0,
+    healthy: report.issuesCount === 0,
+    repaired: true,
+    ...report
+  });
 }));

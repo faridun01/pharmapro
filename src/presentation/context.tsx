@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Product, User, Invoice, Supplier } from '../core/domain';
 import { TransactionDTO } from '../application/services';
 import { ApiProductRepository, ApiInvoiceRepository, ApiSupplierRepository, buildApiHeaders } from '../infrastructure/api';
@@ -48,6 +48,7 @@ interface PharmacyContextType {
     invoiceNumber: string;
     invoiceDate: string;
     discountAmount?: number;
+    status?: 'DRAFT' | 'POSTED';
     items: Array<{
       productId: string;
       batchNumber: string;
@@ -56,8 +57,11 @@ interface PharmacyContextType {
       costBasis: number;
       manufacturedDate: Date;
       expiryDate: Date;
+      countryOfOrigin?: string;
     }>;
   }) => Promise<void>;
+  updatePurchaseInvoice: (id: string, payload: any) => Promise<void>;
+  deletePurchaseInvoice: (id: string) => Promise<void>;
   createProduct: (payload: Omit<Product, 'batches' | 'totalStock' | 'status'> & { minStock?: number }) => Promise<Product>;
   updateProduct: (payload: Product) => Promise<Product>;
   deleteProduct: (productId: string) => Promise<void>;
@@ -68,7 +72,7 @@ const PharmacyContext = createContext<PharmacyContextType | undefined>(undefined
 const bootstrapLoads = new Map<string, Promise<void>>();
 
 const getBootstrapLoadKey = (user: User | null) => {
-  const token = window.sessionStorage.getItem('pharmapro_token') || localStorage.getItem('pharmapro_token') || 'guest';
+  const token = window.sessionStorage.getItem('pharmapro_token') || 'guest';
   return user ? `auth:${user.id}:${token}` : `guest:${token}`;
 };
 
@@ -119,7 +123,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       const data = payload;
       window.sessionStorage.setItem('pharmapro_token', data.token);
       window.sessionStorage.setItem('pharmapro_user', JSON.stringify(data.user));
-      localStorage.setItem('pharmapro_token', data.token);
+      localStorage.removeItem('pharmapro_token');
       setUser(data.user);
     } catch (err: any) {
       setError(err.message);
@@ -134,25 +138,27 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     setUser(null);
   };
 
-  const refreshProducts = async () => {
+  const refreshProducts = useCallback(async () => {
     try {
-      let data = await productRepository.getAll();
+      const result = await productRepository.getAll();
+      const data = Array.isArray(result) ? result : (result?.items || []);
       setProducts(data);
     } catch (err: any) {
       logger.error('Failed to fetch products', err);
     }
-  };
+  }, []);
 
-  const refreshInvoices = async () => {
+  const refreshInvoices = useCallback(async () => {
     try {
-      const data = await invoiceRepository.getAll();
+      const result = await invoiceRepository.getAll();
+      const data = Array.isArray(result) ? result : (result?.items || []);
       setInvoices(data);
     } catch (err: any) {
       logger.error('Failed to fetch invoices', err);
     }
-  };
+  }, []);
 
-  const refreshSuppliers = async (force: boolean = false) => {
+  const refreshSuppliers = useCallback(async (force: boolean = false) => {
     try {
       const now = Date.now();
       const cached = cacheRef.current.suppliers;
@@ -165,12 +171,13 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
 
       // Fetch fresh data
       const data = await supplierRepository.getAll();
-      cacheRef.current.suppliers = { data, timestamp: now };
-      setSuppliers(data);
+      const safeData = Array.isArray(data) ? data : ((data as any)?.items || []);
+      cacheRef.current.suppliers = { data: safeData, timestamp: now };
+      setSuppliers(safeData);
     } catch (err: any) {
       logger.error('Failed to fetch suppliers', err);
     }
-  };
+  }, []);
 
   const processTransaction = async (transaction: TransactionDTO) => {
     try {
@@ -225,6 +232,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     invoiceNumber: string;
     invoiceDate: string;
     discountAmount?: number;
+    status?: 'DRAFT' | 'POSTED';
     items: Array<{
       productId: string;
       batchNumber: string;
@@ -244,6 +252,31 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(body.error || 'Failed to import purchase invoice');
+    }
+  };
+
+  const updatePurchaseInvoice = async (id: string, payload: any) => {
+    const response = await fetch(`/api/inventory/purchase-invoices/${id}`, {
+      method: 'PUT',
+      headers: await buildApiHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.error || 'Failed to update purchase invoice');
+    }
+  };
+
+  const deletePurchaseInvoice = async (id: string) => {
+    const response = await fetch(`/api/inventory/purchase-invoices/${id}`, {
+      method: 'DELETE',
+      headers: await buildApiHeaders(),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.error || 'Failed to delete purchase invoice');
     }
   };
 
@@ -317,11 +350,35 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
         return;
       }
 
+      // Proactive Theme Loading for Premium Feel
+      const applyTheme = (theme: string) => {
+        document.documentElement.dataset.theme = theme;
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      };
+
+      // Load initial theme from server-side preferences
+      void fetch('/api/system/me/preferences', { headers: await buildApiHeaders(false) })
+        .then(res => res.json())
+        .then(prefs => {
+           if (prefs?.appearance?.theme) {
+             applyTheme(prefs.appearance.theme);
+           }
+        })
+        .catch(() => { /* use default if failed */ });
+
       setIsLoading(false);
 
       let bootstrapPromise = bootstrapLoads.get(loadKey);
       if (!bootstrapPromise) {
-        bootstrapPromise = Promise.resolve().catch((error) => {
+        bootstrapPromise = runRefreshTasks(
+          refreshProducts,
+          refreshInvoices,
+          refreshSuppliers,
+        ).catch((error) => {
           bootstrapLoads.delete(loadKey);
           throw error;
         });
@@ -358,6 +415,8 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       processTransaction,
       restockInventory,
       importPurchaseInvoice,
+      updatePurchaseInvoice,
+      deletePurchaseInvoice,
       createProduct,
       updateProduct,
       deleteProduct

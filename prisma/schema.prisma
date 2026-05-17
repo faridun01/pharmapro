@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/server/infrastructure/generated-client"
 }
 
 datasource db {
@@ -62,6 +63,7 @@ enum InvoiceStatus {
   CANCELLED
   RETURNED
   PARTIALLY_RETURNED
+  RESERVED
 }
 
 enum ReturnType {
@@ -74,6 +76,7 @@ enum ReturnStatus {
   APPROVED
   REJECTED
   COMPLETED
+  CANCELLED
 }
 
 enum RefundMethod {
@@ -133,9 +136,9 @@ enum PriceType {
 }
 
 enum CounterpartyType {
-  CUSTOMER
   SUPPLIER
   OTHER
+  CUSTOMER
 }
 
 enum PaymentDirection {
@@ -147,7 +150,6 @@ enum PaymentMethod {
   CASH
   CARD
   BANK_TRANSFER
-  CREDIT_OFFSET
 }
 
 enum PurchaseInvoiceStatus {
@@ -158,15 +160,6 @@ enum PurchaseInvoiceStatus {
   CANCELLED
 }
 
-enum SalesOrderStatus {
-  DRAFT
-  CONFIRMED
-  RESERVED
-  SHIPPED
-  CANCELLED
-  CLOSED
-}
-
 enum DebtStatus {
   OPEN
   PARTIAL
@@ -175,56 +168,47 @@ enum DebtStatus {
   WRITTEN_OFF
 }
 
-enum ReservationStatus {
-  ACTIVE
-  RELEASED
-  FULFILLED
-  CANCELLED
-}
-
 model Product {
-  id                String              @id @default(uuid())
+  id                String                @id @default(uuid())
   name              String
-  sku               String              @unique
-  barcode           String?             @unique
+  sku               String                @unique
+  barcode           String?               @unique
   internationalName String?
   category          String
   categoryId        String?
-  productCategory   ProductCategory?    @relation(fields: [categoryId], references: [id])
+  productCategory   ProductCategory?      @relation(fields: [categoryId], references: [id])
   manufacturer      String
   countryOfOrigin   String?
   manufacturerId    String?
-  manufacturerRef   Manufacturer?       @relation(fields: [manufacturerId], references: [id])
+  manufacturerRef   Manufacturer?         @relation(fields: [manufacturerId], references: [id])
   dosage            String?
   dosageUnit        String?
   formId            String?
-  form              ProductForm?        @relation(fields: [formId], references: [id])
+  form              ProductForm?          @relation(fields: [formId], references: [id])
   packageTypeId     String?
-  packageType       PackageType?        @relation(fields: [packageTypeId], references: [id])
-  totalStock        Int                 @default(0)
-  minStock          Int                 @default(10)
+  packageType       PackageType?          @relation(fields: [packageTypeId], references: [id])
+  totalStock        Int                   @default(0)
+  minStock          Int                   @default(10)
   costPrice         Float
   sellingPrice      Float
-  status            ProductStatus       @default(ACTIVE)
-  isActive          Boolean             @default(true)
+  status            ProductStatus         @default(ACTIVE)
+  isActive          Boolean               @default(true)
   image             String?
-  prescription      Boolean             @default(false)
-  markingRequired   Boolean             @default(false)
+  prescription      Boolean               @default(false)
+  markingRequired   Boolean               @default(false)
   analogs           String? // JSON string of analog product IDs or names
   batches           Batch[]
   warehouseStocks   WarehouseStock[]
   aliases           ProductAlias[]
-  analogLinksFrom   ProductAnalog[]     @relation("ProductAnalogFrom")
-  analogLinksTo     ProductAnalog[]     @relation("ProductAnalogTo")
+  analogLinksFrom   ProductAnalog[]       @relation("ProductAnalogFrom")
+  analogLinksTo     ProductAnalog[]       @relation("ProductAnalogTo")
   priceHistory      PriceHistory[]
   invoiceItems      InvoiceItem[]
   purchaseItems     PurchaseInvoiceItem[]
-  salesOrderItems   SalesOrderItem[]
-  reservations      Reservation[]
   returnItems       ReturnItem[]
   writeOffItems     WriteOffItem[]
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
   StockTransferItem StockTransferItem[]
   OcrRow            OcrRow[]
 
@@ -233,43 +217,45 @@ model Product {
 }
 
 model Batch {
-  id               String              @id @default(uuid())
+  id               String               @id @default(uuid())
   batchNumber      String // The user-facing ID like #BAT-AMX-2024-001
   quantity         Int
-  initialQty       Int                 @default(0)
-  currentQty       Int                 @default(0)
-  reservedQty      Int                 @default(0)
-  availableQty     Int                 @default(0)
+  initialQty       Int                  @default(0)
+  currentQty       Int                  @default(0)
+  reservedQty      Int                  @default(0)
+  availableQty     Int                  @default(0)
   unit             String
   costBasis        Float
   purchasePrice    Float?
   wholesalePrice   Float?
   retailPrice      Float?
   supplierId       String?
-  supplier         Supplier?           @relation(fields: [supplierId], references: [id])
+  supplier         Supplier?            @relation(fields: [supplierId], references: [id])
   warehouseId      String?
-  warehouse        Warehouse?          @relation(fields: [warehouseId], references: [id])
+  warehouse        Warehouse?           @relation(fields: [warehouseId], references: [id])
   manufacturedDate DateTime
-  receivedAt       DateTime            @default(now())
+  receivedAt       DateTime             @default(now())
   expiryDate       DateTime
+  countryOfOrigin  String?
   status           BatchStatus
   productId        String
-  product          Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product          Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
   purchaseItemId   String?
   purchaseItem     PurchaseInvoiceItem? @relation(fields: [purchaseItemId], references: [id])
   movements        BatchMovement[]
   invoiceItems     InvoiceItem[]
-  reservations     Reservation[]
   returnItems      ReturnItem[]
   writeOffItems    WriteOffItem[]
   transferItems    StockTransferItem[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  reservations     Reservation[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   @@index([productId, expiryDate])
   @@index([batchNumber])
   @@index([status, expiryDate])
   @@index([productId, status])
+  @@index([warehouseId])
 }
 
 model BatchMovement {
@@ -285,107 +271,103 @@ model BatchMovement {
 }
 
 model User {
-  id                String           @id @default(uuid())
-  username          String?
-  email             String           @unique
+  id                String            @id @default(uuid())
+  username          String            @unique
   password          String
   name              String
   role              UserRole
-  isActive          Boolean          @default(true)
+  isActive          Boolean           @default(true)
   warehouseId       String?
-  warehouse         Warehouse?       @relation(fields: [warehouseId], references: [id])
+  warehouse         Warehouse?        @relation(fields: [warehouseId], references: [id])
   lastLoginAt       DateTime?
   movements         BatchMovement[]
   invoices          Invoice[]
   purchaseInvoices  PurchaseInvoice[] @relation("PurchaseCreatedBy")
-  salesOrders       SalesOrder[]     @relation("SalesOrderCreatedBy")
   payments          Payment[]
   auditLogs         AuditLog[]
-  returnsCreated    Return[]         @relation("ReturnCreatedBy")
-  returnsApproved   Return[]         @relation("ReturnApprovedBy")
-  writeOffsCreated  WriteOff[]       @relation("WriteOffCreatedBy")
-  writeOffsApproved WriteOff[]       @relation("WriteOffApprovedBy")
-  shifts            CashShift[]      @relation("ShiftCashier")
+  returnsCreated    Return[]          @relation("ReturnCreatedBy")
+  returnsApproved   Return[]          @relation("ReturnApprovedBy")
+  writeOffsCreated  WriteOff[]        @relation("WriteOffCreatedBy")
+  writeOffsApproved WriteOff[]        @relation("WriteOffApprovedBy")
+  shifts            CashShift[]       @relation("ShiftCashier")
   cashMovements     CashMovement[]
-  ocrDocuments      OcrDocument[]    @relation("OcrUploadedBy")
-  expenses          Expense[]        @relation("ExpenseRecordedBy")
-  priceChanges      PriceHistory[]   @relation("PriceChangedBy")
-  transfersCreated  StockTransfer[]  @relation("TransferCreatedBy")
-  transfersReceived StockTransfer[]  @relation("TransferReceivedBy")
-  ocrDraftApprovals OcrImportDraft[] @relation("OcrDraftApprovedBy")
-  backupsCreated    BackupMetadata[] @relation("BackupCreatedBy")
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  ocrDocuments      OcrDocument[]     @relation("OcrUploadedBy")
+  expenses          Expense[]         @relation("ExpenseRecordedBy")
+  priceChanges      PriceHistory[]    @relation("PriceChangedBy")
+  transfersCreated  StockTransfer[]   @relation("TransferCreatedBy")
+  transfersReceived StockTransfer[]   @relation("TransferReceivedBy")
+  ocrDraftApprovals OcrImportDraft[]  @relation("OcrDraftApprovedBy")
+  backupsCreated    BackupMetadata[]  @relation("BackupCreatedBy")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 }
 
 model Supplier {
-  id             String            @id @default(uuid())
-  name           String
-  contact        String?
-  email          String?
-  address        String?
-  contractNumber String?
-  contractDate   DateTime?
-  paymentTermDays Int?
-  isActive       Boolean           @default(true)
-  batches        Batch[]
-  aliases        ProductAlias[]
+  id               String            @id @default(uuid())
+  name             String
+  contact          String?
+  address          String?
+  contractNumber   String?
+  contractDate     DateTime?
+  paymentTermDays  Int?
+  isActive         Boolean           @default(true)
+  batches          Batch[]
+  aliases          ProductAlias[]
   purchaseInvoices PurchaseInvoice[]
-  payments       Payment[]
-  returns        Return[]
-  ocrDocuments   OcrDocument[]
-  payableEntries SupplierPayable[]
-  payables       Payable[]
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  payments         Payment[]
+  ocrDocuments     OcrDocument[]
+  payableEntries   SupplierPayable[]
+  payables         Payable[]
+  returns          Return[]          @relation("SupplierReturns")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@index([name])
 }
 
 model Invoice {
-  id          String        @id @default(uuid())
-  invoiceNo   String        @unique
-  customer    String?
-  customerId  String?
-  customerRef Customer?     @relation(fields: [customerId], references: [id])
-  totalAmount Float
-  taxAmount   Float         @default(0)
-  discount    Float         @default(0)
-  paymentType PaymentType
-  status      InvoiceStatus @default(PAID)
+  id            String        @id @default(uuid())
+  invoiceNo     String        @unique
+  customer      String?
+  totalAmount   Float
+  taxAmount     Float         @default(0)
+  discount      Float         @default(0)
+  paymentType   PaymentType
+  status        InvoiceStatus @default(PAID)
   paymentStatus PaymentStatus @default(UNPAID)
-  comment     String?
-  userId      String
-  user        User          @relation(fields: [userId], references: [id])
-  items       InvoiceItem[]
-  payments    Payment[]
-  receivables Receivable[]
-  returns     Return[]
-  cashShiftId String?
-  cashShift   CashShift?    @relation(fields: [cashShiftId], references: [id])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  comment       String?
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  items         InvoiceItem[]
+  payments      Payment[]
+  returns       Return[]
+  cashShiftId   String?
+  cashShift     CashShift?    @relation(fields: [cashShiftId], references: [id])
+  customerId    String?
+  customerRef   Customer?     @relation(fields: [customerId], references: [id])
+  receivable    Receivable?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@index([createdAt])
   @@index([status, createdAt])
-  @@index([customerId, createdAt])
   @@index([paymentStatus, createdAt])
 }
 
 model InvoiceItem {
-  id          String  @id @default(uuid())
-  invoiceId   String
-  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product @relation(fields: [productId], references: [id])
-  batchId     String
-  batch       Batch   @relation(fields: [batchId], references: [id])
-  productName String
-  batchNo     String
-  quantity    Int
-  unitPrice   Float
-  discountAmount Float @default(0)
-  totalPrice  Float
+  id             String  @id @default(uuid())
+  invoiceId      String
+  invoice        Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product @relation(fields: [productId], references: [id])
+  batchId        String
+  batch          Batch   @relation(fields: [batchId], references: [id])
+  productName    String
+  batchNo        String
+  quantity       Int
+  unitPrice      Float
+  discountAmount Float   @default(0)
+  totalPrice     Float
 
   @@index([invoiceId])
   @@index([productId])
@@ -414,28 +396,26 @@ model AuditLog {
 }
 
 model Warehouse {
-  id          String           @id @default(uuid())
-  code        String           @unique
-  name        String
-  type        String?
-  address     String?
-  isDefault   Boolean          @default(false)
-  isActive    Boolean          @default(true)
-  description String?
-  users       User[]
-  batches     Batch[]
-  stocks      WarehouseStock[]
-  returns     Return[]
-  writeOffs   WriteOff[]
+  id               String            @id @default(uuid())
+  code             String            @unique
+  name             String
+  type             String?
+  address          String?
+  isDefault        Boolean           @default(false)
+  isActive         Boolean           @default(true)
+  description      String?
+  users            User[]
+  batches          Batch[]
+  stocks           WarehouseStock[]
+  returns          Return[]
+  writeOffs        WriteOff[]
   purchaseInvoices PurchaseInvoice[]
-  salesOrders SalesOrder[]
-  reservations Reservation[]
-  shifts      CashShift[]
-  transferOut StockTransfer[]  @relation("TransferFromWarehouse")
-  transferIn  StockTransfer[]  @relation("TransferToWarehouse")
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  Expense     Expense[]
+  shifts           CashShift[]
+  transferOut      StockTransfer[]   @relation("TransferFromWarehouse")
+  transferIn       StockTransfer[]   @relation("TransferToWarehouse")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  Expense          Expense[]
 }
 
 model WarehouseStock {
@@ -492,10 +472,10 @@ model Return {
   invoiceId    String?
   invoice      Invoice?      @relation(fields: [invoiceId], references: [id])
   supplierId   String?
-  supplier     Supplier?     @relation(fields: [supplierId], references: [id])
-  customerName String?
+  supplier     Supplier?     @relation("SupplierReturns", fields: [supplierId], references: [id])
   customerId   String?
   customer     Customer?     @relation(fields: [customerId], references: [id])
+  customerName String?
   refundMethod RefundMethod?
   reason       String?
   note         String?
@@ -513,37 +493,38 @@ model Return {
 }
 
 model ReturnItem {
-  id        String  @id @default(uuid())
-  returnId  String
-  return    Return  @relation(fields: [returnId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-  batchId   String?
-  batch     Batch?  @relation(fields: [batchId], references: [id])
-  quantity  Int
-  unitPrice Float?
-  discountAmount Float? @default(0)
-  lineTotal Float? @default(0)
-  reason    String?
+  id             String  @id @default(uuid())
+  returnId       String
+  return         Return  @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product @relation(fields: [productId], references: [id])
+  batchId        String?
+  batch          Batch?  @relation(fields: [batchId], references: [id])
+  quantity       Int
+  unitPrice      Float?
+  discountAmount Float?  @default(0)
+  lineTotal      Float?  @default(0)
+  reason         String?
+  invoiceItemId  String?
 
   @@index([returnId])
 }
 
 model WriteOff {
-  id          String         @id @default(uuid())
-  writeOffNo  String         @unique
-  warehouseId String
-  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id])
-  reason      WriteOffReason
-  status      String         @default("POSTED")
-  note        String?
-  totalAmount Float?         @default(0)
-  createdById String
-  createdBy   User           @relation("WriteOffCreatedBy", fields: [createdById], references: [id])
+  id           String         @id @default(uuid())
+  writeOffNo   String         @unique
+  warehouseId  String
+  warehouse    Warehouse      @relation(fields: [warehouseId], references: [id])
+  reason       WriteOffReason
+  status       String         @default("POSTED")
+  note         String?
+  totalAmount  Float?         @default(0)
+  createdById  String
+  createdBy    User           @relation("WriteOffCreatedBy", fields: [createdById], references: [id])
   approvedById String?
-  approvedBy  User?          @relation("WriteOffApprovedBy", fields: [approvedById], references: [id])
-  items       WriteOffItem[]
-  createdAt   DateTime       @default(now())
+  approvedBy   User?          @relation("WriteOffApprovedBy", fields: [approvedById], references: [id])
+  items        WriteOffItem[]
+  createdAt    DateTime       @default(now())
 
   @@index([reason])
   @@index([createdAt])
@@ -613,14 +594,14 @@ model PriceHistory {
 }
 
 model ProductCategory {
-  id        String    @id @default(uuid())
+  id        String            @id @default(uuid())
   name      String
   parentId  String?
-  parent    ProductCategory? @relation("ProductCategoryTree", fields: [parentId], references: [id])
+  parent    ProductCategory?  @relation("ProductCategoryTree", fields: [parentId], references: [id])
   children  ProductCategory[] @relation("ProductCategoryTree")
   products  Product[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
   @@index([name])
 }
@@ -651,127 +632,50 @@ model PackageType {
   updatedAt DateTime  @updatedAt
 }
 
-model Customer {
-  id              String        @id @default(uuid())
-  code            String?       @unique
-  name            String
-  legalName       String?
-  taxId           String?
-  phone           String?
-  email           String?
-  address         String?
-  managerName     String?
-  creditLimit     Float         @default(0)
-  defaultDiscount Float         @default(0)
-  paymentTermDays Int?
-  isActive        Boolean       @default(true)
-  contacts        CustomerContact[]
-  invoices        Invoice[]
-  salesOrders     SalesOrder[]
-  returns         Return[]
-  payments        Payment[]
-  receivables     Receivable[]
-  reservations    Reservation[]
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  @@index([name])
-}
-
-model CustomerContact {
-  id         String   @id @default(uuid())
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  fullName   String
-  phone      String?
-  email      String?
-  position   String?
-  isPrimary  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
-
 model PurchaseInvoice {
-  id            String                @id @default(uuid())
-  invoiceNumber String                @unique
-  supplierId    String
-  supplier      Supplier              @relation(fields: [supplierId], references: [id])
-  warehouseId   String
-  warehouse     Warehouse             @relation(fields: [warehouseId], references: [id])
-  invoiceDate   DateTime
-  status        PurchaseInvoiceStatus @default(DRAFT)
-  totalAmount   Float                 @default(0)
-  discountAmount Float                @default(0)
-  taxAmount     Float                 @default(0)
-  paymentStatus PaymentStatus         @default(UNPAID)
-  comment       String?
-  createdById   String
-  createdBy     User                  @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
-  items         PurchaseInvoiceItem[]
-  payments      Payment[]
-  payables      Payable[]
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  id             String                @id @default(uuid())
+  invoiceNumber  String                @unique
+  supplierId     String
+  supplier       Supplier              @relation(fields: [supplierId], references: [id])
+  warehouseId    String
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id])
+  invoiceDate    DateTime
+  status         PurchaseInvoiceStatus @default(DRAFT)
+  totalAmount    Float                 @default(0)
+  discountAmount Float                 @default(0)
+  taxAmount      Float                 @default(0)
+  paymentStatus  PaymentStatus         @default(UNPAID)
+  comment        String?
+  createdById    String
+  createdBy      User                  @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
+  items          PurchaseInvoiceItem[]
+  payments       Payment[]
+  payables       Payable[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
   @@index([invoiceDate])
 }
 
 model PurchaseInvoiceItem {
-  id               String          @id @default(uuid())
+  id                String          @id @default(uuid())
   purchaseInvoiceId String
-  purchaseInvoice  PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
-  productId        String
-  product          Product         @relation(fields: [productId], references: [id])
-  batchNumber      String?
-  manufacturedDate DateTime?
-  expiryDate       DateTime?
-  quantity         Int
-  purchasePrice    Float
-  wholesalePrice   Float?
-  retailPrice      Float?
-  lineDiscount     Float           @default(0)
-  lineTotal        Float           @default(0)
-  batches          Batch[]
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id])
+  batchNumber       String?
+  manufacturedDate  DateTime?
+  expiryDate        DateTime?
+  countryOfOrigin   String?
+  quantity          Int
+  purchasePrice     Float
+  wholesalePrice    Float?
+  retailPrice       Float?
+  lineDiscount      Float           @default(0)
+  lineTotal         Float           @default(0)
+  batches           Batch[]
 
   @@index([purchaseInvoiceId])
-  @@index([productId])
-}
-
-model SalesOrder {
-  id             String           @id @default(uuid())
-  orderNumber    String           @unique
-  customerId     String
-  customer       Customer         @relation(fields: [customerId], references: [id])
-  warehouseId    String
-  warehouse      Warehouse        @relation(fields: [warehouseId], references: [id])
-  status         SalesOrderStatus @default(DRAFT)
-  paymentStatus  PaymentStatus    @default(UNPAID)
-  totalAmount    Float            @default(0)
-  discountAmount Float            @default(0)
-  comment        String?
-  createdById    String
-  createdBy      User             @relation("SalesOrderCreatedBy", fields: [createdById], references: [id])
-  items          SalesOrderItem[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  @@index([createdAt])
-}
-
-model SalesOrderItem {
-  id           String     @id @default(uuid())
-  salesOrderId String
-  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  productId    String
-  product      Product    @relation(fields: [productId], references: [id])
-  requestedQty Int
-  reservedQty  Int        @default(0)
-  shippedQty   Int        @default(0)
-  unitPrice    Float
-  discount     Float      @default(0)
-  lineTotal    Float      @default(0)
-
-  @@index([salesOrderId])
   @@index([productId])
 }
 
@@ -779,8 +683,6 @@ model Payment {
   id                String           @id @default(uuid())
   direction         PaymentDirection
   counterpartyType  CounterpartyType
-  customerId        String?
-  customer          Customer?        @relation(fields: [customerId], references: [id])
   supplierId        String?
   supplier          Supplier?        @relation(fields: [supplierId], references: [id])
   method            PaymentMethod
@@ -794,67 +696,33 @@ model Payment {
   purchaseInvoice   PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
   createdById       String
   createdBy         User             @relation(fields: [createdById], references: [id])
+  customerId        String?
+  customer          Customer?        @relation(fields: [customerId], references: [id])
   comment           String?
   createdAt         DateTime         @default(now())
 
   @@index([paymentDate])
-  @@index([customerId, paymentDate])
   @@index([invoiceId, paymentDate])
-}
-
-model Receivable {
-  id             String        @id @default(uuid())
-  customerId     String
-  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  invoiceId      String?
-  invoice        Invoice?      @relation(fields: [invoiceId], references: [id])
-  originalAmount Float
-  paidAmount     Float         @default(0)
-  remainingAmount Float
-  dueDate        DateTime?
-  status         DebtStatus    @default(OPEN)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  @@index([customerId, status])
-  @@index([customerId, dueDate])
-  @@index([status, dueDate])
+  @@index([invoiceId])
+  @@index([supplierId])
+  @@index([customerId])
 }
 
 model Payable {
-  id               String           @id @default(uuid())
-  supplierId       String
-  supplier         Supplier         @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  id                String           @id @default(uuid())
+  supplierId        String
+  supplier          Supplier         @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   purchaseInvoiceId String?
-  purchaseInvoice  PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
-  originalAmount   Float
-  paidAmount       Float            @default(0)
-  remainingAmount  Float
-  dueDate          DateTime?
-  status           DebtStatus       @default(OPEN)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  purchaseInvoice   PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
+  originalAmount    Float
+  paidAmount        Float            @default(0)
+  remainingAmount   Float
+  dueDate           DateTime?
+  status            DebtStatus       @default(OPEN)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@index([supplierId, status])
-}
-
-model Reservation {
-  id          String            @id @default(uuid())
-  warehouseId String
-  warehouse   Warehouse         @relation(fields: [warehouseId], references: [id])
-  productId   String
-  product     Product           @relation(fields: [productId], references: [id])
-  batchId     String?
-  batch       Batch?            @relation(fields: [batchId], references: [id])
-  customerId  String?
-  customer    Customer?         @relation(fields: [customerId], references: [id])
-  quantity    Int
-  status      ReservationStatus @default(ACTIVE)
-  reason      String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  @@index([warehouseId, productId, status])
 }
 
 model ProductAlias {
@@ -982,14 +850,58 @@ model SupplierPayable {
   @@index([supplierId, createdAt])
 }
 
-model CustomerReceivable {
-  id           String   @id @default(uuid())
-  customerName String
-  amount       Float
-  type         String
-  referenceNo  String?
-  note         String?
-  createdAt    DateTime @default(now())
+model Customer {
+  id              String       @id @default(uuid())
+  code            String?      @unique
+  name            String
+  legalName       String?
+  phone           String?
+  address         String?
+  taxId           String?
+  managerName     String?
+  creditLimit     Float        @default(0)
+  defaultDiscount Float        @default(0)
+  paymentTermDays Int?
+  isActive        Boolean      @default(true)
+  invoices        Invoice[]
+  receivables     Receivable[]
+  returns         Return[]
+  payments        Payment[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
-  @@index([customerName, createdAt])
+  @@index([name])
+  @@index([code])
+}
+
+model Receivable {
+  id              String     @id @default(uuid())
+  invoiceId       String?    @unique
+  invoice         Invoice?   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  customerId      String?
+  customer        Customer?  @relation(fields: [customerId], references: [id])
+  customerName    String?
+  originalAmount  Float
+  paidAmount      Float      @default(0)
+  remainingAmount Float
+  dueDate         DateTime?
+  status          DebtStatus @default(OPEN)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([customerName, status])
+  @@index([customerId])
+}
+
+model Reservation {
+  id        String    @id @default(uuid())
+  batchId   String
+  batch     Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  quantity  Int
+  status    String    @default("ACTIVE")
+  expiredAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([batchId])
 }

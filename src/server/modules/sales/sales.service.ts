@@ -1,28 +1,31 @@
-import { prisma } from '../../infrastructure/prisma';
+import { db } from '../../infrastructure/prisma';
 import { auditService } from '../../services/audit.service';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { computeProductStatus } from '../../common/productStatus';
 import { reportCache } from '../../common/cache';
-import { resolveCustomerDueDate } from '../../common/customerTerms';
+import { computeBatchStatus } from '../../common/batchStatus';
+import { stockService } from '../../services/stock.service';
+import { round } from '../../common/utils';
 
 export type SaleItemInput = {
   productId: string;
+  batchId?: string; // Opt-in manual batch selection
   quantity: number;
   sellingPrice: number;
+  discountAmount?: number;
+  prescriptionPresented?: boolean;
 };
 
 export type CompleteSaleInput = {
   items: SaleItemInput[];
-  discountAmount?: number;
+  discountAmount?: number; // Overall invoice discount
   taxAmount?: number;
   total: number;
-  paymentType: 'CASH' | 'CARD' | 'CREDIT' | 'STORE_BALANCE';
-  customer?: string;
-  customerPhone?: string;
-  customerId?: string;
+  paymentType: 'CASH' | 'CARD' | 'CREDIT';
+  customerName?: string;
   paidAmount?: number;
   userId: string;
-};
+}
 
 const buildInvoiceNumber = () => {
   const now = new Date();
@@ -47,64 +50,7 @@ export class SalesService {
       throw new ValidationError('paidAmount cannot be negative');
     }
 
-    const hasOutstandingBalance = paidAmount < Number(input.total);
-    const requestedCustomerName = String(input.customer || '').trim();
-    const requestedCustomerPhone = String(input.customerPhone || '').trim();
-    let resolvedCustomerId = input.customerId;
-    let resolvedCustomerName: string | null = requestedCustomerName || null;
-
-    const invoice = await prisma.$transaction(async (tx) => {
-      if (resolvedCustomerId) {
-        const customer = await tx.customer.findUnique({
-          where: { id: resolvedCustomerId },
-          select: { id: true, name: true },
-        });
-
-        if (!customer) {
-          throw new NotFoundError(`Customer ${resolvedCustomerId} not found`);
-        }
-
-        resolvedCustomerName = customer.name;
-      } else if (hasOutstandingBalance) {
-        if (!requestedCustomerName) {
-          throw new ValidationError('Customer name is required for credit sale');
-        }
-
-        const existingCustomer = await tx.customer.findFirst({
-          where: {
-            isActive: true,
-            OR: [
-              {
-                name: {
-                  equals: requestedCustomerName,
-                  mode: 'insensitive',
-                },
-              },
-              ...(requestedCustomerPhone
-                ? [{ phone: requestedCustomerPhone }]
-                : []),
-            ],
-          },
-          select: { id: true, name: true },
-        });
-
-        if (existingCustomer) {
-          resolvedCustomerId = existingCustomer.id;
-          resolvedCustomerName = existingCustomer.name;
-        } else {
-          const createdCustomer = await tx.customer.create({
-            data: {
-              name: requestedCustomerName,
-              phone: requestedCustomerPhone || null,
-              isActive: true,
-            },
-            select: { id: true, name: true },
-          });
-
-          resolvedCustomerId = createdCustomer.id;
-          resolvedCustomerName = createdCustomer.name;
-        }
-      }
+    const invoice = await db.$transaction(async (tx: any) => {
 
       const activeShift = await tx.cashShift.findFirst({
         where: {
@@ -125,29 +71,32 @@ export class SalesService {
         batchNo: string;
         quantity: number;
         unitPrice: number;
+        discountAmount: number;
         totalPrice: number;
       }> = [];
 
-      // Single batch load — eliminates N+1 queries inside transaction
       const productIds = [...new Set(input.items.map((i) => i.productId))];
+
+      // FIFO: Sort batches by received date
       const allProducts = await tx.product.findMany({
         where: { id: { in: productIds } },
         include: {
           batches: {
             where: { quantity: { gt: 0 } },
             orderBy: [
-              { receivedAt: 'asc' },
+              { receivedAt: 'asc' }, // FIFO: prioritize oldest arrival
               { createdAt: 'asc' },
               { expiryDate: 'asc' },
             ],
           },
         },
       });
-      const productMap = new Map(allProducts.map((p) => [p.id, p]));
+      const productMap = new Map<string, any>(allProducts.map((p: any) => [p.id, p]));
 
       for (const item of input.items) {
         const quantity = Number(item.quantity);
         const sellingPrice = Number(item.sellingPrice);
+        const itemDiscount = Number(item.discountAmount ?? 0);
 
         if (!item.productId) throw new ValidationError('productId is required');
         if (!quantity || quantity <= 0) throw new ValidationError('quantity must be a positive number');
@@ -157,16 +106,31 @@ export class SalesService {
         if (!product) throw new NotFoundError(`Product ${item.productId} not found`);
         if (product.totalStock < quantity) throw new ValidationError(`Insufficient stock for ${product.name}`);
 
-        const validBatches = product.batches.filter((batch) => batch.expiryDate > new Date());
-        const availableStock = validBatches.reduce((sum, batch) => sum + batch.quantity, 0);
-        if (availableStock < quantity) {
-          throw new ValidationError(`Insufficient non-expired stock for ${product.name}`);
+        if (product.prescription && !item.prescriptionPresented) {
+            throw new ValidationError(`Prescription is required for ${product.name}`);
         }
 
         let remainingToDeduct = quantity;
+        const validBatches = product.batches.filter((batch) => batch.expiryDate > new Date());
 
-        // FIFO: deduct from the oldest received batches first.
-        for (const batch of validBatches) {
+        const targetBatches = item.batchId 
+          ? validBatches.filter(b => b.id === item.batchId)
+          : validBatches;
+
+        if (item.batchId && targetBatches.length === 0) {
+          throw new ValidationError(`Selected batch for ${product.name} is either expired or not found`);
+        }
+
+        const availableStock = targetBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+        if (availableStock < quantity) {
+          throw new ValidationError(
+            item.batchId 
+              ? `Insufficient stock in selected batch for ${product.name}`
+              : `Insufficient non-expired stock for ${product.name}`
+          );
+        }
+
+        for (const batch of targetBatches) {
           if (remainingToDeduct <= 0) break;
 
           const deduct = Math.min(batch.quantity, remainingToDeduct);
@@ -179,26 +143,22 @@ export class SalesService {
           await tx.batch.update({
             where: { id: batch.id },
             data: {
-              quantity: nextQty,
-              currentQty: nextCurrent,
-              availableQty: nextAvailable,
+              quantity: { decrement: deduct },
+              currentQty: { decrement: deduct },
+              availableQty: { decrement: deduct },
+              status: computeBatchStatus(batch.expiryDate),
             },
           });
 
           if (batch.warehouseId) {
-            await tx.warehouseStock.upsert({
+            await tx.warehouseStock.update({
               where: {
                 warehouseId_productId: {
                   warehouseId: batch.warehouseId,
                   productId: product.id,
                 },
               },
-              update: { quantity: { decrement: deduct } },
-              create: {
-                warehouseId: batch.warehouseId,
-                productId: product.id,
-                quantity: 0,
-              },
+              data: { quantity: { decrement: deduct } },
             });
           }
 
@@ -207,7 +167,7 @@ export class SalesService {
               batchId: batch.id,
               type: 'DISPATCH',
               quantity: deduct,
-              description: `POS sale${resolvedCustomerName ? ` for ${resolvedCustomerName}` : ''}`,
+              description: `POS sale${item.batchId ? ' (Manual selection)' : ''}`,
               userId: input.userId,
             },
           });
@@ -219,18 +179,25 @@ export class SalesService {
             batchNo: batch.batchNumber,
             quantity: deduct,
             unitPrice: sellingPrice,
-            totalPrice: deduct * sellingPrice,
+            discountAmount: round((itemDiscount / quantity) * deduct),
+            totalPrice: round((deduct * sellingPrice) - ((itemDiscount / quantity) * deduct)),
           });
 
           remainingToDeduct -= deduct;
         }
 
-        const newTotalStock = product.totalStock - quantity;
+        const updatedProduct = await tx.product.update({
+          where: { id: product.id },
+          data: {
+            totalStock: { decrement: quantity },
+          },
+        });
+
+        // Update status after decrement
         await tx.product.update({
           where: { id: product.id },
           data: {
-            totalStock: newTotalStock,
-            status: computeProductStatus(newTotalStock, product.minStock),
+            status: computeProductStatus(updatedProduct.totalStock, product.minStock),
           },
         });
       }
@@ -238,24 +205,63 @@ export class SalesService {
       const createdInvoice = await tx.invoice.create({
         data: {
           invoiceNo: buildInvoiceNumber(),
-          customer: resolvedCustomerName,
-          customerId: resolvedCustomerId,
           totalAmount: Number(input.total),
           taxAmount: Number(input.taxAmount ?? 0),
           discount: Number(input.discountAmount ?? 0),
           paymentType: input.paymentType,
-          status: paidAmount >= Number(input.total) ? 'PAID' : 'PENDING',
-          paymentStatus: paidAmount >= Number(input.total) ? 'PAID' : paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+          customer: input.customerName,
+          status: input.paymentType === 'CREDIT' ? 'PENDING' : 'PAID',
+          paymentStatus: input.paymentType === 'CREDIT' ? 'UNPAID' : 'PAID',
           userId: input.userId,
           cashShiftId: activeShift.id,
           items: {
-            create: invoiceItems,
+            create: invoiceItems as any,
           },
         },
         include: {
           items: true,
+          receivable: true,
         },
-      });
+      }) as any;
+
+      if (input.paymentType === 'CREDIT') {
+        const initialPaid = round(input.paidAmount || 0);
+        const totalAmount = round(input.total);
+        const remaining = round(Math.max(0, totalAmount - initialPaid));
+        
+        await (tx as any).receivable.create({
+          data: {
+            invoiceId: createdInvoice.id,
+            customerName: input.customerName,
+            originalAmount: totalAmount,
+            paidAmount: initialPaid,
+            remainingAmount: remaining,
+            status: initialPaid > 0 ? 'PARTIAL' : 'OPEN',
+          },
+        });
+
+        if (initialPaid > 0) {
+          await tx.payment.create({
+            data: {
+              direction: 'IN',
+              counterpartyType: 'OTHER',
+              method: 'CASH', // Defaulting to cash for down payment
+              amount: initialPaid,
+              paymentDate: new Date(),
+              status: 'PAID',
+              invoiceId: createdInvoice.id,
+              createdById: input.userId,
+              comment: `Down payment for credit invoice ${createdInvoice.invoiceNo}`,
+            },
+          });
+
+          // Update invoice status to partially paid
+          await tx.invoice.update({
+             where: { id: createdInvoice.id },
+             data: { paymentStatus: 'PARTIALLY_PAID' }
+          });
+        }
+      }
 
       await auditService.log({
         userId: input.userId,
@@ -268,39 +274,18 @@ export class SalesService {
           totalAmount: createdInvoice.totalAmount,
           items: invoiceItems.length,
           paymentType: createdInvoice.paymentType,
-          customer: resolvedCustomerName || undefined,
         },
       }, tx);
 
-      if (resolvedCustomerId && hasOutstandingBalance) {
-        const receivableDueDate = await resolveCustomerDueDate(tx, resolvedCustomerId, createdInvoice.createdAt);
-        await tx.receivable.create({
-          data: {
-            customerId: resolvedCustomerId,
-            invoiceId: createdInvoice.id,
-            originalAmount: Number(input.total),
-            paidAmount,
-            remainingAmount: Number(input.total) - paidAmount,
-            dueDate: receivableDueDate,
-            status: paidAmount > 0 ? 'PARTIAL' : 'OPEN',
-          },
-        });
-      }
-
-      if (paidAmount > 0) {
+      if (paidAmount > 0 && input.paymentType !== 'CREDIT') {
         await tx.payment.create({
           data: {
             direction: 'IN',
-            counterpartyType: resolvedCustomerId ? 'CUSTOMER' : 'OTHER',
-            customerId: resolvedCustomerId,
+            counterpartyType: 'OTHER',
             method:
               input.paymentType === 'CARD'
                 ? 'CARD'
-                : input.paymentType === 'STORE_BALANCE'
-                  ? 'CREDIT_OFFSET'
-                  : input.paymentType === 'CREDIT'
-                    ? 'BANK_TRANSFER'
-                    : 'CASH',
+                : 'CASH',
             amount: Math.min(paidAmount, Number(input.total)),
             paymentDate: new Date(),
             status: 'PAID',
@@ -326,6 +311,167 @@ export class SalesService {
     reportCache.invalidatePattern(/^report:finance:/);
 
     return invoice;
+  }
+
+  async voidSale(invoiceId: string, userId: string) {
+    const invoice = await db.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        items: true,
+        payments: true,
+        receivable: true,
+      },
+    }) as any;
+
+    if (!invoice) throw new NotFoundError('Invoice not found');
+    if (invoice.status === 'CANCELLED') throw new ValidationError('Invoice is already cancelled');
+    if (invoice.status === 'RETURNED' || invoice.status === 'PARTIALLY_RETURNED') {
+      throw new ValidationError('Returned invoices cannot be voided, use return workflow');
+    }
+
+    return await db.$transaction(async (tx: any) => {
+      // 1. Restore stock
+      for (const item of invoice.items) {
+        await tx.batch.update({
+          where: { id: item.batchId },
+          data: {
+            quantity: { increment: item.quantity },
+            availableQty: { increment: item.quantity },
+            currentQty: { increment: item.quantity },
+          },
+        });
+
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { totalStock: { increment: item.quantity } },
+        });
+
+        await tx.batchMovement.create({
+          data: {
+            batchId: item.batchId,
+            type: 'RESTOCK',
+            quantity: item.quantity,
+            description: `Void sale: ${invoice.invoiceNo}`,
+            userId,
+          },
+        });
+      }
+
+      // 2. Cancel financial entries
+
+      if (invoice.payments.length > 0) {
+        await tx.payment.updateMany({
+          where: { invoiceId },
+          data: { status: 'CANCELLED' },
+        });
+      }
+
+      // 3. Update invoice status
+      const updatedInvoice = await tx.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          status: 'CANCELLED',
+          paymentStatus: 'CANCELLED',
+          comment: `Voided by ${userId} at ${new Date().toISOString()}`,
+        },
+      });
+
+      await auditService.log({
+        userId,
+        module: 'sales',
+        action: 'VOID_SALE',
+        entity: 'INVOICE',
+        entityId: invoiceId,
+        newValue: { invoiceNo: invoice.invoiceNo, status: 'CANCELLED' },
+      }, tx);
+
+      return updatedInvoice;
+    });
+  }
+
+  async payDebt(invoiceId: string, input: { amount: number, paymentMethod: 'CASH' | 'CARD', userId: string }) {
+    const invoice = await db.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { receivable: true }
+    });
+
+    if (!invoice) throw new NotFoundError('Invoice not found');
+    if (invoice.paymentType !== 'CREDIT') throw new ValidationError('This is not a debt invoice');
+    if (invoice.status === 'PAID') throw new ValidationError('This debt is already paid');
+
+    const result = await db.$transaction(async (tx: any) => {
+      const amount = Number(input.amount);
+      
+      // Resiliency: if receivable record is missing for some reason, create it now
+      let receivableRecord = (invoice as any).receivable;
+      if (!receivableRecord) {
+        receivableRecord = await (tx as any).receivable.create({
+          data: {
+            invoiceId: (invoice as any).id,
+            customerName: (invoice as any).customer || 'Аноним',
+            originalAmount: Number((invoice as any).totalAmount),
+            remainingAmount: Number((invoice as any).totalAmount),
+            status: 'OPEN'
+          }
+        });
+      }
+
+      // Update Receivable
+      const currentPaid = Number(receivableRecord.paidAmount || 0);
+      const newPaid = currentPaid + amount;
+      const totalAmount = Number((invoice as any).totalAmount);
+      const isFullyPaid = newPaid >= totalAmount;
+
+      const updatedReceivable = await (tx as any).receivable.update({
+        where: { id: receivableRecord.id },
+        data: {
+          paidAmount: newPaid,
+          remainingAmount: Math.max(0, totalAmount - newPaid),
+          status: isFullyPaid ? 'PAID' : 'PARTIAL'
+        }
+      });
+
+      // Record Payment
+      await tx.payment.create({
+        data: {
+          direction: 'IN',
+          counterpartyType: 'OTHER',
+          method: input.paymentMethod,
+          amount: amount,
+          paymentDate: new Date(),
+          status: 'PAID',
+          invoiceId: invoice.id,
+          createdById: input.userId,
+          comment: `Debt payment for invoice ${invoice.invoiceNo}`,
+        }
+      });
+
+      // Update Invoice Status if fully paid
+      if (isFullyPaid) {
+        await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            status: 'PAID',
+            paymentStatus: 'PAID'
+          }
+        });
+      } else {
+         await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            paymentStatus: 'PARTIALLY_PAID'
+          }
+        });
+      }
+
+      return updatedReceivable;
+    });
+
+    reportCache.invalidatePattern(/^metrics:dashboard:/);
+    reportCache.invalidatePattern(/^report:finance:/);
+    reportCache.invalidatePattern(/^report:debts:/);
+
+    return result;
   }
 }
 

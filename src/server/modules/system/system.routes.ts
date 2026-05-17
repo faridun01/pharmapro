@@ -1,15 +1,17 @@
 import { Router } from 'express';
+import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { authenticate, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { ValidationError } from '../../common/errors';
-import { prisma } from '../../infrastructure/prisma';
+import { db } from '../../infrastructure/prisma';
 import {
   getDefaultUserPreferences,
   normalizeUserPreferences,
   readSystemSettings,
   writeSystemSettings,
 } from './systemSettings.storage';
+import { buildStockIntegrityReport, applyStockIntegrityFix } from '../../services/stockIntegrity.service';
 
 export const systemRouter = Router();
 
@@ -18,13 +20,30 @@ const canManageSystem = (role: string | undefined) => {
   return normalized === 'ADMIN' || normalized === 'OWNER';
 };
 
-const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+
+
+systemRouter.get('/ping', (_req, res) => {
+  res.json({ ok: true, message: 'System service is healthy', timestamp: new Date().toISOString() });
+});
+systemRouter.get('/disk-space', authenticate, asyncHandler(async (_req, res) => {
+  try {
+    const stats = await fs.promises.statfs(process.cwd());
+    const totalBytes = stats.bsize * stats.blocks;
+    const freeBytes = stats.bsize * stats.bavail;
+    const freeGb = (freeBytes / (1024 * 1024 * 1024)).toFixed(1);
+    const percentage = Math.round((freeBytes / totalBytes) * 100);
+    
+    res.json({ ok: true, freeGb, percentage });
+  } catch (err) {
+    res.json({ ok: true, freeGb: '0.0', percentage: 0 });
+  }
+}));
 
 systemRouter.get('/me/profile', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
-  const user = await prisma.user.findUnique({
+  const user = await db.user.findUnique({
     where: { id: authedReq.user.id },
-    select: { id: true, name: true, email: true, role: true, username: true },
+    select: { id: true, name: true, role: true, username: true },
   });
   if (!user) {
     throw new ValidationError('User not found');
@@ -36,34 +55,21 @@ systemRouter.get('/me/profile', authenticate, asyncHandler(async (req, res) => {
 systemRouter.put('/me/profile', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const nextName = String(req.body?.name || '').trim();
-  const nextEmail = normalizeEmail(req.body?.email);
+
 
   if (!nextName) {
     throw new ValidationError('Name is required');
   }
-  if (!nextEmail || !nextEmail.includes('@')) {
-    throw new ValidationError('Valid email is required');
-  }
 
-  const duplicate = await prisma.user.findFirst({
-    where: {
-      email: nextEmail,
-      NOT: { id: authedReq.user.id },
-    },
-    select: { id: true },
-  });
-  if (duplicate) {
-    throw new ValidationError('Email is already used by another account');
-  }
 
-  const updated = await prisma.user.update({
+
+  const updated = await db.user.update({
     where: { id: authedReq.user.id },
     data: {
       name: nextName,
-      email: nextEmail,
-      username: String(req.body?.username || '').trim() || null,
+      username: String(req.body?.username || '').trim() || undefined,
     },
-    select: { id: true, name: true, email: true, role: true, username: true },
+    select: { id: true, name: true, role: true, username: true },
   });
 
   res.json(updated);
@@ -87,7 +93,7 @@ systemRouter.put('/me/password', authenticate, asyncHandler(async (req, res) => 
     throw new ValidationError('Password confirmation does not match');
   }
 
-  const user = await prisma.user.findUnique({ where: { id: authedReq.user.id } });
+  const user = await db.user.findUnique({ where: { id: authedReq.user.id } });
   if (!user) {
     throw new ValidationError('User not found');
   }
@@ -102,7 +108,7 @@ systemRouter.put('/me/password', authenticate, asyncHandler(async (req, res) => 
     throw new ValidationError('New password must differ from current password');
   }
 
-  await prisma.user.update({
+  await db.user.update({
     where: { id: authedReq.user.id },
     data: {
       password: await bcrypt.hash(nextPassword, 12),
@@ -139,30 +145,27 @@ systemRouter.get('/backup/export', authenticate, asyncHandler(async (req, res) =
     products,
     invoices,
     suppliers,
-    internalCustomers,
     returns,
     writeOffs,
     shifts,
     warehouses,
   ] = await Promise.all([
-    prisma.product.findMany({ include: { batches: true } }),
-    prisma.invoice.findMany({ include: { items: true } }),
-    prisma.supplier.findMany(),
-    prisma.customer.findMany(),
-    prisma.return.findMany({ include: { items: true } }),
-    prisma.writeOff.findMany({ include: { items: true } }),
-    prisma.cashShift.findMany({ include: { cashMovements: true, invoices: true } }),
-    prisma.warehouse.findMany({ include: { stocks: true } }),
+    db.product.findMany({ include: { batches: true } }),
+    db.invoice.findMany({ include: { items: true } }),
+    db.supplier.findMany(),
+    db.return.findMany({ include: { items: true } }),
+    db.writeOff.findMany({ include: { items: true } }),
+    db.cashShift.findMany({ include: { cashMovements: true, invoices: true } }),
+    db.warehouse.findMany({ include: { stocks: true } }),
   ]);
 
   const payload = {
     exportedAt: new Date().toISOString(),
-    exportedBy: authedReq.user.email,
+    exportedBy: authedReq.user.username,
     data: {
       products,
       invoices,
       suppliers,
-      customers: internalCustomers,
       returns,
       writeOffs,
       shifts,
@@ -173,4 +176,44 @@ systemRouter.get('/backup/export', authenticate, asyncHandler(async (req, res) =
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="pharmapro-backup-${new Date().toISOString().slice(0, 10)}.json"`);
   res.send(JSON.stringify(payload, null, 2));
+}));
+
+systemRouter.get('/stock-integrity', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  if (!canManageSystem(authedReq.user.role)) {
+    throw new ValidationError('Only ADMIN or OWNER can run stock integrity checks');
+  }
+
+  try {
+    const report = await buildStockIntegrityReport();
+    res.json({ 
+      ok: report.issuesCount === 0, 
+      healthy: report.issuesCount === 0, 
+      ...report 
+    });
+  } catch (err: any) {
+    console.error('[STOCK_INTEGRITY_SERVICE_ERROR]:', err);
+    throw err;
+  }
+}));
+
+systemRouter.post('/stock-integrity/fix', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  if (!canManageSystem(authedReq.user.role)) {
+    throw new ValidationError('Only ADMIN or OWNER can fix stock integrity');
+  }
+
+  try {
+    await applyStockIntegrityFix();
+    const report = await buildStockIntegrityReport();
+    res.json({ 
+      ok: report.issuesCount === 0, 
+      healthy: report.issuesCount === 0, 
+      repaired: true, 
+      ...report 
+    });
+  } catch (err: any) {
+    console.error('[STOCK_INTEGRITY_FIX_ERROR]:', err);
+    throw err;
+  }
 }));

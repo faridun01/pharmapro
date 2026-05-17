@@ -14,7 +14,7 @@ type NotificationItem = {
 type NotificationsViewProps = {
   notifications: NotificationItem[];
   onOpenAllActivity?: () => void;
-  onNotificationClick?: (notification: NotificationItem) => void;
+  onNotificationClick?: (id: string, linkTo: string) => void;
 };
 
 export const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, onOpenAllActivity, onNotificationClick }) => {
@@ -108,11 +108,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ notificati
             <button
               key={option.value}
               onClick={() => setFilter(option.value as typeof filter)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
-                filter === option.value
-                  ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
-                  : 'bg-[#f5f5f0] text-[#5A5A40] border-[#5A5A40]/10 hover:bg-[#ecebe5]'
-              }`}
+              className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${filter === option.value
+                ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
+                : 'bg-[#f5f5f0] text-[#5A5A40] border-[#5A5A40]/10 hover:bg-[#ecebe5]'
+                }`}
             >
               {option.label}
             </button>
@@ -128,29 +127,33 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ notificati
         {filteredNotifications.map((n) => (
           <div
             key={n.id}
-            className={`p-4 rounded-2xl border transition-all flex gap-4 ${
-              n.read
-                ? 'bg-white border-[#5A5A40]/5 opacity-70'
-                : 'bg-[#f5f5f0]/50 border-[#5A5A40]/10 shadow-sm hover:bg-[#ecebe5]'
-            }`}
+            className={`p-4 rounded-2xl border transition-all flex gap-4 ${n.read
+              ? 'bg-white border-[#5A5A40]/5 opacity-60'
+              : 'bg-[#f5f5f0]/50 border-[#5A5A40]/10 shadow-sm hover:bg-[#ecebe5]'
+              }`}
           >
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${renderTone(n.type)}`}>
               {renderIcon(n.type)}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-start mb-1">
-                <h4 className="text-sm font-bold text-[#5A5A40] truncate">{n.title}</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-[#5A5A40] truncate">{n.title}</h4>
+                  {!n.read && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+                </div>
                 <span className="text-[10px] text-[#5A5A40]/30 font-medium whitespace-nowrap">{n.time}</span>
               </div>
               <p className="text-xs text-[#5A5A40]/60 line-clamp-2 leading-relaxed">{n.description}</p>
               <div className="mt-3 flex items-center justify-between gap-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]/40">Действие: {getActionLabel(n.type)}</span>
                 <button
                   type="button"
-                  onClick={() => onNotificationClick?.(n)}
-                  className="px-3 py-1.5 rounded-xl bg-[#5A5A40] text-white text-xs font-semibold hover:bg-[#4A4A30] transition-all"
+                  onClick={() => onNotificationClick?.(n.id, (n as any).linkTo)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${n.read
+                    ? 'bg-[#5A5A40]/5 text-[#5A5A40]/40 hover:bg-[#5A5A40]/10'
+                    : 'bg-[#5A5A40] text-white hover:bg-[#4A4A30]'
+                    }`}
                 >
-                  {getActionLabel(n.type)}
+                  {n.read ? 'Просмотрено' : `Перейти в ${(n as any).linkTo === 'inventory' ? 'Склад' : (n as any).linkTo === 'batches' ? 'Партии' : (n as any).linkTo === 'shifts' ? 'Смены' : 'раздел'}`}
                 </button>
               </div>
             </div>

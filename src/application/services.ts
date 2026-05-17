@@ -27,9 +27,7 @@ export interface TransactionDTO {
   taxAmount: number;
   total: number;
   paymentType: 'CASH' | 'CARD' | 'CREDIT';
-  customer?: string;
-  customerPhone?: string;
-  customerId?: string;
+  customerName?: string;
   paidAmount?: number;
   userId: string;
   date: Date;
@@ -64,7 +62,7 @@ export class InventoryService {
 
     product.batches.push(newBatch);
     product.totalStock += batchData.quantity;
-    product.status = product.totalStock > product.minStock ? 'Active' : 'Low Stock';
+    product.status = product.totalStock > product.minStock ? 'ACTIVE' : 'LOW_STOCK';
 
     await this.productRepository.update(product);
     this.logger.info(`Restocked product ${product.name}`, { productId, quantity: batchData.quantity });
@@ -91,7 +89,7 @@ export class InventoryService {
       userId
     });
 
-    product.status = product.totalStock <= 0 ? 'Out of Stock' : product.totalStock < product.minStock ? 'Low Stock' : 'Active';
+    product.status = product.totalStock <= 0 ? 'OUT_OF_STOCK' : product.totalStock < product.minStock ? 'LOW_STOCK' : 'ACTIVE';
     
     await this.productRepository.update(product);
     this.logger.warn(`Write-off processed for ${product.name}`, { productId, batchId, quantity, reason });
@@ -136,10 +134,10 @@ export class POSService {
       let remainingToDeduct = item.quantity;
       product.totalStock -= item.quantity;
 
-      // FEFO: Sort batches by expiry date (earliest first, but NOT expired)
+      // FIFO: Sort batches by received date (first in, first out)
       const validBatches = product.batches.filter(b => b.expiryDate > new Date() && b.quantity > 0);
       const sortedBatches = [...validBatches].sort((a, b) => 
-        a.expiryDate.getTime() - b.expiryDate.getTime()
+        new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
       );
 
       if (sortedBatches.reduce((acc, b) => acc + b.quantity, 0) < item.quantity) {
@@ -157,7 +155,7 @@ export class POSService {
             type: 'DISPATCH',
             quantity: deduct,
             date: new Date(),
-            description: `POS Sale - Invoice ${transaction.customer || 'Walk-in'}`,
+            description: `POS Sale`,
             userId: transaction.userId
           });
           
@@ -176,19 +174,20 @@ export class POSService {
         }
       }
 
-      product.status = product.totalStock <= 0 ? 'Out of Stock' : product.totalStock < product.minStock ? 'Low Stock' : 'Active';
+      product.status = product.totalStock <= 0 ? 'OUT_OF_STOCK' : product.totalStock < product.minStock ? 'LOW_STOCK' : 'ACTIVE';
       await this.productRepository.update(product);
     }
 
     const invoice: Invoice = {
       id: `inv-${Date.now()}`,
       invoiceNo: `INV-${Date.now().toString().slice(-6)}`,
-      customer: transaction.customer,
       totalAmount: transaction.total,
       taxAmount: transaction.taxAmount,
       discount: transaction.discountAmount,
       paymentType: transaction.paymentType,
-      status: 'PAID',
+      status: transaction.paymentType === 'CREDIT' ? 'PENDING' : 'PAID',
+      paymentStatus: transaction.paymentType === 'CREDIT' ? 'UNPAID' : 'PAID',
+      customer: transaction.customerName,
       userId: transaction.userId,
       items: invoiceItems,
       createdAt: new Date()

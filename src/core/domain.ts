@@ -5,7 +5,7 @@
 
 export type BatchStatus = 'CRITICAL' | 'STABLE' | 'NEAR_EXPIRY' | 'EXPIRED';
 export type MovementType = 'RESTOCK' | 'DISPATCH' | 'ADJUSTMENT' | 'RETURN' | 'WRITE_OFF';
-export type UserRole = 'ADMIN' | 'CASHIER' | 'WAREHOUSE' | 'OWNER';
+export type UserRole = 'OWNER' | 'ADMIN' | 'CASHIER' | 'PHARMACIST' | 'WAREHOUSE_STAFF';
 
 export interface BatchMovement {
   id: string;
@@ -27,7 +27,9 @@ export interface Batch {
   supplierName?: string;
   manufacturedDate: Date;
   expiryDate: Date;
+  receivedAt: Date;
   status: BatchStatus;
+  countryOfOrigin?: string;
   movements: BatchMovement[];
 }
 
@@ -43,7 +45,7 @@ export interface Product {
   minStock: number;
   costPrice: number;
   sellingPrice: number;
-  status: 'Active' | 'Low Stock' | 'Out of Stock';
+  status: 'ACTIVE' | 'LOW_STOCK' | 'OUT_OF_STOCK';
   image: string;
   prescription: boolean;
   markingRequired: boolean;
@@ -53,7 +55,7 @@ export interface Product {
 
 export interface User {
   id: string;
-  email: string;
+  username: string;
   name: string;
   role: UserRole;
 }
@@ -62,62 +64,9 @@ export interface Supplier {
   id: string;
   name: string;
   contact?: string;
-  email?: string;
   address?: string;
 }
 
-export interface Customer {
-  id: string;
-  code?: string;
-  name: string;
-  legalName?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  managerName?: string;
-  creditLimit: number;
-  defaultDiscount: number;
-  paymentTermDays?: number;
-  isActive: boolean;
-  summary?: {
-    totalPurchased: number;
-    totalPaid: number;
-    totalDebt: number;
-    overdueDebt?: number;
-    invoiceCount: number;
-    lastInvoiceAt?: string | null;
-    lastPaymentAt?: string | null;
-    nextDueDate?: string | null;
-  };
-  history?: {
-    recentInvoices: Array<{
-      id: string;
-      invoiceNo: string;
-      createdAt: string;
-      totalAmount: number;
-      paymentStatus?: string | null;
-      status: string;
-      outstandingAmount: number;
-      itemCount: number;
-    }>;
-    recentPayments: Array<{
-      id: string;
-      amount: number;
-      paymentDate: string;
-      method: string;
-      invoiceNo?: string | null;
-      comment?: string | null;
-    }>;
-    openReceivables: Array<{
-      id: string;
-      invoiceNo?: string | null;
-      remainingAmount: number;
-      dueDate?: string | null;
-      status: string;
-      createdAt: string;
-    }>;
-  };
-}
 
 export interface InvoiceItem {
   id: string;
@@ -133,34 +82,43 @@ export interface InvoiceItem {
 export interface Invoice {
   id: string;
   invoiceNo: string;
-  customer?: string;
-  customerId?: string;
   totalAmount: number;
   taxAmount: number;
   discount: number;
   paymentType: 'CASH' | 'CARD' | 'CREDIT';
   status: 'PAID' | 'PENDING' | 'CANCELLED' | 'RETURNED' | 'PARTIALLY_RETURNED';
-  paymentStatus?: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'OVERDUE' | 'CANCELLED';
+  paymentStatus?: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'CANCELLED';
+  customer?: string;
+  customerId?: string | null;
   comment?: string;
   userId: string;
+  paidAmountTotal?: number;
+  outstandingAmount?: number;
+  returnedAmountTotal?: number;
+  receivable?: { remainingAmount?: number | null; dueDate?: string | Date | null } | null;
+  receivables?: Array<{ remainingAmount?: number | null; dueDate?: string | Date | null }>;
   items: InvoiceItem[];
-  receivables?: Array<{
-    id: string;
-    originalAmount: number;
-    paidAmount: number;
-    remainingAmount: number;
-    status: 'OPEN' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'WRITTEN_OFF';
-    dueDate?: string | Date | null;
-  }>;
   createdAt: Date;
 }
 
-/**
- * Repository Interfaces - Abstractions for data access.
- * Follows Dependency Inversion Principle.
- */
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
 export interface IProductRepository {
-  getAll(): Promise<Product[]>;
+  getAll(params?: PaginationParams): Promise<Product[] | PaginatedResponse<Product>>;
   getById(id: string): Promise<Product | null>;
   getBySku(sku: string): Promise<Product | null>;
   save(product: Product): Promise<Product>;
@@ -169,10 +127,14 @@ export interface IProductRepository {
 }
 
 export interface IInvoiceRepository {
-  getAll(): Promise<Invoice[]>;
+  getAll(params?: PaginationParams): Promise<Invoice[] | PaginatedResponse<Invoice>>;
   getById(id: string): Promise<Invoice | null>;
   save(invoice: Invoice): Promise<void>;
+  update(id: string, payload: Partial<Invoice>): Promise<Invoice>;
   updateStatus(id: string, status: string): Promise<void>;
+  addPayment(id: string, payload: { amount: number; method: string; comment?: string }): Promise<Invoice>;
+  processReturn(id: string, items: Array<{ id: string; quantity: number }>): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 export interface ISupplierRepository {

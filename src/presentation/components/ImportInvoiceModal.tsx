@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Upload, Trash2, FileText, Truck, Calendar, CheckCircle2, AlertCircle, Search, Pill, Sparkles } from 'lucide-react';
+import { X, Upload, Trash2, FileText, Truck, Calendar, CheckCircle2, AlertCircle, Search, Pill, Sparkles, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { usePharmacy } from '../context';
 import { useDebounce } from '../../lib/useDebounce';
@@ -8,102 +8,32 @@ import { useDebounce } from '../../lib/useDebounce';
 interface ImportInvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
+  editInvoice?: any | null;
 }
 
-interface InvoiceImportItem {
-  lineId: string;
-  productId: string | null;
-  name: string;
-  sku?: string;
-  barcode?: string;
-  quantity: number;
-  unitsInPack: number;
-  costPrice: number;
-  batchNumber: string;
-  expiryDate: string;
-  confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
-  warnings?: string;
-  needsReview?: boolean;
-}
+import { 
+  InvoiceImportItem, 
+  OcrAnalyzeResponse, 
+  ImportFileKind, 
+  randomBatch, 
+  buildItemIdentity, 
+  isImportablePreviewItem, 
+  formatVisibleError, 
+  detectImportFileKind, 
+  findSupplierByName, 
+  requestStructuredPreview, 
+  requestImageOcr 
+} from '../../lib/ocr-service';
 
-interface OcrAnalyzeResponse {
-  engine: string;
-  invoiceNumber: string;
-  supplierName: string;
-  invoiceDate: string;
-  rawText?: string;
-  review?: { total: number; high: number; medium: number; low: number; needsReview: number };
-  items: Array<{
-    lineId?: string;
-    productId?: string | null;
-    name: string;
-    sku?: string;
-    barcode?: string;
-    quantity: number;
-    costPrice: number;
-    batchNumber?: string;
-    expiryDate?: string;
-    confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
-    warnings?: string;
-    needsReview?: boolean;
-  }>;
-  warning?: string;
-}
-
-type ImportFileKind = 'image' | 'pdf' | 'excel' | 'unsupported';
-
-const randomBatch = () => `B-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-
-const buildItemIdentity = (item: Pick<InvoiceImportItem, 'name' | 'expiryDate' | 'costPrice'>) => {
-  return [
-    item.name.trim().toLowerCase(),
-    item.expiryDate || '',
-    Number(item.costPrice || 0).toFixed(2),
-  ].join('::');
-};
-
-const isPlaceholderItemName = (value: string) => {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (!normalized) return true;
-
-  return [
-    'тестовый препарат',
-    'test product',
-    'sample product',
-    'demo product',
-    'placeholder product',
-  ].some((token) => normalized.includes(token));
-};
-
-const isImportablePreviewItem = (item: Partial<InvoiceImportItem>) => {
-  return !isPlaceholderItemName(String(item.name || ''))
-    && Number(item.quantity || 0) > 0
-    && Number(item.costPrice || 0) > 0;
-};
-
-const formatVisibleError = (message: string | null) => {
-  if (!message) return null;
-
-  const parserValidationMarkers = [
-    'Missing product name',
-    'Quantity could not be parsed',
-    'Cost price could not be parsed',
-    'Quantity must be >= 1',
-    'Cost price must be numeric and > 0',
-  ];
-
-  if (parserValidationMarkers.some((marker) => message.includes(marker))) {
-    return 'Не удалось корректно распознать позиции накладной. Проверьте файл или загрузите более четкое изображение.';
-  }
-
-  return message;
-};
-
-export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, onClose }) => {
+export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, onClose, editInvoice }) => {
   const { t } = useTranslation();
-  const { suppliers, products, importPurchaseInvoice, refreshProducts, refreshSuppliers, createProduct } = usePharmacy();
+  const { suppliers, products, importPurchaseInvoice, updatePurchaseInvoice, refreshProducts, refreshSuppliers, createProduct } = usePharmacy();
+  const supplierMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [supplierId, setSupplierId] = useState('');
+  const [detectedSupplierName, setDetectedSupplierName] = useState('');
+  const [supplierQuery, setSupplierQuery] = useState('');
+  const [supplierMenuOpen, setSupplierMenuOpen] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [items, setItems] = useState<InvoiceImportItem[]>([]);
@@ -122,6 +52,40 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
   const [excelPreviewItems, setExcelPreviewItems] = useState<InvoiceImportItem[] | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
 
+  const generateInvoiceNumber = (invoiceDate = new Date()) => {
+    const year = invoiceDate.getFullYear();
+    const month = String(invoiceDate.getMonth() + 1).padStart(2, '0');
+    const day = String(invoiceDate.getDate()).padStart(2, '0');
+    const stamp = Date.now().toString().slice(-6);
+    return `PR-${year}${month}${day}-${stamp}`;
+  };
+
+  const resetForm = () => {
+    const today = new Date();
+    setItems([]);
+    setSupplierId('');
+    setDetectedSupplierName('');
+    setSupplierQuery('');
+    setSupplierMenuOpen(false);
+    setInvoiceNumber(generateInvoiceNumber(today));
+    setDate(today.toISOString().split('T')[0]);
+    setSearchTerm('');
+    setProcessing(false);
+    setAnalyzing(false);
+    setSuccess(false);
+    setError(null);
+    setSelectedImportFile(null);
+    setUsedEngine(null);
+    setOcrDraftId(null);
+    setReviewSummary(null);
+    setRawOcrText(null);
+    setShowRawText(false);
+    setPendingOcrItems(null);
+    setExcelPreviewItems(null);
+    setDiscountAmount(0);
+    setImportStatus('DRAFT');
+  };
+
   useEffect(() => {
     if (!isOpen || suppliers.length > 0) {
       return;
@@ -129,6 +93,40 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
 
     void refreshSuppliers();
   }, [isOpen, refreshSuppliers, suppliers.length]);
+
+  const [importStatus, setImportStatus] = useState<'DRAFT' | 'POSTED'>('DRAFT');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (editInvoice) {
+        setSupplierId(editInvoice.supplierId);
+        setSupplierQuery(editInvoice.supplier?.name || '');
+        setInvoiceNumber(editInvoice.invoiceNumber);
+        setDate(new Date(editInvoice.invoiceDate).toISOString().split('T')[0]);
+        setDiscountAmount(editInvoice.discountAmount || 0);
+        setImportStatus(editInvoice.status);
+        setItems((editInvoice.items || []).map((item: any) => ({
+          lineId: item.id,
+          productId: item.productId,
+          name: item.product?.name || item.productName || '',
+          countryOfOrigin: item.countryOfOrigin || item.product?.countryOfOrigin || '',
+          sku: item.product?.sku || '',
+          barcode: item.product?.barcode || '',
+          quantity: item.quantity,
+          unitsInPack: 1,
+          costPrice: item.purchasePrice || item.costBasis || 0,
+          wholesalePrice: item.wholesalePrice || null,
+          batchNumber: item.batchNumber || '',
+          expiryDate: new Date(item.expiryDate).toISOString().split('T')[0],
+        })));
+        setOcrDraftId(null);
+        setSuccess(false);
+        setError(null);
+      } else {
+        resetForm();
+      }
+    }
+  }, [isOpen, editInvoice]);
 
   useEffect(() => {
     if (!isOpen || products.length > 0) {
@@ -138,12 +136,66 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
     void refreshProducts();
   }, [isOpen, products.length, refreshProducts]);
 
-  // Debounce search to 300ms to avoid filtering on every keystroke
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || p.sku.toLowerCase().includes(debouncedSearchTerm.toLowerCase()),
   );
+
+  const filteredSuppliers = suppliers.filter((supplier) =>
+    !supplierQuery.trim()
+      || supplier.name.toLowerCase().includes(supplierQuery.trim().toLowerCase()),
+  );
+
+  const selectedSupplier = suppliers.find((supplier) => supplier.id === supplierId) || null;
+
+  useEffect(() => {
+    if (!detectedSupplierName || supplierId || suppliers.length === 0) {
+      return;
+    }
+
+    const foundSupplier = findSupplierByName(detectedSupplierName, suppliers);
+    if (foundSupplier) {
+      setSupplierId(foundSupplier.id);
+      setSupplierQuery(foundSupplier.name);
+    }
+  }, [detectedSupplierName, supplierId, suppliers]);
+
+  useEffect(() => {
+    if (!supplierMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!supplierMenuRef.current?.contains(event.target as Node)) {
+        setSupplierMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [supplierMenuOpen]);
+
+  const normalizeCountry = (value?: string | null) => String(value || '').trim().toLocaleLowerCase('ru-RU');
+
+  const findProductMatch = (item: InvoiceImportItem) => {
+    const normalizedSku = item.sku?.trim().toLowerCase();
+    const normalizedName = item.name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
+    const normalizedCountry = normalizeCountry(item.countryOfOrigin);
+
+    if (normalizedSku) {
+      const bySku = products.find((product) => product.sku.trim().toLowerCase() === normalizedSku);
+      if (bySku) return bySku;
+    }
+
+    return products.find((product) => {
+      const sameName = product.name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU') === normalizedName;
+      if (!sameName) return false;
+
+      const productCountry = normalizeCountry(product.countryOfOrigin);
+      return normalizedCountry ? productCountry === normalizedCountry : !productCountry;
+    }) || null;
+  };
 
   const addItem = (product: any) => {
     const existing = items.find((i) => i.productId === product.id);
@@ -154,6 +206,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
         lineId: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         productId: product.id,
         name: product.name,
+        countryOfOrigin: product.countryOfOrigin || '',
         sku: product.sku,
         barcode: product.barcode,
         quantity: 1,
@@ -173,6 +226,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
         lineId: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         productId: null,
         name: '',
+        countryOfOrigin: '',
         sku: '',
         barcode: '',
         quantity: 1,
@@ -189,65 +243,60 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
   };
 
   const updateItem = (lineId: string, field: keyof InvoiceImportItem, value: any) => {
-    setItems(items.map((i) => (i.lineId === lineId ? { ...i, [field]: value } : i)));
+    setItems(items.map((item) => {
+      if (item.lineId !== lineId) return item;
+      const nextItem = { ...item, [field]: value };
+
+      if (field === 'name' || field === 'countryOfOrigin' || field === 'sku') {
+        const matchedProduct = findProductMatch(nextItem);
+        nextItem.productId = matchedProduct?.id || null;
+      }
+
+      return nextItem;
+    }));
+  };
+
+  const updatePreviewItem = (
+    kind: 'excel' | 'ocr',
+    lineId: string,
+    field: keyof InvoiceImportItem,
+    value: any,
+  ) => {
+    const setter = kind === 'excel' ? setExcelPreviewItems : setPendingOcrItems;
+    setter((prev) => (prev || []).map((item) => {
+      if (item.lineId !== lineId) return item;
+      const nextItem = { ...item, [field]: value };
+      if (field === 'name' || field === 'countryOfOrigin' || field === 'sku') {
+        const matchedProduct = findProductMatch(nextItem);
+        nextItem.productId = matchedProduct?.id || null;
+      }
+      return nextItem;
+    }));
   };
 
   const grossTotal = items.reduce((acc, i) => acc + i.quantity * i.unitsInPack * i.costPrice, 0);
   const netTotal = Math.max(0, grossTotal - discountAmount);
   const visibleError = formatVisibleError(error);
 
-  const toBase64 = async (file: File): Promise<string> => {
-    // Prefer arrayBuffer because FileReader can sporadically fail in packaged Electron.
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      if (!bytes.length) throw new Error('empty-file');
-      let binary = '';
-      const chunkSize = 0x8000;
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        const chunk = bytes.subarray(i, i + chunkSize);
-        binary += String.fromCharCode(...chunk);
-      }
-      return btoa(binary);
-    } catch {
-      return await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = String(reader.result || '');
-          const base64 = dataUrl.split(',')[1];
-          if (!base64) {
-            reject(new Error(`Не удалось прочитать файл: ${file.name}`));
-            return;
-          }
-          resolve(base64);
-        };
-        reader.onerror = () => reject(new Error(`Не удалось прочитать файл: ${file.name}`));
-        reader.readAsDataURL(file);
-      });
-    }
-  };
-
-  const findSupplierByName = (candidate: string) => {
-    const normalizedCandidate = String(candidate || '').trim().toLowerCase();
-    if (!normalizedCandidate) return null;
-
-    return suppliers.find(
-      (supplier) =>
-        supplier.name.toLowerCase().includes(normalizedCandidate) ||
-        normalizedCandidate.includes(supplier.name.toLowerCase()),
-    ) || null;
-  };
-
   const applyStructuredPreview = (data: OcrAnalyzeResponse) => {
     setUsedEngine(data.engine ?? null);
     setReviewSummary(data.review ?? null);
     if (data.rawText) setRawOcrText(data.rawText);
 
-    if (data.invoiceNumber) setInvoiceNumber(data.invoiceNumber);
+    if (data.invoiceNumber) {
+      setInvoiceNumber(data.invoiceNumber);
+    } else {
+      setInvoiceNumber((prev) => prev.trim() || generateInvoiceNumber(new Date(data.invoiceDate || Date.now())));
+    }
     if (data.invoiceDate) setDate(data.invoiceDate);
 
     if (data.supplierName) {
-      const foundSupplier = findSupplierByName(data.supplierName);
-      if (foundSupplier) setSupplierId(foundSupplier.id);
+      setDetectedSupplierName(data.supplierName);
+      const foundSupplier = findSupplierByName(data.supplierName, suppliers);
+      if (foundSupplier) {
+        setSupplierId(foundSupplier.id);
+        setSupplierQuery(foundSupplier.name);
+      }
     }
 
     return (data.items || [])
@@ -255,6 +304,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
         lineId: item.lineId || `parsed-${Date.now()}-${index}`,
         productId: item.productId || null,
         name: item.name,
+        countryOfOrigin: item.countryOfOrigin || '',
         sku: item.sku || '',
         barcode: item.barcode || '',
         quantity: Number(item.quantity) || 0,
@@ -269,48 +319,6 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
       .filter((item) => isImportablePreviewItem(item)) as InvoiceImportItem[];
   };
 
-  const requestStructuredPreview = async (file: File) => {
-    const fileBase64 = await toBase64(file);
-    const token = localStorage.getItem('pharmapro_token');
-    const response = await fetch('/api/invoices/ocr/structured-preview', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        fileBase64,
-        fileName: file.name,
-        mimeType: file.type,
-      }),
-    });
-
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(body.error || 'Не удалось обработать файл поставщика');
-    }
-
-    return body as OcrAnalyzeResponse;
-  };
-
-  const detectImportFileKind = (file: File): ImportFileKind => {
-    const fileName = file.name.toLowerCase();
-    const mimeType = file.type.toLowerCase();
-
-    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
-      return 'excel';
-    }
-
-    if (fileName.endsWith('.pdf') || mimeType === 'application/pdf') {
-      return 'pdf';
-    }
-
-    if (mimeType.startsWith('image/')) {
-      return 'image';
-    }
-
-    return 'unsupported';
-  };
 
   const processUploadedFile = async (file: File) => {
     const fileKind = detectImportFileKind(file);
@@ -340,25 +348,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
 
       const data: OcrAnalyzeResponse = fileKind === 'pdf'
         ? await requestStructuredPreview(file)
-        : await (async () => {
-          const imageBase64 = await toBase64(file);
-          const token = localStorage.getItem('pharmapro_token');
-          const response = await fetch('/api/invoices/ocr', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ imageBase64, mimeType: file.type || 'image/png', engine: 'ollama' }),
-          });
-
-          if (!response.ok) {
-            const body = await response.json().catch(() => ({}));
-            throw new Error(body.error || t('Failed to analyze invoice'));
-          }
-
-          return await response.json() as OcrAnalyzeResponse;
-        })();
+        : await requestImageOcr(file);
 
       const parsedItems = applyStructuredPreview(data);
 
@@ -382,19 +372,6 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
       setError(err.message || 'Не удалось обработать файл');
     } finally {
       event.target.value = '';
-    }
-  };
-
-  const handleAnalyzeExcel = async () => {
-    if (!selectedImportFile || detectImportFileKind(selectedImportFile) !== 'excel') {
-      setError('Сначала выберите Excel-файл');
-      return;
-    }
-
-    try {
-      await processUploadedFile(selectedImportFile);
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось обработать Excel-файл');
     }
   };
 
@@ -422,32 +399,9 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
     setUsedEngine(null);
   };
 
-  const handleAnalyzeInvoice = async () => {
-    if (!selectedImportFile) {
-      setError(t('Select invoice image first'));
-      return;
-    }
-
-    try {
-      await processUploadedFile(selectedImportFile);
-    } catch (err: any) {
-      setError(err.message || t('Failed to analyze invoice'));
-    }
-  };
-
   const resetFormAndClose = () => {
-    setSuccess(false);
     onClose();
-    setItems([]);
-    setSupplierId('');
-    setInvoiceNumber('');
-    setSelectedImportFile(null);
-    setOcrDraftId(null);
-    setReviewSummary(null);
-    setRawOcrText(null);
-    setShowRawText(false);
-    setPendingOcrItems(null);
-    setExcelPreviewItems(null);
+    resetForm();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -457,39 +411,6 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
     setProcessing(true);
     setError(null);
     try {
-      if (ocrDraftId) {
-        const token = localStorage.getItem('pharmapro_token');
-        const response = await fetch(`/api/invoices/ocr/drafts/${ocrDraftId}/import`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            supplierId,
-            invoiceNumber,
-            invoiceDate: date,
-            createMissingProducts: true,
-            items: items.map((item) => ({
-              ...item,
-              quantity: item.quantity * item.unitsInPack,
-            })),
-          }),
-        });
-
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.error || t('Failed to import OCR draft'));
-        }
-
-        await refreshProducts();
-        setSuccess(true);
-        setTimeout(resetFormAndClose, 1200);
-        return;
-      }
-
-      const selectedSupplier = suppliers.find((s) => s.id === supplierId);
-
       const createSku = (name: string) => {
         const base = name
           .toUpperCase()
@@ -506,9 +427,14 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
 
       for (const item of items) {
         let productId = item.productId;
+        const matchedProduct = findProductMatch(item);
+        if (!matchedProduct || matchedProduct.id !== productId) {
+          productId = matchedProduct?.id || '';
+        }
         const normalizedSku = item.sku?.trim();
         const skuKey = normalizedSku ? `sku:${normalizedSku.toLowerCase()}` : '';
-        const nameKey = `name:${normalizeImportKey(item.name)}`;
+        const countryKey = normalizeCountry(item.countryOfOrigin);
+        const nameKey = `name:${normalizeImportKey(item.name)}::country:${countryKey}`;
 
         if (!productId) {
           productId = (skuKey && importResolvedProducts.get(skuKey)) || importResolvedProducts.get(nameKey) || '';
@@ -522,6 +448,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
             barcode: item.barcode?.trim() || undefined,
             category: 'Imported',
             manufacturer: selectedSupplier?.name || 'Invoice Import',
+            countryOfOrigin: item.countryOfOrigin?.trim() || undefined,
             minStock: 10,
             costPrice: item.costPrice || 0,
             sellingPrice: Number((item.costPrice * 1.35).toFixed(2)),
@@ -545,24 +472,33 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
           quantity: item.quantity * item.unitsInPack,
           unit: 'units',
           costBasis: item.costPrice,
+          wholesalePrice: item.wholesalePrice,
           manufacturedDate: new Date(date),
           expiryDate: new Date(item.expiryDate),
+          countryOfOrigin: item.countryOfOrigin,
         });
       }
 
-      await importPurchaseInvoice({
+      const payload = {
         supplierId,
         invoiceNumber,
         invoiceDate: date,
         discountAmount,
+        status: importStatus,
         items: importItems,
-      });
+      };
+
+      if (editInvoice) {
+        await updatePurchaseInvoice(editInvoice.id, payload);
+      } else {
+        await (importPurchaseInvoice as any)(payload);
+      }
 
       await refreshProducts();
       setSuccess(true);
       setTimeout(resetFormAndClose, 1200);
     } catch (err: any) {
-      setError(err.message || t('Failed to import invoice'));
+      setError(err.message || t('Failed to save invoice'));
     } finally {
       setProcessing(false);
     }
@@ -593,8 +529,8 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                   <Upload size={28} />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-[#5A5A40]">Импорт приходной накладной</h3>
-                  <p className="text-xs text-[#5A5A40]/40 uppercase tracking-widest font-bold">Поступление нового товара от поставщика</p>
+                  <h3 className="text-2xl font-bold text-[#5A5A40]">{editInvoice ? 'Редактирование накладной' : 'Импорт приходной накладной'}</h3>
+                  <p className="text-xs text-[#5A5A40]/40 uppercase tracking-widest font-bold">{editInvoice ? `Накладная №${editInvoice.invoiceNumber}` : 'Поступление нового товара от поставщика'}</p>
                 </div>
               </div>
               <button onClick={onClose} className="p-3 text-[#5A5A40]/30 hover:text-[#5A5A40] hover:bg-white rounded-2xl transition-all">
@@ -637,6 +573,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                         <thead>
                           <tr className="bg-[#f5f5f0] text-[#5A5A40]/70 uppercase tracking-wider text-[10px]">
                             <th className="px-3 py-2">Наименование</th>
+                            <th className="px-3 py-2">Страна</th>
                             <th className="px-3 py-2">Срок</th>
                             <th className="px-3 py-2">Кол-во</th>
                             <th className="px-3 py-2">Цена</th>
@@ -646,10 +583,11 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                         <tbody>
                           {excelPreviewItems.map((row) => (
                             <tr key={row.lineId} className="border-t border-[#5A5A40]/10">
-                              <td className="px-3 py-2 font-semibold text-[#5A5A40]">{row.name}</td>
-                              <td className="px-3 py-2">{row.expiryDate}</td>
-                              <td className="px-3 py-2">{row.unitsInPack > 1 ? `${row.quantity} x ${row.unitsInPack}` : row.quantity}</td>
-                              <td className="px-3 py-2">{row.costPrice}</td>
+                              <td className="px-3 py-2"><input type="text" value={row.name} onChange={(e) => updatePreviewItem('excel', row.lineId, 'name', e.target.value)} className="w-full min-w-44 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs font-semibold text-[#5A5A40]" /></td>
+                              <td className="px-3 py-2"><input type="text" value={row.countryOfOrigin || ''} onChange={(e) => updatePreviewItem('excel', row.lineId, 'countryOfOrigin', e.target.value)} placeholder="Страна" className="w-28 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
+                              <td className="px-3 py-2"><input type="date" value={row.expiryDate} onChange={(e) => updatePreviewItem('excel', row.lineId, 'expiryDate', e.target.value)} className="w-36 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
+                              <td className="px-3 py-2"><input type="number" min="0" value={row.quantity} onChange={(e) => updatePreviewItem('excel', row.lineId, 'quantity', parseInt(e.target.value) || 0)} className="w-20 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
+                              <td className="px-3 py-2"><input type="number" step="0.01" min="0" value={row.costPrice} onChange={(e) => updatePreviewItem('excel', row.lineId, 'costPrice', parseFloat(e.target.value) || 0)} className="w-24 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
                               <td className="px-3 py-2">
                                 {row.needsReview ? (
                                   <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Нужна проверка</span>
@@ -692,6 +630,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                         <thead>
                           <tr className="bg-[#f5f5f0] text-[#5A5A40]/70 uppercase tracking-wider text-[10px]">
                             <th className="px-3 py-2">Наименование</th>
+                            <th className="px-3 py-2">Страна</th>
                             <th className="px-3 py-2">Срок</th>
                             <th className="px-3 py-2">Кол-во</th>
                             <th className="px-3 py-2">Цена</th>
@@ -702,10 +641,11 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                         <tbody>
                           {pendingOcrItems.map((row) => (
                             <tr key={row.lineId} className="border-t border-[#5A5A40]/10 align-top">
-                              <td className="px-3 py-2 font-semibold text-[#5A5A40]">{row.name}</td>
-                              <td className="px-3 py-2 whitespace-nowrap">{row.expiryDate}</td>
-                              <td className="px-3 py-2 whitespace-nowrap">{row.unitsInPack > 1 ? `${row.quantity} x ${row.unitsInPack}` : row.quantity}</td>
-                              <td className="px-3 py-2 whitespace-nowrap">{row.costPrice}</td>
+                              <td className="px-3 py-2"><input type="text" value={row.name} onChange={(e) => updatePreviewItem('ocr', row.lineId, 'name', e.target.value)} className="w-full min-w-44 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs font-semibold text-[#5A5A40]" /></td>
+                              <td className="px-3 py-2"><input type="text" value={row.countryOfOrigin || ''} onChange={(e) => updatePreviewItem('ocr', row.lineId, 'countryOfOrigin', e.target.value)} placeholder="Страна" className="w-28 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
+                              <td className="px-3 py-2 whitespace-nowrap"><input type="date" value={row.expiryDate} onChange={(e) => updatePreviewItem('ocr', row.lineId, 'expiryDate', e.target.value)} className="w-36 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
+                              <td className="px-3 py-2 whitespace-nowrap"><input type="number" min="0" value={row.quantity} onChange={(e) => updatePreviewItem('ocr', row.lineId, 'quantity', parseInt(e.target.value) || 0)} className="w-20 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
+                              <td className="px-3 py-2 whitespace-nowrap"><input type="number" step="0.01" min="0" value={row.costPrice} onChange={(e) => updatePreviewItem('ocr', row.lineId, 'costPrice', parseFloat(e.target.value) || 0)} className="w-24 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
                               <td className="px-3 py-2 text-[11px] text-amber-800">{row.warnings || 'Без предупреждений'}</td>
                               <td className="px-3 py-2 whitespace-nowrap">
                                 {row.needsReview ? (
@@ -724,12 +664,50 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest ml-1">Поставщик</label>
-                  <div className="relative group">
-                    <Truck className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
-                    <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} required className="w-full pl-12 pr-4 py-3 bg-[#f5f5f0]/50 border-none rounded-2xl focus:ring-2 focus:ring-[#5A5A40]/20 text-sm outline-none appearance-none">
-                      <option value="">Выберите поставщика</option>
-                      {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                  <div className="relative group" ref={supplierMenuRef}>
+                    <Truck className="absolute left-4 top-3.5 text-[#5A5A40]/30" size={18} />
+                    <button
+                      type="button"
+                      onClick={() => setSupplierMenuOpen((prev) => !prev)}
+                      className="w-full pl-12 pr-11 py-3 bg-[#f5f5f0]/50 rounded-2xl text-sm outline-none text-left focus:ring-2 focus:ring-[#5A5A40]/20"
+                    >
+                      <span className={selectedSupplier ? 'text-[#151619]' : 'text-[#5A5A40]/50'}>
+                        {selectedSupplier?.name || 'Выберите поставщика'}
+                      </span>
+                    </button>
+                    <ChevronDown className={`absolute right-4 top-3.5 text-[#5A5A40]/30 transition-transform ${supplierMenuOpen ? 'rotate-180' : ''}`} size={18} />
+                    {supplierMenuOpen && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-2xl border border-[#5A5A40]/10 bg-white shadow-2xl overflow-hidden">
+                        <div className="p-3 border-b border-[#5A5A40]/10">
+                          <input
+                            type="text"
+                            value={supplierQuery}
+                            onChange={(e) => setSupplierQuery(e.target.value)}
+                            placeholder="Поиск поставщика..."
+                            className="w-full bg-[#f5f5f0]/70 border border-[#5A5A40]/10 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-[#5A5A40]/10"
+                          />
+                        </div>
+                        <div className="max-h-56 overflow-y-auto custom-scrollbar">
+                          {filteredSuppliers.map((supplier) => (
+                            <button
+                              key={supplier.id}
+                              type="button"
+                              onClick={() => {
+                                setSupplierId(supplier.id);
+                                setSupplierQuery(supplier.name);
+                                setSupplierMenuOpen(false);
+                              }}
+                              className={`w-full px-4 py-3 text-left text-xs transition-colors hover:bg-[#f5f5f0] ${supplier.id === supplierId ? 'bg-[#f5f5f0] font-bold text-[#151619]' : 'text-[#5A5A40]'}`}
+                            >
+                              {supplier.name}
+                            </button>
+                          ))}
+                          {filteredSuppliers.length === 0 && (
+                            <div className="px-4 py-4 text-xs text-[#5A5A40]/50">Поставщики не найдены</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -746,6 +724,30 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                   <div className="relative group">
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30" size={18} />
                     <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-full pl-12 pr-4 py-3 bg-[#f5f5f0]/50 border-none rounded-2xl focus:ring-2 focus:ring-[#5A5A40]/20 text-sm outline-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest ml-1">Режим приёмки</label>
+                  <div className="flex gap-2 p-1 bg-[#f5f5f0]/50 rounded-2xl">
+                    <button
+                      type="button"
+                      onClick={() => setImportStatus('DRAFT')}
+                      className={`flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                        importStatus === 'DRAFT' ? 'bg-white text-[#5A5A40] shadow-sm' : 'text-[#5A5A40]/40 hover:text-[#5A5A40]'
+                      }`}
+                    >
+                      Черновик
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportStatus('POSTED')}
+                      className={`flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                        importStatus === 'POSTED' ? 'bg-[#5A5A40] text-white shadow-lg' : 'text-[#5A5A40]/40 hover:text-[#5A5A40]'
+                      }`}
+                    >
+                      Принять
+                    </button>
                   </div>
                 </div>
               </div>
@@ -794,10 +796,13 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                     <thead>
                       <tr className="bg-[#f5f5f0]/50 text-[10px] uppercase tracking-widest text-[#5A5A40]/50 font-bold">
                         <th className="px-4 py-4">№ ({items.length})</th>
-                        <th className="px-4 py-4">Название (рус.)</th>
+                        <th className="px-4 py-4">Наименование</th>
+                        <th className="px-4 py-4">Серия</th>
+                        <th className="px-4 py-4">Страна</th>
                         <th className="px-4 py-4">Срок годности</th>
                         <th className="px-4 py-4">Кол-во</th>
-                        <th className="px-4 py-4">Цена за ед.</th>
+                        <th className="px-4 py-4">Цена зак.</th>
+                        <th className="px-4 py-4">Цена опт.</th>
                         <th className="px-4 py-4">Сумма</th>
                         <th className="px-6 py-4 text-right"></th>
                       </tr>
@@ -811,9 +816,12 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                             {item.confidence && <p className="text-[10px] mt-1 font-bold uppercase tracking-widest text-[#5A5A40]/60">{item.confidence}</p>}
                             {item.warnings && <p className="text-[10px] text-red-500 mt-1">{item.warnings}</p>}
                           </td>
+                          <td className="px-4 py-4"><input type="text" value={item.batchNumber || ''} onChange={(e) => updateItem(item.lineId, 'batchNumber', e.target.value)} placeholder="Серия" className="w-24 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
+                          <td className="px-4 py-4"><input type="text" value={item.countryOfOrigin || ''} onChange={(e) => updateItem(item.lineId, 'countryOfOrigin', e.target.value)} placeholder="Страна" className="w-28 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
                           <td className="px-4 py-4"><input type="date" value={item.expiryDate} onChange={(e) => updateItem(item.lineId, 'expiryDate', e.target.value)} className="w-32 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
                           <td className="px-4 py-4"><input type="number" min="0" value={item.quantity} onChange={(e) => updateItem(item.lineId, 'quantity', parseInt(e.target.value) || 0)} className="w-16 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
                           <td className="px-4 py-4"><input type="number" step="0.01" min="0" value={item.costPrice} onChange={(e) => updateItem(item.lineId, 'costPrice', parseFloat(e.target.value) || 0)} className="w-24 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
+                          <td className="px-4 py-4"><input type="number" step="0.01" min="0" value={item.wholesalePrice || ''} onChange={(e) => updateItem(item.lineId, 'wholesalePrice', parseFloat(e.target.value) || null)} placeholder="Опт" className="w-20 bg-white border border-[#5A5A40]/10 rounded-lg px-2 py-1 text-xs" /></td>
                           <td className="px-4 py-4"><span className="text-xs font-bold text-[#5A5A40]">{(item.quantity * item.costPrice).toFixed(2)} TJS</span></td>
                           <td className="px-6 py-4 text-right">
                             <button type="button" onClick={() => removeItem(item.lineId)} className="p-1.5 text-[#5A5A40]/30 hover:text-red-500">
@@ -824,7 +832,7 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                       ))}
                       {items.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="px-6 py-12 text-center text-[#5A5A40]/30 italic text-sm">Позиции в накладную еще не добавлены.</td>
+                          <td colSpan={10} className="px-6 py-12 text-center text-[#5A5A40]/30 italic text-sm">Позиции в накладную еще не добавлены.</td>
                         </tr>
                       )}
                     </tbody>
@@ -836,15 +844,15 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
             <div className="p-8 bg-[#f5f5f0]/30 border-t border-[#5A5A40]/5 flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-8">
                 <div>
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest">Всего позиций</p>
-                  <p className="text-xl font-bold text-[#5A5A40]">{items.length}</p>
+                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest leading-tight">Всего позиций</p>
+                  <p className="text-sm font-bold text-[#5A5A40]">{items.length}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest">Сумма до скидки</p>
-                  <p className="text-xl font-bold text-[#5A5A40]">{grossTotal.toFixed(2)} TJS</p>
+                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest leading-tight">Сумма до скидки</p>
+                  <p className="text-sm font-bold text-[#5A5A40]">{grossTotal.toFixed(2)} TJS</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest">Скидка</p>
+                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest leading-tight">Скидка</p>
                   <input
                     type="number"
                     min="0"
@@ -855,8 +863,8 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                   />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest">Итог с учетом скидки</p>
-                  <p className="text-xl font-bold text-[#5A5A40]">{netTotal.toFixed(2)} TJS</p>
+                  <p className="text-[10px] font-bold text-[#5A5A40]/40 uppercase tracking-widest leading-tight">Итог с учетом скидки</p>
+                  <p className="text-sm font-bold text-[#5A5A40]">{netTotal.toFixed(2)} TJS</p>
                 </div>
               </div>
 
@@ -879,9 +887,9 @@ export const ImportInvoiceModal: React.FC<ImportInvoiceModalProps> = ({ isOpen, 
                     Накладная успешно импортирована
                   </div>
                 )}
-                <button type="button" onClick={onClose} className="px-8 py-3 bg-white text-[#5A5A40] rounded-2xl font-bold border border-[#5A5A40]/10 hover:bg-white/80">Отмена</button>
-                <button onClick={handleSubmit} disabled={submitBlockers.length > 0 || processing} className="px-12 py-3 bg-[#5A5A40] text-white rounded-2xl font-bold shadow-xl hover:bg-[#4A4A30] disabled:opacity-50">
-                  {processing ? 'Обработка...' : 'Завершить импорт'}
+                <button type="button" onClick={resetFormAndClose} className="px-8 py-3 bg-white text-[#5A5A40] rounded-2xl font-bold border border-[#5A5A40]/10 hover:bg-white/80">Отмена</button>
+                <button type="submit" disabled={submitBlockers.length > 0 || processing} className="px-12 py-3 bg-[#5A5A40] text-white rounded-2xl font-bold shadow-xl hover:bg-[#4A4A30] disabled:opacity-50">
+                  <span>{editInvoice ? 'Обновить накладную' : 'Импортировать накладную'}</span>
                 </button>
               </div>
             </div>

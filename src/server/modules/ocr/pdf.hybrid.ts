@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 import type { OcrConfidence, OcrResult, OcrResultItem } from './ocr.types';
-import { runOllamaTextNormalization, runOllamaVisionOcr } from './ollama.engine';
+// ...existing code...
 import { runPdfOcr } from './pdf.engine';
 
 type PdfParseResult = { text: string };
@@ -55,7 +55,7 @@ type RenderedPdfPage = {
 
 export type ProcessPdfDocumentResult = {
   pdfType: PdfType;
-  engine: 'pdf+camelot' | 'pdf+ollama' | 'pdf+vision+ollama' | 'pdf+legacy';
+  engine: 'pdf+camelot' | 'pdf+legacy';
   result: OcrResult;
   warnings: string[];
 };
@@ -134,7 +134,7 @@ const normalizeUnit = (value: unknown) => {
   if (!normalized) return '';
   if (normalized.startsWith('короб')) return 'коробка';
   if (normalized.startsWith('меш')) return 'мешок';
-  if (normalized === 'шт.' || normalized === 'шт') return 'шт';
+  if (normalized === 'шт.' || normalized === 'шт' || normalized === 'дона' || normalized === 'д') return 'шт';
   return normalized;
 };
 
@@ -155,7 +155,7 @@ const detectTableLikeText = (rawText: string) => {
   if (!lines.length) return false;
 
   const headerHits = lines.slice(0, 20).filter((line) =>
-    /(наимен|товар|price|qty|quantity|сумма|итого|unit|колич|цена|упаков|короб|invoice|артикул)/i.test(line),
+    /(наимен|товар|price|qty|quantity|сумма|итого|unit|колич|цена|упаков|короб|invoice|артикул|микдор|нарх|маблаг|номгуй)/i.test(line),
   ).length;
 
   const rowHits = lines.filter((line) => {
@@ -176,17 +176,17 @@ const extractHeader = (rawText: string) => {
 
   for (const line of lines.slice(0, 30)) {
     if (!invoiceNumber) {
-      const match = line.match(/(?:накладная|сч[её]т|фактура|invoice|акт|заказ)\s*[№#]?\s*([A-ZА-ЯЁa-zа-яё0-9\/-]{2,30})/i);
+      const match = line.match(/(?:накладная|накладнома|сч[её]т|фактура|invoice|акт|заказ)\s*[№#]?\s*([A-ZА-ЯЁa-zа-яё0-9\/-]{2,30})/i);
       if (match?.[1]) invoiceNumber = match[1].trim();
     }
 
     if (!invoiceDate) {
-      const match = line.match(/(?:от|дата|date)?\s*(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4})/i);
+      const match = line.match(/(?:от|дата|date|сана)?\s*(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4})/i);
       if (match?.[1]) invoiceDate = normalizeDateString(match[1]);
     }
 
     if (!supplierName) {
-      const keywordMatch = line.match(/(?:поставщик|supplier|продавец|от кого)\s*[:\-]?\s*(.+)/i);
+      const keywordMatch = line.match(/(?:поставщик|supplier|продавец|от кого|таъминкунанда|фурушанда)\s*[:\-]?\s*(.+)/i);
       if (keywordMatch?.[1]) supplierName = keywordMatch[1].trim();
     }
   }
@@ -419,37 +419,7 @@ export async function processPdfDocument(pdfBase64: string): Promise<ProcessPdfD
     }
   }
 
-  if (pdfType === 'scan') {
-    try {
-      const renderedPage = await renderPdfPageForVision(fileBuffer);
-      const result = await runOllamaVisionOcr(renderedPage.imageBase64, renderedPage.mimeType || 'image/png');
-      return {
-        pdfType,
-        engine: 'pdf+vision+ollama',
-        result: {
-          ...result,
-          confidenceSummary: buildConfidenceSummary(result.items),
-        },
-        warnings,
-      };
-    } catch (error) {
-      warnings.push(error instanceof Error ? error.message : 'PDF render fallback failed');
-      console.warn('[OCR] PDF render fallback failed, using legacy PDF parser');
-    }
-  }
-
-  if (rawText) {
-    const normalized = await runOllamaTextNormalization(rawText);
-    return {
-      pdfType,
-      engine: 'pdf+ollama',
-      result: {
-        ...normalized,
-        confidenceSummary: buildConfidenceSummary(normalized.items),
-      },
-      warnings,
-    };
-  }
+  // Удалены ветки ollama. Теперь только Camelot и legacy.
 
   const legacy = await runPdfOcr(pdfBase64);
   return {

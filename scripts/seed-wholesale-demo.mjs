@@ -128,27 +128,27 @@ async function main() {
   const warehouse = await prisma.warehouse.upsert({
     where: { code: 'MAIN' },
     update: {
-      name: 'Main Warehouse',
+      name: 'Аптечный склад',
       isDefault: true,
       isActive: true,
-      address: 'Tashkent central warehouse',
-      type: 'DISTRIBUTION',
+      address: 'Душанбе центральный склад',
+      type: 'ОПТОВЫЙ',
     },
     create: {
       code: 'MAIN',
-      name: 'Main Warehouse',
+      name: 'Аптечный склад',
       isDefault: true,
       isActive: true,
-      address: 'Tashkent central warehouse',
-      type: 'DISTRIBUTION',
+      address: 'Душанбе центральный склад',
+      type: 'ОПТОВЫЙ',
     },
   });
 
   const supplierData = {
-    name: 'Demo Supplier',
-    contact: '+7 (900) 000-00-00',
+    name: 'Демо поставщик',
+    contact: '+992900000000',
     email: 'demo@supplier.local',
-    address: 'Moscow, Testovaya, 1',
+    address: 'Душанбе, Тестовая, 1',
     contractNumber: 'SUP-2026-01',
     contractDate: new Date('2026-01-15'),
     paymentTermDays: 10,

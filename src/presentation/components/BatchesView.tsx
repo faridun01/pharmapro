@@ -44,6 +44,8 @@ export const BatchesView: React.FC<{
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<VisibleBatchStatus>('NEAR_EXPIRY');
   const [sortMode, setSortMode] = useState<BatchSortMode>('name');
+  const [batchPage, setBatchPage] = useState(1);
+  const batchPageSize = 10;
   const [restockModal, setRestockModal] = useState({
     open: false,
     productId: '',
@@ -188,6 +190,23 @@ export const BatchesView: React.FC<{
     });
   }, [filteredBatches, sortMode]);
 
+  const totalBatchPages = Math.max(1, Math.ceil(groupedBatches.length / batchPageSize));
+  const safeBatchPage = Math.min(batchPage, totalBatchPages);
+  const paginatedBatches = useMemo(() => {
+    const startIndex = (safeBatchPage - 1) * batchPageSize;
+    return groupedBatches.slice(startIndex, startIndex + batchPageSize);
+  }, [groupedBatches, safeBatchPage]);
+
+  useEffect(() => {
+    setBatchPage(1);
+  }, [debouncedSearchTerm, sortMode, statusFilter]);
+
+  useEffect(() => {
+    if (batchPage > totalBatchPages) {
+      setBatchPage(totalBatchPages);
+    }
+  }, [batchPage, totalBatchPages]);
+
   const openRestockModalForBatch = (batch: BatchWithProductName) => {
     setRestockModal({
       open: true,
@@ -277,29 +296,29 @@ export const BatchesView: React.FC<{
 
       {showActionBlock && (
       <div className="rounded-[28px] border border-[#5A5A40]/10 bg-white px-4 py-4 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
-          {onOpenImportInvoice && (
-            <button
-              onClick={onOpenImportInvoice}
-              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
-            >
-              <Package size={16} /> Импорт прихода
-            </button>
-          )}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {onOpenAddProduct && (
             <button
               onClick={onOpenAddProduct}
-              className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#4A4A30]"
             >
               <Plus size={16} /> Добавить товар
             </button>
           )}
           <button
             onClick={openCreateBatchModal}
-            className="px-5 py-3 bg-[#5A5A40] text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-[#4A4A30] transition-all flex items-center gap-2 justify-center"
+            className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#4A4A30]"
           >
             <Layers size={16} /> Добавить партию
           </button>
+          {onOpenImportInvoice && (
+            <button
+              onClick={onOpenImportInvoice}
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#4A4A30]"
+            >
+              <ArrowDownUp size={16} /> Импорт прихода
+            </button>
+          )}
         </div>
       </div>
       )}
@@ -324,19 +343,19 @@ export const BatchesView: React.FC<{
           </div>
         </div>
 
-        <div className="flex items-center gap-4 overflow-x-auto pb-1 custom-scrollbar">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {statusOptions.map((option) => (
             <button
               key={option.id}
               onClick={() => setStatusFilter(option.id)}
-              className={`px-6 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+              className={`flex h-13 w-full items-center justify-center rounded-2xl px-6 text-sm font-medium transition-all border ${
                 statusFilter === option.id
                   ? 'bg-[#5A5A40] text-white border-[#5A5A40] shadow-md'
                   : 'bg-white text-[#5A5A40]/60 border-[#5A5A40]/10 hover:bg-[#f5f5f0]'
               }`}
             >
               {option.label}
-              <span className={`ml-2 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${statusFilter === option.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
+              <span className={`ml-2 inline-flex min-w-7 items-center justify-center rounded-lg px-2 py-0.5 text-[10px] font-bold ${statusFilter === option.id ? 'bg-white/20 text-white' : 'bg-[#f5f5f0] text-[#5A5A40]/40'}`}>
                 {statusCounts[option.id]}
               </span>
             </button>
@@ -373,7 +392,7 @@ export const BatchesView: React.FC<{
                 <th className="px-8 py-5">Цены</th>
                 <th className="px-8 py-5">Ближайший срок</th>
                 <th className="px-8 py-5">{t('Status')}</th>
-                <th className="px-8 py-5 text-right">Действие</th>
+                <th className="px-8 py-5 text-right">Действия</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#5A5A40]/5">
@@ -384,7 +403,7 @@ export const BatchesView: React.FC<{
                   </td>
                 </tr>
               )}
-              {groupedBatches.map((group) => {
+              {paginatedBatches.map((group) => {
                 const isLowStock = group.minStock > 0 && group.totalQuantity <= group.minStock;
                 const groupStatus = getGroupStatusMeta(group);
 
@@ -439,7 +458,7 @@ export const BatchesView: React.FC<{
                         disabled={!group.primaryBatch || busyBatchId === group.primaryBatch.id}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#5A5A40]/10 text-sm font-medium text-[#5A5A40] hover:bg-[#f5f5f0] transition-all disabled:opacity-40"
                       >
-                        <Layers size={16} />
+                        <Plus size={16} />
                         Пополнить
                       </button>
                     </td>
@@ -449,6 +468,34 @@ export const BatchesView: React.FC<{
             </tbody>
           </table>
         </div>
+        {groupedBatches.length > batchPageSize && (
+          <div className="flex min-h-18 flex-col gap-3 border-t border-[#5A5A40]/5 bg-[#fcfbf7] px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-[#5A5A40]/70">
+              Показано {(safeBatchPage - 1) * batchPageSize + 1}-{Math.min(safeBatchPage * batchPageSize, groupedBatches.length)} из {groupedBatches.length}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBatchPage((page) => Math.max(1, page - 1))}
+                disabled={safeBatchPage === 1}
+                className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Назад
+              </button>
+              <span className="px-3 py-2 text-sm font-semibold text-[#5A5A40]">
+                {safeBatchPage} / {totalBatchPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setBatchPage((page) => Math.min(totalBatchPages, page + 1))}
+                disabled={safeBatchPage === totalBatchPages}
+                className="rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm text-[#5A5A40] transition-all hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Вперед
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {restockModal.open && (

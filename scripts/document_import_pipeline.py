@@ -35,6 +35,23 @@ DEFAULT_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
 DEFAULT_SHEET_HINTS = ("invoice", "наклад", "прайс", "price", "товар", "лист")
 
 
+DEFAULT_SHEET_HINTS = (*DEFAULT_SHEET_HINTS, "naklad", "ҳуҷҷат", "номгӯй")
+DEFAULT_COLUMN_ALIASES["invoice_number"] += ("номер накладной", "номер документа", "рақами ҳуҷҷат", "раками хуччат")
+DEFAULT_COLUMN_ALIASES["supplier_name"] += ("поставщик", "контрагент", "фурӯшанда", "харидор")
+DEFAULT_COLUMN_ALIASES["invoice_date"] += ("дата", "дата накладной", "сана")
+DEFAULT_COLUMN_ALIASES["name"] += ("товар", "наименование", "номгӯй", "номгуй")
+DEFAULT_COLUMN_ALIASES["sku"] += ("артикул", "код", "код товара")
+DEFAULT_COLUMN_ALIASES["barcode"] += ("штрихкод", "штрих-код")
+DEFAULT_COLUMN_ALIASES["quantity"] += ("количество", "колво", "кол-во", "миқдор", "микдор")
+DEFAULT_COLUMN_ALIASES["cost_price"] += ("цена", "цена за ед", "закупочная цена", "нархи воҳид", "нархи воҳид сомонӣ", "нархи вохид")
+DEFAULT_COLUMN_ALIASES["unit"] += ("ед", "единица")
+DEFAULT_COLUMN_ALIASES["box_quantity"] += ("в упаковке", "в коробке", "коробка")
+DEFAULT_COLUMN_ALIASES["box_price"] += ("сумма", "итого", "арзиш", "арзиш сомонӣ")
+DEFAULT_COLUMN_ALIASES["expiry_date"] += ("срок", "срок годности", "годен до")
+DEFAULT_COLUMN_ALIASES["batch_number"] += ("серия", "партия", "силсила", "шакл", "силсила шакл")
+DEFAULT_COLUMN_ALIASES["country_of_origin"] = ("country", "country_of_origin", "country origin", "страна", "страна производства", "кишвари истеҳсол", "кишвари истехсол")
+
+
 @dataclass(slots=True)
 class ParseWarning:
     message: str
@@ -50,6 +67,7 @@ class ParsedRow:
     name: str = ""
     sku: str = ""
     barcode: str = ""
+    country_of_origin: str = ""
     quantity: float = 0.0
     cost_price: float = 0.0
     unit: str = ""
@@ -111,6 +129,35 @@ def normalize_key(value: Any) -> str:
         .replace("ё", "е")
     )
     return re.sub(r"[^a-z0-9а-я]+", "", text)
+
+
+def normalize_key(value: Any) -> str:
+    text = normalize_text(value).lower()
+    text = (
+        text.replace("Ò›", "Ðº")
+        .replace("Ò³", "Ñ…")
+        .replace("Ò“", "Ð³")
+        .replace("Ò·", "Ð¶")
+        .replace("Ó¯", "Ñƒ")
+        .replace("Ó£", "Ð¸")
+        .replace("Ñ‘", "Ðµ")
+        .replace("қ", "к")
+        .replace("ҳ", "х")
+        .replace("ғ", "г")
+        .replace("ӯ", "у")
+        .replace("ӣ", "и")
+        .replace("ҷ", "ж")
+        .replace("ё", "е")
+    )
+    return re.sub(r"[^a-z0-9а-я]+", "", text)
+
+
+def is_summary_or_note_label(value: Any) -> bool:
+    cell = normalize_key(value)
+    if not cell:
+        return False
+    markers = ("итого", "сумма", "всего", "total", "хамаги", "эзох", "примечание", "заметка", "note")
+    return any(marker in cell for marker in markers)
 
 
 def safe_float(value: Any) -> tuple[float | None, bool]:
@@ -228,6 +275,82 @@ def build_column_mapping(columns: Sequence[str], aliases: dict[str, tuple[str, .
     return mapping
 
 
+def heuristically_map_columns(
+    headers: Sequence[str], body_rows: Sequence[Sequence[Any]], current_mapping: dict[str, str]
+) -> dict[str, str]:
+    """Attempts to fill missing mappings by analyzing data content in columns."""
+    if not body_rows:
+        return current_mapping
+
+    mapping = dict(current_mapping)
+    mapped_columns = set(mapping.values())
+    unmapped_targets = [
+        t for t in ("name", "quantity", "cost_price", "expiry_date", "batch_number") if t not in mapping
+    ]
+
+    if not unmapped_targets:
+        return mapping
+
+    # Analyze first N rows of data
+    sample_size = min(len(body_rows), 15)
+    samples = body_rows[:sample_size]
+
+    col_stats = []
+    for col_idx in range(len(headers)):
+        original_header = headers[col_idx]
+        if original_header in mapped_columns:
+            col_stats.append(None)
+            continue
+
+        values = [row[col_idx] for row in samples if col_idx < len(row)]
+
+        # Heuristics
+        date_count = sum(1 for v in values if safe_date(v)[1])
+        float_count = sum(1 for v in values if safe_float(v)[1])
+        # Names are usually longer strings
+        avg_len = sum(len(str(v)) for v in values) / len(values) if values else 0
+
+        col_stats.append(
+            {
+                "header": original_header,
+                "date_score": date_count / len(values) if values else 0,
+                "float_score": float_count / len(values) if values else 0,
+                "avg_len": avg_len,
+            }
+        )
+
+    for target in unmapped_targets:
+        best_col: str | None = None
+        best_score = -1.0
+
+        for stats in col_stats:
+            if stats is None or stats["header"] in set(mapping.values()):
+                continue
+
+            score = 0.0
+            if target == "expiry_date":
+                score = stats["date_score"]
+            elif target in ("quantity", "cost_price"):
+                # Quantity and Price are both floats, but Price often has decimals
+                score = stats["float_score"]
+            elif target == "name":
+                # Names are text and usually long
+                score = 0.5 if stats["avg_len"] > 10 else 0.1
+                if stats["date_score"] > 0.5 or stats["float_score"] > 0.5:
+                    score = 0  # Not a name
+
+            if score > 0.4 and score > best_score:
+                best_score = score
+                best_col = stats["header"]
+
+        if best_col:
+            mapping[target] = best_col
+
+    return mapping
+
+
+
+
 def detect_excel_header_row(rows: Sequence[Sequence[Any]], aliases: dict[str, tuple[str, ...]]) -> int:
     best_index = 0
     best_score = -1
@@ -319,6 +442,9 @@ def merge_multiline_names(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         name = normalize_text(row.get("name"))
         has_numeric_content = any(safe_float(row.get(field))[0] is not None for field in ("quantity", "cost_price", "box_quantity", "box_price"))
 
+        if is_summary_or_note_label(name):
+            continue
+
         if merged and name and not has_numeric_content:
             merged[-1]["name"] = normalize_text(f"{merged[-1].get('name', '')} {name}")
             merged[-1].setdefault("raw_multiline_parts", []).append(dict(row))
@@ -395,18 +521,23 @@ def parse_spreadsheet_like_rows(
     rows: list[dict[str, Any]] = []
     body_rows = trimmed_rows[header_row_index + 1 :]
 
+    # Apply heuristics for missing columns
+    column_mapping = heuristically_map_columns(headers, body_rows, column_mapping)
+
     for row_index, row in enumerate(body_rows, start=1):
         normalized_record = {
             header: row[position] if position < len(row) else ""
             for position, header in enumerate(headers)
         }
         parsed_row = {"row_index": row_index, "raw_values": normalized_record}
-        for target_field in ("name", "sku", "barcode", "quantity", "cost_price", "unit", "box_quantity", "box_price", "expiry_date", "batch_number"):
+        for target_field in ("name", "sku", "barcode", "country_of_origin", "quantity", "cost_price", "unit", "box_quantity", "box_price", "expiry_date", "batch_number"):
             source_column = column_mapping.get(target_field)
             parsed_row[target_field] = normalized_record.get(source_column) if source_column else ""
 
-        row_payload_values = [parsed_row[field_name] for field_name in ("name", "sku", "barcode", "quantity", "cost_price", "unit", "box_quantity", "box_price", "expiry_date", "batch_number")]
+        row_payload_values = [parsed_row[field_name] for field_name in ("name", "sku", "barcode", "country_of_origin", "quantity", "cost_price", "unit", "box_quantity", "box_price", "expiry_date", "batch_number")]
         if not any(normalize_text(value) for value in row_payload_values):
+            continue
+        if is_summary_or_note_label(parsed_row.get("name")):
             continue
         rows.append(parsed_row)
 
@@ -611,6 +742,7 @@ def normalize_rows(parsed_rows: Sequence[dict[str, Any]], source: str) -> tuple[
         name = normalize_text(row.get("name"))
         sku = normalize_text(row.get("sku"))
         barcode = normalize_text(row.get("barcode"))
+        country_of_origin = normalize_text(row.get("country_of_origin"))
         unit = normalize_text(row.get("unit"))
         batch_number = normalize_text(row.get("batch_number"))
         expiry_date, expiry_ok = safe_date(row.get("expiry_date"))
@@ -626,6 +758,7 @@ def normalize_rows(parsed_rows: Sequence[dict[str, Any]], source: str) -> tuple[
             name=name,
             sku=sku,
             barcode=barcode,
+            country_of_origin=country_of_origin,
             quantity=quantity or 0.0,
             cost_price=cost_price or 0.0,
             unit=unit,
@@ -707,6 +840,7 @@ def import_preview(document: NormalizedDocument) -> ImportPreview:
                 "name": row.name,
                 "sku": row.sku,
                 "barcode": row.barcode,
+                "countryOfOrigin": row.country_of_origin,
                 "quantity": row.quantity,
                 "costPrice": row.cost_price,
                 "unit": row.unit,
@@ -740,6 +874,7 @@ def prepare_for_database(document: NormalizedDocument) -> dict[str, Any]:
                 "name": row.name,
                 "sku": row.sku,
                 "barcode": row.barcode,
+                "countryOfOrigin": row.country_of_origin,
                 "quantity": max(1, int(round(row.quantity or 0))),
                 "costPrice": round(row.cost_price, 2),
                 "unit": row.unit,

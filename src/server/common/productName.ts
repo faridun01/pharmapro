@@ -3,36 +3,44 @@ import { prisma } from '../infrastructure/prisma';
 export const normalizeProductName = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
 const normalizeCountry = (value: string | null | undefined) => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
 
-export async function findExistingProductByName(name: string, countryOfOrigin?: string | null) {
+export async function findExistingProductByName(
+  name: string, 
+  countryOfOrigin?: string | null,
+  dosage?: string | null,
+  formId?: string | null
+) {
   const normalizedName = normalizeProductName(name || '');
   if (!normalizedName) return null;
-  const normalizedCountry = normalizeCountry(countryOfOrigin);
 
-  const candidates = await prisma.product.findMany({
-    where: { isActive: true },
-    select: {
-      id: true,
-      name: true,
-      countryOfOrigin: true,
+  const matched = await prisma.product.findFirst({
+    where: {
+      isActive: true,
+      name: {
+        equals: normalizedName,
+        mode: 'insensitive',
+      },
+      ...(dosage ? { dosage: { equals: dosage.trim(), mode: 'insensitive' } } : {}),
+      ...(formId ? { formId: formId } : {}),
+      ...(countryOfOrigin
+        ? {
+            countryOfOrigin: {
+              equals: countryOfOrigin.trim(),
+              mode: 'insensitive',
+            },
+          }
+        : {
+            OR: [
+              { countryOfOrigin: null },
+              { countryOfOrigin: '' },
+            ],
+          }),
+    },
+    include: {
+      batches: {
+        where: { quantity: { gt: 0 } },
+      },
     },
   });
 
-  const match = candidates.find((candidate) => {
-    if (normalizeProductName(candidate.name) !== normalizedName) {
-      return false;
-    }
-
-    const candidateCountry = normalizeCountry(candidate.countryOfOrigin);
-    if (normalizedCountry) {
-      return candidateCountry === normalizedCountry;
-    }
-
-    return !candidateCountry;
-  });
-  if (!match) return null;
-
-  return prisma.product.findUnique({
-    where: { id: match.id },
-    include: { batches: true },
-  });
+  return matched;
 }

@@ -33,9 +33,9 @@ const mapRefundMethod = (value: string | undefined): 'CASH' | 'CARD' | 'STORE_BA
   return 'CASH';
 };
 
-const mapPaymentMethod = (value: string | undefined): 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'CREDIT_OFFSET' => {
+const mapPaymentMethod = (value: string | undefined): 'CASH' | 'CARD' | 'BANK_TRANSFER' => {
   const normalized = (value || 'CASH').toUpperCase().replace(/\s+/g, '_');
-  if (normalized === 'CASH' || normalized === 'CARD' || normalized === 'BANK_TRANSFER' || normalized === 'CREDIT_OFFSET') {
+  if (normalized === 'CASH' || normalized === 'CARD' || normalized === 'BANK_TRANSFER') {
     return normalized;
   }
   return 'CASH';
@@ -104,7 +104,7 @@ invoicesRouter.get('/', authenticate, asyncHandler(async (req, res) => {
             totalPrice: true,
           },
         },
-        receivables: {
+        receivable: {
           select: {
             id: true,
             originalAmount: true,
@@ -175,6 +175,7 @@ invoicesRouter.get('/', authenticate, asyncHandler(async (req, res) => {
 
     return {
       ...invoice,
+      receivables: invoice.receivable ? [invoice.receivable] : [],
       outstandingAmount,
       paidAmountTotal: actualPaidAmount,
       returnedAmountTotal,
@@ -207,7 +208,7 @@ invoicesRouter.post('/:id/payments', authenticate, asyncHandler(async (req, res)
     const invoice = await tx.invoice.findUnique({
       where: { id: invoiceId },
       include: {
-        receivables: true,
+        receivable: true,
       },
     });
 
@@ -256,12 +257,12 @@ invoicesRouter.post('/:id/payments', authenticate, asyncHandler(async (req, res)
       },
       include: {
         items: true,
-        receivables: true,
+        receivable: true,
       },
     });
 
     if (invoice.customerId) {
-      const existingReceivable = invoice.receivables[0];
+      const existingReceivable = invoice.receivable;
       if (existingReceivable) {
         await tx.receivable.update({
           where: { id: existingReceivable.id },
@@ -360,7 +361,7 @@ invoicesRouter.patch('/:id', authenticate, asyncHandler(async (req, res) => {
       where: { id: invoiceId },
       include: {
         items: true,
-        receivables: true,
+        receivable: true,
       },
     });
 
@@ -498,12 +499,12 @@ invoicesRouter.patch('/:id', authenticate, asyncHandler(async (req, res) => {
         items: {
           include: {},
         },
-        receivables: true,
+        receivable: true,
       },
     });
 
     if (existing.customerId) {
-      const existingReceivable = existing.receivables[0];
+      const existingReceivable = existing.receivable;
       if (existingReceivable) {
         await tx.receivable.update({
           where: { id: existingReceivable.id },

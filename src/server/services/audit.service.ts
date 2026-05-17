@@ -1,5 +1,5 @@
-import { Prisma, UserRole } from '@prisma/client';
-import { prisma } from '../infrastructure/prisma';
+import { prisma, Prisma } from '../infrastructure/prisma';
+import { UserRole } from '../infrastructure/generated-client';
 
 type AuditInput = {
   userId: string;
@@ -16,7 +16,7 @@ type AuditInput = {
 
 export class AuditService {
   async log(input: AuditInput, db: Prisma.TransactionClient | typeof prisma = prisma) {
-    await db.auditLog.create({
+    await (db as any).auditLog.create({
       data: {
         userId: input.userId,
         userRole: input.userRole ?? null,

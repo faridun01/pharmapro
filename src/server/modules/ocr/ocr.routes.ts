@@ -1,4 +1,4 @@
-﻿import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -11,7 +11,7 @@ import { ValidationError } from '../../common/errors';
 import { findExistingProductByName } from '../../common/productName';
 import { prisma } from '../../infrastructure/prisma';
 import { inventoryService } from '../inventory/inventory.service';
-import { checkOllamaAvailability, getOllamaModelName, runOllamaVisionOcr } from './ollama.engine';
+// ...existing code...
 import { processPdfDocument } from './pdf.hybrid';
 
 // --- Types ---
@@ -138,23 +138,27 @@ const buildNormalizedItems = (
     })
     .filter((item) => item.quantity > 0 && item.costPrice > 0);
 
-const pickExistingUserId = async (reqUser?: { id?: string; email?: string }) => {
+const pickExistingUserId = async (reqUser?: { id?: string; username?: string; email?: string }) => {
   if (reqUser?.id) {
     const userById = await prisma.user.findUnique({ where: { id: reqUser.id }, select: { id: true } });
     if (userById) return userById.id;
   }
 
-  if (reqUser?.email) {
-    const userByEmail = await prisma.user.findUnique({ where: { email: reqUser.email }, select: { id: true } });
-    if (userByEmail) return userByEmail.id;
+  if (reqUser?.username) {
+    const userByUsername = await prisma.user.findUnique({ where: { username: reqUser.username }, select: { id: true } });
+    if (userByUsername) return userByUsername.id;
   }
 
   const firstUser = await prisma.user.findFirst({ select: { id: true } });
   if (firstUser) return firstUser.id;
 
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Authenticated user missing during OCR operation');
+  }
+
   const fallback = await prisma.user.create({
     data: {
-      email: reqUser?.email || 'admin@pharmapro.local',
+      username: reqUser?.username || reqUser?.email || 'admin',
       password: await bcrypt.hash('dev-password', 12),
       name: 'System User',
       role: 'ADMIN',
@@ -180,15 +184,14 @@ const readInvoiceWithOcr = async (imageBase64: string, mimeType: string) => {
   const isPdf = mimeType === 'application/pdf' || mimeType === 'pdf';
 
   let parsedHeader: { invoiceNumber?: string; supplierName?: string; invoiceDate?: string; items?: ParsedInvoiceItem[]; rawText?: string };
-  let resolvedEngine: 'ollama' | 'pdf+ollama' | 'pdf+camelot' | 'pdf+vision+ollama' | 'pdf+legacy';
+  let resolvedEngine: 'pdf+camelot' | 'pdf+legacy';
 
   if (isPdf) {
     const processed = await processPdfDocument(imageBase64);
     parsedHeader = processed.result;
     resolvedEngine = processed.engine;
   } else {
-    parsedHeader = await runOllamaVisionOcr(imageBase64, mimeType);
-    resolvedEngine = 'ollama';
+    // ...existing code...
   }
 
   return { parsedHeader, resolvedEngine };
@@ -310,7 +313,7 @@ const runStructuredImportPreview = async (fileBase64: string, fileName?: string,
 
 /** GET /engines - tells the frontend which engines are available */
 ocrRouter.get('/engines', async (_req, res) => {
-  res.json({ ollama: await checkOllamaAvailability(), model: getOllamaModelName() });
+  // ...existing code...
 });
 
 ocrRouter.post('/structured-preview', authenticate, asyncHandler(async (req, res) => {

@@ -1,7 +1,3 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
-
 # PharmaPro
 
 Desktop pharmacy management system built with Electron, React, Express, and Prisma.
@@ -33,9 +29,7 @@ Useful dev commands:
 
 Example `.env` value:
 
-`DATABASE_URL="postgresql://postgres:postgres@localhost:5432/pharmapro?schema=public"`
-
-If startup logs `Database bootstrap skipped`, PostgreSQL is not reachable with the credentials currently configured in `.env`.
+`DATABASE_URL="postgresql://postgres:*****@localhost:****/*****?schema=public"`
 
 ## Production Build
 

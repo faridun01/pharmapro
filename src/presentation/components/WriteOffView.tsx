@@ -4,6 +4,8 @@ import { Plus, Trash2, RefreshCw, AlertTriangle, Package, Pencil, CheckCircle2, 
 import { runRefreshTasks } from '../../lib/utils';
 import { AppModal } from './AppModal';
 import { useCurrencyCode } from '../../lib/useCurrencyCode';
+import { DateRangeFilter, ReportRangePreset } from './common/DateRangeFilter';
+import { getPresetDates } from './common/dateUtils';
 
 const REASONS = ['EXPIRED', 'DAMAGED', 'LOST', 'INTERNAL_USE', 'MISMATCH', 'BROKEN_PACKAGING', 'OTHER'] as const;
 type Reason = (typeof REASONS)[number];
@@ -31,6 +33,7 @@ interface WriteOff {
   id: string;
   writeOffNo: string;
   reason: Reason;
+  status: 'DRAFT' | 'POSTED';
   note?: string;
   totalAmount?: number;
   createdAt: string;
@@ -112,7 +115,7 @@ const getSortedWriteOffBatches = (product?: { batches?: Array<any> } | null) => 
 };
 
 function authHeaders() {
-  const token = localStorage.getItem('pharmapro_token');
+  const token = sessionStorage.getItem('pharmapro_token');
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -360,7 +363,7 @@ function CreateWriteOffModal({
                         onChange={(e) => updateItemPackaging(idx, '0', e.target.value)}
                         placeholder="Кол-во"
                       />
-                      <p className="text-[10px] text-[#5A5A40]/55 leading-tight">Количество в единицах</p>
+                      <p className="text-[10px] text-[#5A5A40]/80 font-semibold leading-tight">Количество в единицах</p>
                     </div>
                     <div className="xl:col-span-1 flex justify-center xl:justify-end">
                       {formItems.length > 1 && (
@@ -467,7 +470,7 @@ const REASON_STYLES: Record<string, string> = {
   OTHER: 'bg-gray-100 text-gray-700',
 };
 
-export const WriteOffView: React.FC = () => {
+export const WriteOffView: React.FC<{ hideHeader?: boolean }> = ({ hideHeader }) => {
   const { refreshProducts } = usePharmacy();
   const currencyCode = useCurrencyCode();
   const [writeOffs, setWriteOffs] = useState<WriteOff[]>([]);
@@ -479,15 +482,31 @@ export const WriteOffView: React.FC = () => {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const [preset, setPreset] = useState<ReportRangePreset>('month');
+  
+  const initialDates = getPresetDates('month');
+  const [fromDate, setFromDate] = useState(initialDates.from);
+  const [toDate, setToDate] = useState(initialDates.to);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/writeoffs', { headers: authHeaders() });
+      const q = new URLSearchParams();
+      if (fromDate) q.set('from', fromDate);
+      if (toDate) q.set('to', toDate);
+      const res = await fetch(`/api/writeoffs?${q.toString()}`, { headers: authHeaders() });
       if (res.ok) setWriteOffs(await res.json());
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fromDate, toDate]);
+
+  useEffect(() => {
+    if (preset === 'custom') return;
+    const { from, to } = getPresetDates(preset);
+    setFromDate(from);
+    setToDate(to);
+  }, [preset]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -557,26 +576,47 @@ export const WriteOffView: React.FC = () => {
     }
   };
 
+  const handleApprove = async (writeOff: WriteOff) => {
+    try {
+      setFeedback(null);
+      const res = await fetch(`/api/writeoffs/approve/${writeOff.id}`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Ошибка при подтверждении');
+      }
+      setFeedback({ tone: 'success', message: `Списание ${writeOff.writeOffNo} успешно проведено!` });
+      await runRefreshTasks(refreshProducts, load);
+    } catch (err: any) {
+      setFeedback({ tone: 'error', message: err.message });
+    }
+  };
+
   const handleCreated = async () => {
     await load();
     setFeedback({
       tone: 'success',
       message: editingWriteOff
         ? `Списание ${editingWriteOff.writeOffNo} обновлено.`
-        : 'Новое списание сохранено.',
+        : 'Новое списание сохранено и ожидает подтверждения (если вы не администратор).',
     });
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="rounded-[30px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_45px_rgba(90,90,64,0.08)] backdrop-blur-md md:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-[#f9ebe7] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-red-600/80">
-              Контроль потерь
-            </span>
-            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A5A40]/45 border border-[#5A5A40]/10">
-              Просрочка, брак и расхождения
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-red-100 rounded-2xl">
+              <AlertTriangle className="text-red-600" size={24} />
+            </div>
+            <span>
+              <h2 className="text-2xl font-bold text-[#151619]">Списания</h2>
+              <span className="text-[#5A5A40]/60 text-sm">
+                Просрочка, брак и расхождения
+              </span>
             </span>
           </div>
 
@@ -592,7 +632,7 @@ export const WriteOffView: React.FC = () => {
           </button>
         </div>
         </div>
-      </div>
+      )}
 
       {feedback && (
         <div className={`rounded-3xl border px-4 py-3 shadow-sm ${feedback.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-700'}`}>
@@ -603,15 +643,32 @@ export const WriteOffView: React.FC = () => {
         </div>
       )}
 
-      {loading ? (
-        <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40]" /></div>
-      ) : writeOffs.length === 0 ? (
-        <div className="text-center py-20 text-[#5A5A40]/40">
-          <Package size={48} className="mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">Списаний пока нет</p>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-3">
+          <DateRangeFilter
+            preset={preset}
+            setPreset={setPreset}
+            fromDate={fromDate}
+            setFromDate={(d) => { setFromDate(d); setPreset('custom'); }}
+            toDate={toDate}
+            setToDate={(d) => { setToDate(d); setPreset('custom'); }}
+            onRefresh={load}
+          />
         </div>
-      ) : (
-        <div className="space-y-3">
+
+        <div className="lg:col-span-9">
+          {loading ? (
+             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40] mb-4" />
+                <p className="text-sm text-[#5A5A40]/40 font-medium">Загружаем списания...</p>
+             </div>
+          ) : writeOffs.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-3xl border border-[#5A5A40]/5 shadow-sm text-[#5A5A40]/40">
+              <Package size={48} className="mx-auto mb-4 opacity-30" />
+              <p className="text-lg font-medium">Списаний пока нет</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
           {writeOffs.map((wo) => (
             <div key={wo.id} className="bg-white rounded-2xl shadow-sm border border-[#5A5A40]/5 overflow-hidden">
               <div
@@ -623,14 +680,18 @@ export const WriteOffView: React.FC = () => {
                     <AlertTriangle size={18} className="text-red-400" />
                   </div>
                   <div>
-                    <p className="font-semibold text-[#151619]">{wo.writeOffNo}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-[#151619]">{wo.writeOffNo}</p>
+                      {wo.status === 'DRAFT' && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black uppercase tracking-widest rounded-md border border-amber-200">Черновик</span>}
+                      {wo.status === 'POSTED' && <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-widest rounded-md border border-emerald-100">Проведено</span>}
+                    </div>
                     <p className="text-xs text-[#5A5A40]/50 mt-0.5">
                       {wo.warehouse?.name} · {wo.createdBy?.name} · {wo.items.length} поз.
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-sm font-bold text-[#151619]">{Number(wo.totalAmount || 0).toFixed(2)} {currencyCode}</span>
+                  <span className="text-sm font-bold text-[#151619] tabular-nums">{Number(wo.totalAmount || 0).toFixed(2)} {currencyCode}</span>
                   <span className="text-xs text-[#5A5A40]/40">{new Date(wo.createdAt).toLocaleDateString()}</span>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${REASON_STYLES[wo.reason] ?? 'bg-gray-100 text-gray-600'}`}>
                     {REASON_LABELS[wo.reason] || 'Другое'}
@@ -645,16 +706,32 @@ export const WriteOffView: React.FC = () => {
                       {wo.note && <p className="text-sm text-[#5A5A40]/60">Примечание: {wo.note}</p>}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEditModal(wo);
-                        }}
-                        className="inline-flex items-center gap-2 rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-all"
-                      >
-                        <Pencil size={15} /> Редактировать
-                      </button>
+                      {wo.status === 'DRAFT' && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleApprove(wo);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl bg-[#5A5A40] px-4 py-2 text-sm font-bold text-white hover:bg-[#4A4A30] shadow-md transition-all active:scale-95"
+                        >
+                          <CheckCircle2 size={15} /> Провести списание
+                        </button>
+                      )}
+                      
+                      {wo.status === 'DRAFT' && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEditModal(wo);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#5A5A40]/10 bg-white px-3 py-2 text-sm font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-all"
+                        >
+                          <Pencil size={15} /> Редактировать
+                        </button>
+                      )}
+                      
                       <button
                         type="button"
                         onClick={(event) => {
@@ -672,7 +749,7 @@ export const WriteOffView: React.FC = () => {
                     <thead>
                       <tr className="text-xs text-[#5A5A40]/40 uppercase tracking-widest">
                         <th className="text-left py-2">Товар</th>
-                        <th className="text-left py-2">Партия</th>
+                        <th className="text-left py-2">Кол-во в партии</th>
                         <th className="text-right py-2">Списано</th>
                       </tr>
                     </thead>
@@ -680,7 +757,7 @@ export const WriteOffView: React.FC = () => {
                       {wo.items.map((item) => (
                         <tr key={item.id} className="border-t border-[#5A5A40]/5">
                           <td className="py-2 font-medium">{item.product?.name ?? 'Неизвестно'}</td>
-                          <td className="py-2 text-[#5A5A40]/60">{item.batch?.batchNumber ?? '—'}</td>
+                          <td className="py-2 text-[#5A5A40]/60">{'quantity' in (item.batch ?? {}) && typeof (item.batch as any).quantity === 'number' ? formatPackQuantity((item.batch as any).quantity) : '—'}</td>
                           <td className="py-2 text-right text-red-600 font-semibold">−{formatPackQuantity(item.quantity)}</td>
                         </tr>
                       ))}
@@ -690,8 +767,10 @@ export const WriteOffView: React.FC = () => {
               )}
             </div>
           ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <CreateWriteOffModal open={isModalOpen} onClose={closeModal} onCreated={handleCreated} initialWriteOff={editingWriteOff} />
 

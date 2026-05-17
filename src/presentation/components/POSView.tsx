@@ -1,31 +1,32 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { usePharmacy } from '../context';
 import { buildApiHeaders } from '../../infrastructure/api';
-import { formatProductDisplayName } from '../../lib/productDisplay';
 import { saveLatestClosedShiftNotice } from '../../lib/shiftCloseNotice';
 import { CloseShiftModal, OpenShiftModal } from './ShiftView';
-import { 
-  Search, 
-  Barcode, 
-  ShoppingCart, 
-  Trash2, 
-  Plus, 
-  Minus, 
-  CreditCard, 
-  Wallet, 
-  CheckCircle2,
+import {
   AlertCircle,
-  Pill,
-  User as UserIcon,
+  Barcode,
+  CheckCircle2,
   CircleAlert,
+  CreditCard,
+  Minus,
+  Plus,
   RefreshCw,
+  Search,
+  ShoppingCart,
+  Trash2,
+  User,
+  Wallet,
 } from 'lucide-react';
 import { Product } from '../../core/domain';
 
 type CartItem = Product & {
   quantity: number;
-  markingCode?: string;
+  batchId?: string;
+  batchNumber?: string;
+  discountAmount?: number;
+  prescriptionPresented?: boolean;
+  expiryDate?: string;
 };
 
 type ActiveShift = {
@@ -43,16 +44,116 @@ type ClosedShiftSummary = {
   netSales: number;
 };
 
+const formatUnitQuantity = (quantity: number) => {
+  const safeQuantity = Math.max(0, Math.floor(Number(quantity) || 0));
+  return `${safeQuantity} ед.`;
+};
+
+const ProductCatalog = memo(({
+  filteredProducts,
+  onAddToCart,
+}: {
+  filteredProducts: Product[];
+  onAddToCart: (product: Product) => void;
+}) => {
+  if (filteredProducts.length === 0) {
+    return (
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div className="rounded-2xl border border-dashed border-[#5A5A40]/15 bg-[#f5f5f0]/40 px-5 py-8 text-center text-sm text-[#5A5A40]/55 font-normal">
+          Товары не найдены
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar [direction:rtl]">
+      <div className="space-y-1.5 [direction:ltr]">
+        {filteredProducts.map((product, index) => {
+          const stockLabel = formatUnitQuantity(product.totalStock);
+          const lowStock = product.totalStock < (product.minStock || 10);
+
+          // Expiry Analysis
+          const now = new Date();
+          const soonDays = 90;
+          const criticalDays = 30;
+          
+          let expiryStatus: 'EXPIRED' | 'CRITICAL' | 'SOON' | 'OK' = 'OK';
+          let minDays = Infinity;
+
+          if (product.batches && product.batches.length > 0) {
+            for (const b of product.batches) {
+              if (b.quantity <= 0) continue;
+              const exp = new Date(b.expiryDate);
+              const diffTime = exp.getTime() - now.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              if (diffDays < minDays) minDays = diffDays;
+              
+              if (diffDays <= 0) expiryStatus = 'EXPIRED';
+              else if (diffDays <= criticalDays && expiryStatus !== 'EXPIRED') expiryStatus = 'CRITICAL';
+              else if (diffDays <= soonDays && expiryStatus === 'OK') expiryStatus = 'SOON';
+            }
+          }
+
+          return (
+            <button
+              key={product.id}
+              onClick={() => onAddToCart(product)}
+              className="w-full bg-white px-3 py-2 rounded-xl shadow-sm border border-[#5A5A40]/5 hover:shadow-md transition-all text-left group"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 bg-[#f5f5f0] rounded-lg flex items-center justify-center text-[#5A5A40]/30 group-hover:bg-[#5A5A40] group-hover:text-white transition-colors shrink-0 text-[10px] font-normal">
+                  {index + 1}
+                </div>
+                <div className="min-w-0 flex-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                       <h3 className="text-[14px] font-normal text-[#151619] truncate leading-tight">{product.name}</h3>
+                       {product.countryOfOrigin && (
+                          <span className="shrink-0 px-1.5 py-0.5 bg-[#5A5A40]/5 text-[#5A5A40]/60 text-[8px] uppercase tracking-wider rounded-md border border-[#5A5A40]/10 font-bold">
+                            {product.countryOfOrigin}
+                          </span>
+                       )}
+                       {expiryStatus === 'EXPIRED' && <span className="shrink-0 scale-75 px-1.5 py-0.5 bg-red-600 text-white text-[8px] uppercase tracking-tighter rounded-md font-bold">Просрочено</span>}
+                       {expiryStatus === 'CRITICAL' && <span className="shrink-0 scale-75 px-1.5 py-0.5 bg-orange-500 text-white text-[8px] uppercase tracking-tighter rounded-md font-bold">Срок!</span>}
+                    </div>
+                    <div className="flex items-center gap-2.5 mt-0.5">
+                      <span className="text-[9px] text-[#5A5A40]/40 uppercase tracking-widest">{product.sku}</span>
+                      <span className="text-[9px] text-[#5A5A40]/30 italic truncate max-w-[120px]">{product.manufacturer}</span>
+                      <span className={`text-[9px] font-normal px-1.5 py-0.5 rounded-md ${lowStock ? 'bg-red-50 text-red-600' : 'bg-[#f5f5f0] text-[#5A5A40]/50'}`}>
+                        {stockLabel}
+                      </span>
+                      {expiryStatus !== 'OK' && expiryStatus !== 'EXPIRED' && (
+                         <span className={`text-[9px] font-normal px-1.5 py-0.5 rounded-md flex items-center gap-1 ${expiryStatus === 'CRITICAL' ? 'text-orange-600 bg-orange-50' : 'text-amber-600 bg-amber-50'}`}>
+                            <AlertCircle size={8} /> {minDays <= 0 ? 'Истек' : `${minDays} дн.`}
+                         </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[15px] font-normal text-[#5A5A40] tabular-nums whitespace-nowrap">
+                    {product.sellingPrice.toFixed(2)} <span className="text-[10px] opacity-40">TJS</span>
+                  </p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+ProductCatalog.displayName = 'ProductCatalog';
+
 export const POSView: React.FC = () => {
-  const { t } = useTranslation();
   const { products, refreshProducts, processTransaction, user } = usePharmacy();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [paymentType, setPaymentType] = useState<'CASH' | 'CARD' | 'CREDIT'>('CASH');
-  const [paidAmountInput, setPaidAmountInput] = useState('');
-  const [creditCustomerName, setCreditCustomerName] = useState('');
-  const [creditCustomerPhone, setCreditCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [paidAmount, setPaidAmount] = useState<number>(0);
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,667 +162,336 @@ export const POSView: React.FC = () => {
   const [shiftError, setShiftError] = useState<string | null>(null);
   const [isOpenShiftModal, setIsOpenShiftModal] = useState(false);
   const [isCloseShiftModal, setIsCloseShiftModal] = useState(false);
+  const [recentSales, setRecentSales] = useState<any[]>([]);
   const [closedShiftSummary, setClosedShiftSummary] = useState<ClosedShiftSummary | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [barcodeScanning, setBarcodeScanning] = useState(false);
+  const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
 
-  const cartProductIds = new Set(cart.map((item) => item.id));
+  const alphabet = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ".split("");
 
-  const filteredProducts = products.filter((p) => {
-    if (cartProductIds.has(p.id)) return false;
-    if (p.totalStock <= 0) return false;
-    return (
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(p.barcode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(p.manufacturer || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(p.countryOfOrigin || '').toLowerCase().includes(searchTerm.toLowerCase())
+  const normalizedSearchTerm = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm]);
+  const cartProductIds = useMemo(() => new Set(cart.map((item) => item.id)), [cart]);
+
+  const filteredProducts = useMemo(() => products.filter((product) => {
+    if (product.totalStock <= 0) return false;
+    if (cartProductIds.has(product.id)) return false;
+    
+    const matchesSearch = (
+      product.name.toLowerCase().includes(normalizedSearchTerm) ||
+      product.sku.toLowerCase().includes(normalizedSearchTerm) ||
+      String(product.barcode || '').toLowerCase().includes(normalizedSearchTerm)
     );
-  });
 
-  const getProductDisplayLabel = useCallback((product: Pick<Product, 'name' | 'manufacturer' | 'countryOfOrigin'>) => {
-    return formatProductDisplayName(product, {
-      includeManufacturer: true,
-      includeCountry: true,
-    });
-  }, []);
+    if (selectedLetter) {
+      return matchesSearch && product.name.toUpperCase().startsWith(selectedLetter);
+    }
+    return matchesSearch;
+  }), [products, normalizedSearchTerm, cartProductIds, selectedLetter]);
 
-  const formatUnitQuantity = (quantity: number) => {
-    const safeQuantity = Math.max(0, Math.floor(Number(quantity) || 0));
-    return `${safeQuantity} ед.`;
-  };
-
-  const getCartItemKey = (item: Pick<CartItem, 'id' | 'markingCode'>) => `${item.id}:${item.markingCode || 'default'}`;
-
-  const findProductByScannedCode = (rawCode: string) => {
+  const getCartItemKey = useCallback((item: Pick<CartItem, 'id' | 'batchId'>) => `${item.id}:${item.batchId || 'default'}`, []);
+  const findProductByScannedCode = useCallback((rawCode: string) => {
     const normalize = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const normalizedCode = normalize(rawCode);
     if (!normalizedCode) return null;
-
     return (
-      products.find((p) => normalize(p.sku) === normalizedCode) ||
-      products.find((p) => normalize(p.barcode || '') === normalizedCode) ||
-      products.find((p) => normalize(p.id) === normalizedCode) ||
+      products.find((product) => normalize(product.sku) === normalizedCode) ||
+      products.find((product) => normalize(product.barcode || '') === normalizedCode) ||
+      products.find((product) => normalize(product.id) === normalizedCode) ||
       null
     );
-  };
-
-  useEffect(() => {
-    barcodeInputRef.current?.focus();
-  }, []);
-
-  const loadActiveShift = useCallback(async () => {
-    setShiftLoading(true);
-    setShiftError(null);
-
-    try {
-      const response = await fetch('/api/shifts/active', {
-        headers: await buildApiHeaders(),
-      });
-
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(body?.error || 'Не удалось проверить активную смену');
-      }
-
-      setActiveShift(body);
-    } catch (shiftLoadError: any) {
-      setActiveShift(null);
-      setShiftError(shiftLoadError?.message || 'Не удалось проверить активную смену');
-    } finally {
-      setShiftLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadActiveShift();
-
-    const handleFocus = () => {
-      void loadActiveShift();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [loadActiveShift]);
-
-  useEffect(() => {
-    if (products.length > 0) {
-      return;
-    }
-
-    void refreshProducts();
-  }, [products.length, refreshProducts]);
-
-  // Global barcode listener (simulated)
-  useEffect(() => {
-    let buffer = '';
-    let lastKeyTime = Date.now();
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const currentTime = Date.now();
-      
-      // If time between keys is very short, it's likely a scanner
-      if (currentTime - lastKeyTime > 50) {
-        buffer = '';
-      }
-      
-      if (e.key === 'Enter') {
-        if (buffer.length > 5) {
-          const product = findProductByScannedCode(buffer);
-          if (product) {
-            addToCart(product);
-          }
-          buffer = '';
-        }
-      } else if (e.key.length === 1) {
-        buffer += e.key;
-      }
-      
-      lastKeyTime = currentTime;
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [products]);
 
-  const addToCart = (product: Product) => {
+  const addToCart = useCallback((product: Product) => {
     if (product.totalStock <= 0) {
       setError('Товар закончился на складе');
       window.setTimeout(() => setError(null), 2000);
       return;
     }
-
-    const existing = cart.find(item => item.id === product.id && !item.markingCode);
-    if (existing) {
-      setCart(cart.map(item => {
-        if (item.id !== product.id || item.markingCode) return item;
-        return { ...item, quantity: Math.min(item.totalStock, item.quantity + 1) };
-      }));
-    } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
-    }
-    setSearchTerm('');
-  };
-
-  const handleBarcodeScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      const product = findProductByScannedCode(barcodeInput);
-      if (product) {
-        if (product.totalStock <= 0) {
-          setError('Товар закончился на складе');
-          setTimeout(() => setError(null), 3000);
-        } else {
-          addToCart(product);
+    setCart((currentCart) => {
+      const existing = currentCart.find((item) => item.id === product.id);
+      if (existing) {
+        return currentCart.map((item) => {
+          if (item.id !== product.id) return item;
+          return { ...item, quantity: Math.min(item.totalStock, item.quantity + 1) };
+        });
+      }
+      return [
+        ...currentCart,
+        {
+          ...product,
+          quantity: 1,
+          batchId: undefined, 
+          batchNumber: 'FIFO Авто',
+          expiryDate: new Date().toISOString(),
+          prescriptionPresented: !product.prescription,
         }
-        setBarcodeInput('');
-      } else {
-        setError(`Товар по штрихкоду не найден: ${barcodeInput}`);
-        setBarcodeInput('');
-        setTimeout(() => setError(null), 3000);
-      }
-    }
-  };
+      ];
+    });
+  }, []);
 
-  const removeFromCart = (cartItemKey: string) => {
-    setCart(cart.filter(item => getCartItemKey(item) !== cartItemKey));
-  };
-
-  const updateQuantity = (cartItemKey: string, delta: number) => {
-    setCart(cart.map(item => {
-      if (getCartItemKey(item) === cartItemKey) {
-        return { ...item, quantity: Math.max(1, Math.min(item.totalStock, item.quantity + delta)) };
-      }
-      return item;
-    }));
-  };
-
-  const updateQuantityFromInput = (cartItemKey: string, unitsValue: string) => {
-    setCart(cart.map((item) => {
-      if (getCartItemKey(item) !== cartItemKey) {
-        return item;
-      }
-
-      const parsedUnits = Number(unitsValue);
-      if (!Number.isFinite(parsedUnits)) {
-        return item;
-      }
-
-      return {
-        ...item,
-        quantity: Math.max(1, Math.min(item.totalStock, Math.floor(parsedUnits))),
-      };
-    }));
-  };
-
-  const subtotal = cart.reduce((acc, item) => acc + (item.sellingPrice * item.quantity), 0);
+  const subtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.sellingPrice * item.quantity), 0), [cart]);
   const total = subtotal;
-  const isCreditSale = paymentType === 'CREDIT';
-  const enteredPaidAmountPreview = paidAmountInput.trim() === ''
-    ? isCreditSale ? 0 : total
-    : Number(paidAmountInput);
-  const outstandingAmount = Number.isFinite(enteredPaidAmountPreview)
-    ? Math.max(0, total - Math.min(enteredPaidAmountPreview, total))
-    : total;
-  const needsDebtorDetails = isCreditSale || outstandingAmount > 0.009;
+
+  useEffect(() => { barcodeInputRef.current?.focus(); }, []);
+
+  const loadActiveShift = useCallback(async () => {
+    setShiftLoading(true);
+    try {
+      const response = await fetch('/api/shifts/active', { headers: await buildApiHeaders() });
+      const body = await response.json().catch(() => null);
+      if (response.ok) setActiveShift(body);
+      else throw new Error('Shift load failed');
+    } catch {
+      setActiveShift(null);
+    } finally {
+      setShiftLoading(false);
+    }
+  }, []);
+
+  const loadRecentSales = useCallback(async () => {
+    try {
+      const res = await fetch('/api/sales/invoices?limit=10', { headers: await buildApiHeaders() });
+      const data = await res.json();
+      setRecentSales(data.items || []);
+    } catch (err) { console.error(err); }
+  }, []);
+
+  useEffect(() => { loadActiveShift(); loadRecentSales(); }, [loadActiveShift, loadRecentSales]);
+
+  useEffect(() => { if (products.length === 0) void refreshProducts(); }, [products.length, refreshProducts]);
 
   useEffect(() => {
-    if (cart.length === 0) {
-      setPaidAmountInput('');
-      setCreditCustomerName('');
-      setCreditCustomerPhone('');
-    }
-  }, [cart.length]);
+    let buffer = '';
+    let lastKeyTime = Date.now();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const currentTime = Date.now();
+      if (currentTime - lastKeyTime > 50) buffer = '';
+      if (event.key === 'Enter') {
+        if (buffer.length > 5) {
+          const product = findProductByScannedCode(buffer);
+          if (product) addToCart(product);
+          buffer = '';
+        }
+      } else if (event.key.length === 1) buffer += event.key;
+      lastKeyTime = currentTime;
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [addToCart, findProductByScannedCode]);
 
-  useEffect(() => {
-    if (paymentType === 'CREDIT') {
-      return;
+  const handleBarcodeScan = useCallback(async (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return;
+    const code = barcodeInput.trim();
+    if (!code) return;
+    const local = findProductByScannedCode(code);
+    if (local) {
+      addToCart(local);
+      setBarcodeInput('');
+    } else {
+      setBarcodeScanning(true);
+      setBarcodeInput('');
+      try {
+        const res = await fetch(`/api/products/barcode/${encodeURIComponent(code)}`, { headers: await buildApiHeaders(false) });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) { addToCart(body as Product); void refreshProducts(); }
+        else { setError(`Товар «${code}» не найден`); window.setTimeout(() => setError(null), 3000); }
+      } catch {
+        setError(`Ошибка сканирования`);
+        window.setTimeout(() => setError(null), 3000);
+      } finally { setBarcodeScanning(false); }
     }
+    barcodeInputRef.current?.focus();
+  }, [addToCart, barcodeInput, findProductByScannedCode, refreshProducts]);
 
-    setPaidAmountInput(total > 0 ? total.toFixed(2) : '');
-  }, [paymentType, total]);
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter' && filteredProducts[0]) addToCart(filteredProducts[0]);
+  };
+
+  const handleSearchChange = (val: string) => {
+    setSearchTerm(val);
+    if (!val) setSelectedLetter(null);
+  };
+
+  const removeFromCart = useCallback((cartItemKey: string) => {
+    setCart((currentCart) => currentCart.filter((item) => getCartItemKey(item) !== cartItemKey));
+  }, [getCartItemKey]);
+
+  const updateQuantity = useCallback((cartItemKey: string, delta: number) => {
+    setCart((curr) => curr.map((item) => getCartItemKey(item) === cartItemKey ? { ...item, quantity: Math.max(1, Math.min(item.totalStock, item.quantity + delta)) } : item));
+  }, [getCartItemKey]);
+
+  const togglePrescription = (cartItemKey: string) => {
+    setCart(curr => curr.map(item => getCartItemKey(item) === cartItemKey ? { ...item, prescriptionPresented: !item.prescriptionPresented } : item));
+  };
 
   const handleComplete = async () => {
     if (cart.length === 0) return;
-
-    if (!activeShift) {
-      setError('Сначала откройте смену, затем оформляйте продажу');
-      return;
-    }
-
-    const enteredPaidAmount = paidAmountInput.trim() === ''
-      ? isCreditSale ? 0 : total
-      : Number(paidAmountInput);
-
-    if (!Number.isFinite(enteredPaidAmount) || enteredPaidAmount < 0) {
-      setError('Введите корректную сумму внесенных денег');
-      return;
-    }
-
-    if (enteredPaidAmount < total && !creditCustomerName.trim()) {
-      setError('Для продажи в долг укажите имя покупателя');
-      return;
-    }
-
-    const paidAmount = Math.min(enteredPaidAmount, total);
-
+    const rxMissing = cart.find(it => it.prescription && !it.prescriptionPresented);
+    if (rxMissing) return setError(`Для "${rxMissing.name}" нужен рецепт`);
+    if (paymentType === 'CREDIT' && !customerName.trim()) return setError('Имя клиента обязательно');
+    if (!activeShift) return setError('Откройте смену');
+    
     setProcessing(true);
-    setError(null);
     try {
       await processTransaction({
-        items: cart.map(item => ({
-          productId: item.id,
-          quantity: item.quantity,
-          sellingPrice: item.sellingPrice
+        items: cart.map((item) => ({ 
+          productId: item.id, 
+          batchId: item.batchId,
+          quantity: item.quantity, 
+          sellingPrice: item.sellingPrice,
+          prescriptionPresented: item.prescriptionPresented,
         })),
         discountAmount: 0,
         taxAmount: 0,
         total,
         paymentType,
-        customer: enteredPaidAmount < total ? creditCustomerName.trim() : undefined,
-        customerPhone: enteredPaidAmount < total ? creditCustomerPhone.trim() : undefined,
-        paidAmount,
+        customerName: paymentType === 'CREDIT' ? customerName : undefined,
+        paidAmount: paymentType === 'CREDIT' ? Number(paidAmount) : total,
         userId: user?.id || '',
-        date: new Date()
+        date: new Date(),
       });
       setSuccess(true);
       setCart([]);
-      setCreditCustomerName('');
-      setCreditCustomerPhone('');
-      setPaidAmountInput('');
+      setCustomerName('');
+      setPaidAmount(0);
       void loadActiveShift();
-      setTimeout(() => setSuccess(false), 3000);
+      window.setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
-      setError(err.message || 'Не удалось завершить продажу');
-    } finally {
-      setProcessing(false);
-    }
+      setError(err.message || 'Ошибка продажи');
+    } finally { setProcessing(false); }
   };
 
   return (
     <>
-      <div className="grid w-full grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(360px,32vw)] gap-4 h-[calc(100vh-12rem)] animate-in fade-in duration-500">
-      {/* Left: Product Selection */}
-      <div className="bg-white rounded-3xl shadow-xl border border-[#5A5A40]/5 flex flex-col overflow-hidden min-w-0 h-full">
-        <div className="p-5 border-b border-[#5A5A40]/5 flex flex-col gap-4 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                Система онлайн
+      <div className="grid w-full grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 h-[calc(100vh-12rem)] animate-in fade-in duration-500 font-normal">
+        <div className="bg-white rounded-3xl shadow-xl border border-[#5A5A40]/5 flex flex-col overflow-hidden min-w-0 h-full">
+          <div className="p-5 border-b border-[#5A5A40]/5 flex flex-col gap-4 shrink-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
+                <input ref={searchInputRef} type="text" value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Поиск товара..." className="w-full pl-12 pr-4 py-3 bg-[#f5f5f0]/50 border-none rounded-2xl focus:ring-2 focus:ring-[#5A5A40]/20 transition-all text-sm outline-none" />
               </div>
-              <button
-                type="button"
-                onClick={() => void loadActiveShift()}
-                className="w-9 h-9 rounded-xl border border-[#5A5A40]/10 bg-white flex items-center justify-center text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
-                title="Обновить статус смены"
-              >
-                <RefreshCw size={15} className={shiftLoading ? 'animate-spin' : ''} />
-              </button>
+              <div className="relative group">
+                <Barcode className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
+                <input ref={barcodeInputRef} type="text" value={barcodeInput} onChange={(e) => setBarcodeInput(e.target.value)} onKeyDown={handleBarcodeScan} placeholder="Штрихкод..." className="w-full pl-12 pr-4 py-3 bg-[#f5f5f0]/50 border-none rounded-2xl focus:ring-2 focus:ring-[#5A5A40]/20 transition-all text-sm outline-none" />
+              </div>
             </div>
-          </div>
 
-          <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 ${activeShift ? 'border-emerald-100 bg-emerald-50/80 text-emerald-700' : 'border-amber-100 bg-amber-50/80 text-amber-700'}`}>
-            <div className="flex items-center gap-3 min-w-0">
-              {activeShift ? <CheckCircle2 size={18} /> : <CircleAlert size={18} />}
-              <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-widest">
-                  {activeShift ? 'Смена открыта' : 'Смена не открыта'}
-                </p>
-                <p className="text-xs mt-1 truncate">
-                  {activeShift
-                    ? `${activeShift.shiftNo} • открыта ${new Date(activeShift.openAt).toLocaleString()}`
-                    : (shiftError || 'Для оформления продажи сначала откройте смену в разделе смен.')}
-                </p>
-              </div>
+            <div className="flex items-center gap-1 overflow-x-auto pb-2 no-scrollbar custom-scrollbar">
+              <button onClick={() => setSelectedLetter(null)} className={`shrink-0 w-8 h-8 rounded-lg text-[10px] transition-all ${!selectedLetter ? 'bg-[#5A5A40] text-white shadow-sm' : 'bg-[#f5f5f0] text-[#5A5A40]/40 hover:bg-[#5A5A40]/10'}`}>Все</button>
+              {alphabet.map(char => (
+                <button key={char} onClick={() => setSelectedLetter(selectedLetter === char ? null : char)} className={`shrink-0 w-8 h-8 rounded-lg text-[10px] transition-all ${selectedLetter === char ? 'bg-[#5A5A40] text-white shadow-sm' : 'bg-[#f5f5f0] text-[#5A5A40]/40 hover:bg-[#5A5A40]/10'}`}>{char}</button>
+              ))}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {activeShift ? (
-                <button
-                  type="button"
-                  onClick={() => setIsCloseShiftModal(true)}
-                  className="px-3 py-2 rounded-xl bg-[#5A5A40] text-white text-xs font-semibold hover:bg-[#4A4A30] transition-colors"
-                >
-                  Закрыть смену
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsOpenShiftModal(true)}
-                  className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors"
-                >
-                  Открыть смену
-                </button>
-              )}
-            </div>
-          </div>
 
-          {closedShiftSummary && !activeShift && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Последняя закрытая смена</p>
-                <p className="text-sm text-emerald-800 mt-1">{closedShiftSummary.shiftNo || 'Смена'} завершена. Прибыль за сегодня уже рассчитана.</p>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                <span className="rounded-full bg-white px-3 py-1.5 text-emerald-800">Прибыль: {closedShiftSummary.grossProfit.toFixed(2)} TJS</span>
-                <span className="rounded-full bg-white px-3 py-1.5 text-[#5A5A40]">Продажи нетто: {closedShiftSummary.netSales.toFixed(2)} TJS</span>
-              </div>
-            </div>
-          )}
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
-              <input 
-                type="text" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Поиск товара по названию"
-                className="w-full pl-12 pr-4 py-3 bg-[#f5f5f0]/50 border-none rounded-2xl focus:ring-2 focus:ring-[#5A5A40]/20 transition-all text-sm outline-none"
-              />
-            </div>
-            <div className="relative group">
-              <Barcode className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A40]/30 group-focus-within:text-[#5A5A40] transition-colors" size={18} />
-              <input 
-                ref={barcodeInputRef}
-                type="text" 
-                value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
-                onKeyDown={handleBarcodeScan}
-                placeholder="Сканируйте штрихкод"
-                className="w-full pl-12 pr-4 py-3 bg-[#f5f5f0]/50 border-none rounded-2xl focus:ring-2 focus:ring-[#5A5A40]/20 transition-all text-sm outline-none"
-              />
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] text-[#5A5A40]/30 uppercase tracking-[0.2em]">Найдено: {filteredProducts.length}</span>
             </div>
           </div>
-
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] text-[#5A5A40]/55">Найдено: {filteredProducts.length}</span>
-            </div>
-          </div>
+          <ProductCatalog filteredProducts={filteredProducts} onAddToCart={addToCart} />
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-          <div className="space-y-2">
-            {filteredProducts.map((product, index) => (
-              (() => {
-                const stockLabel = formatUnitQuantity(product.totalStock);
-                const lowStock = product.totalStock < (product.minStock || 10);
-                const metaBadges = [product.manufacturer, product.countryOfOrigin].filter(Boolean);
+        <div className="bg-white rounded-3xl shadow-xl border border-[#5A5A40]/5 flex flex-col overflow-hidden min-w-0">
+          <div className="p-4 border-b border-[#5A5A40]/5 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <ShoppingCart size={17} className="text-[#5A5A40]/40" />
+              <h3 className="text-sm font-normal text-[#151619]">Заказ</h3>
+            </div>
+            <span className="bg-[#f5f5f0] text-[#5A5A40]/40 text-[10px] px-2 py-0.5 rounded-md uppercase tracking-wider">{cart.length} поз.</span>
+          </div>
 
+          <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
+            {cart.length > 0 ? (
+              cart.map((item) => {
+                const cartItemKey = getCartItemKey(item);
                 return (
-              <button
-                key={product.id}
-                onClick={() => addToCart(product)}
-                className="w-full bg-white px-4 py-3 rounded-2xl shadow-sm border border-[#5A5A40]/5 hover:shadow-md transition-all text-left group"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 bg-[#f5f5f0] rounded-xl flex items-center justify-center text-[#5A5A40] group-hover:bg-[#5A5A40] group-hover:text-white transition-colors shrink-0">
-                    <span className="text-xs font-bold">{index + 1}</span>
-                  </div>
-
-                  <div className="min-w-0 flex-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-[15px] font-bold text-[#5A5A40] truncate">{product.name}</h3>
-                      </div>
-                      <p className="text-[10px] text-[#5A5A40]/50 uppercase tracking-widest mt-0.5">{product.sku}</p>
-                      {metaBadges.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {product.manufacturer && (
-                            <span className="inline-flex rounded-full bg-[#eef2e6] px-2 py-0.5 text-[10px] font-semibold text-[#5A5A40]">
-                              {product.manufacturer}
-                            </span>
+                  <div key={cartItemKey} className="p-2.5 bg-[#f5f5f0]/50 rounded-2xl border border-[#5A5A40]/5 group space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                           <h4 className="text-[12px] font-normal text-[#151619] truncate leading-tight">{item.name}</h4>
+                           {item.batches?.some(b => new Date(b.expiryDate).getTime() < Date.now()) && (
+                              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" title="В составе есть просроченные партии!" />
+                           )}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {item.countryOfOrigin && (
+                             <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-[#5A5A40]/5 text-[#5A5A40]/40 border border-[#5A5A40]/10 uppercase tracking-widest font-normal">{item.countryOfOrigin}</span>
                           )}
-                          {product.countryOfOrigin && (
-                            <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
-                              {product.countryOfOrigin}
-                            </span>
+                          {item.prescription && (
+                             <button onClick={() => togglePrescription(cartItemKey)} className={`text-[8px] px-1.5 py-0.5 rounded-full uppercase tracking-tighter border transition-colors ${item.prescriptionPresented ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-red-50 border-red-100 text-red-500'}`}>{item.prescriptionPresented ? 'Рецепт OK' : 'Нужен рецепт'}</button>
+                          )}
+                          {item.batches?.some(b => {
+                             const days = Math.ceil((new Date(b.expiryDate).getTime() - Date.now()) / (1000*60*60*24));
+                             return days > 0 && days <= 30;
+                          }) && (
+                             <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 uppercase tracking-tighter font-bold">Срок поджимает</span>
                           )}
                         </div>
-                      )}
-                      <p className={`text-[10px] font-bold mt-1.5 px-2 py-1 rounded-lg w-fit ${lowStock ? 'bg-amber-100 text-amber-700' : 'bg-[#f5f5f0] text-[#5A5A40]/60'}`}>
-                        Остаток: {stockLabel}
-                      </p>
-                    </div>
-
-                    <p className="text-[16px] font-bold text-[#5A5A40] leading-none text-right">{product.sellingPrice.toFixed(2)} TJS</p>
-                  </div>
-                </div>
-              </button>
-                );
-              })()
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Right: Cart & Checkout */}
-      <div className="bg-white rounded-3xl shadow-xl border border-[#5A5A40]/5 flex flex-col overflow-hidden min-w-0">
-        <div className="p-3 border-b border-[#5A5A40]/5 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <ShoppingCart size={17} className="text-[#5A5A40]" />
-            <h3 className="text-[15px] font-bold text-[#5A5A40]">Текущий заказ</h3>
-          </div>
-          <span className="bg-[#f5f5f0] text-[#5A5A40] text-[11px] font-bold px-2 py-1 rounded-lg">
-            {cart.length} позиций
-          </span>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
-          {cart.length > 0 ? (
-            cart.map((item) => {
-              const cartItemKey = getCartItemKey(item);
-              const metaBadges = [item.manufacturer, item.countryOfOrigin].filter(Boolean);
-
-              return (
-              <div key={cartItemKey} className="p-2 bg-[#f5f5f0]/50 rounded-xl border border-[#5A5A40]/5 group space-y-1.5">
-                <div className="flex items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-[12px] font-bold text-[#5A5A40] truncate leading-tight">{item.name}</h4>
-                    {metaBadges.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {item.manufacturer && (
-                          <span className="inline-flex rounded-full bg-[#eef2e6] px-2 py-0.5 text-[9px] font-semibold text-[#5A5A40]">
-                            {item.manufacturer}
-                          </span>
-                        )}
-                        {item.countryOfOrigin && (
-                          <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-semibold text-sky-700">
-                            {item.countryOfOrigin}
-                          </span>
-                        )}
+                        <p className="text-[10px] text-[#5A5A40]/40 mt-1">{item.sellingPrice.toFixed(2)} TJS</p>
                       </div>
-                    )}
-                    <p className="text-[10px] text-[#5A5A40]/55 mt-0.5 leading-tight">
-                      {item.sellingPrice.toFixed(2)} TJS / ед. • Остаток: {formatUnitQuantity(item.totalStock)}
-                    </p>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <p className="text-[12px] font-normal text-[#151619] tabular-nums">{(item.sellingPrice * item.quantity).toFixed(2)}</p>
+                        <button onClick={() => removeFromCart(cartItemKey)} className="p-1 text-[#5A5A40]/20 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => updateQuantity(cartItemKey, -1)} className="w-5 h-5 bg-white rounded-md flex items-center justify-center text-[#5A5A40]/40 hover:bg-[#5A5A40] hover:text-white transition-all shadow-sm"><Minus size={11} /></button>
+                      <span className="text-[11px] font-normal tabular-nums min-w-8 text-center">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(cartItemKey, 1)} className="w-5 h-5 bg-white rounded-md flex items-center justify-center text-[#5A5A40]/40 hover:bg-[#5A5A40] hover:text-white transition-all shadow-sm"><Plus size={11} /></button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <p className="text-[12px] font-bold text-[#5A5A40]">{(item.sellingPrice * item.quantity).toFixed(2)} TJS</p>
-                    <button 
-                      onClick={() => removeFromCart(cartItemKey)}
-                      className="p-1 text-[#5A5A40]/35 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <button 
-                    onClick={() => updateQuantity(cartItemKey, -1)}
-                    className="w-5 h-5 bg-white rounded-md flex items-center justify-center text-[#5A5A40] hover:bg-[#5A5A40] hover:text-white transition-colors shadow-sm"
-                  >
-                    <Minus size={11} />
-                  </button>
-                  <span className="text-[11px] font-bold text-[#5A5A40] min-w-14 text-center">{formatUnitQuantity(item.quantity)}</span>
-                  <button 
-                    onClick={() => updateQuantity(cartItemKey, 1)}
-                    className="w-5 h-5 bg-white rounded-md flex items-center justify-center text-[#5A5A40] hover:bg-[#5A5A40] hover:text-white transition-colors shadow-sm"
-                  >
-                    <Plus size={11} />
-                  </button>
-
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={item.quantity}
-                    onChange={(e) => updateQuantityFromInput(cartItemKey, e.target.value)}
-                    className="w-20 px-2 py-1 bg-white border border-[#5A5A40]/10 rounded-lg text-[11px] outline-none focus:ring-2 focus:ring-[#5A5A40]/15"
-                    placeholder="ед."
-                    aria-label="Единицы"
-                  />
-                </div>
+                );
+              })
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-[#5A5A40]/20 text-center p-6 italic">
+                <ShoppingCart size={32} className="mb-2" />
+                <p className="text-[12px]">Пусто</p>
               </div>
-              );
-            })
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-[#5A5A40]/30 text-center p-6">
-              <ShoppingCart size={38} strokeWidth={1.1} className="mb-3" />
-              <p className="text-[13px] font-medium italic">Корзина пуста.<br/>Выберите товары для начала.</p>
-            </div>
-          )}
-        </div>
-
-        <div className="p-3 bg-[#f5f5f0]/50 border-t border-[#5A5A40]/5 space-y-2.5 shrink-0">
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-[18px] font-bold text-[#5A5A40] pt-2 border-t border-[#5A5A40]/10">
-              <span>Итого</span>
-              <span>{total.toFixed(2)} TJS</span>
-            </div>
+            )}
           </div>
 
-          <div className="bg-white p-2.5 rounded-xl border border-[#5A5A40]/10 space-y-1.5">
-            <label className="block text-xs font-bold uppercase tracking-widest text-[#5A5A40]/60">Внесено</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={paidAmountInput}
-                onChange={(e) => setPaidAmountInput(e.target.value)}
-                className="w-full px-3 py-1.5 border border-[#5A5A40]/15 rounded-lg text-[13px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                placeholder="0.00"
-              />
-              <button
-                type="button"
-                onClick={() => setPaidAmountInput(total > 0 ? total.toFixed(2) : '')}
-                className="shrink-0 px-3 py-1.5 rounded-lg border border-[#5A5A40]/15 text-[12px] font-semibold text-[#5A5A40] hover:bg-[#f5f5f0] transition-colors"
-              >
-                Все
-              </button>
-            </div>
-            <p className="text-[11px] text-[#5A5A40]/60">
-              {(() => {
-                const entered = Number(paidAmountInput || 0);
-                if (!Number.isFinite(entered) || entered <= 0) return '';
-                if (entered < total) return `Частичная оплата: остаток ${(total - entered).toFixed(2)} TJS`;
-                return 'Оплачено полностью';
-              })()}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <button 
-              onClick={() => setPaymentType('CASH')}
-              className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[12px] transition-all ${paymentType === 'CASH' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}
-            >
-              <Wallet size={14} />
-              Наличные
-            </button>
-            <button 
-              onClick={() => setPaymentType('CARD')}
-              className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[12px] transition-all ${paymentType === 'CARD' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}
-            >
-              <CreditCard size={14} />
-              Карта
-            </button>
-            <button
-              onClick={() => {
-                setPaymentType('CREDIT');
-                setPaidAmountInput('');
-              }}
-              className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-medium text-[12px] transition-all ${paymentType === 'CREDIT' ? 'bg-[#5A5A40] text-white shadow-lg' : 'bg-white text-[#5A5A40] border border-[#5A5A40]/10 hover:bg-white/80'}`}
-            >
-              <Wallet size={14} />
-              В долг
-            </button>
-          </div>
-
-          {needsDebtorDetails && (
-            <div className="bg-white p-2.5 rounded-xl border border-[#5A5A40]/10 space-y-2">
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#5A5A40]/55">
-                <UserIcon size={14} />
-                Покупатель для долга
+          <div className="p-4 bg-[#f5f5f0]/50 border-t border-[#5A5A40]/5 space-y-3 shrink-0">
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-[#5A5A40]/40">
+                <span>Итог</span>
+                <span className="tabular-nums">{subtotal.toFixed(2)} TJS</span>
               </div>
-              <input
-                type="text"
-                value={creditCustomerName}
-                onChange={(e) => setCreditCustomerName(e.target.value)}
-                className="w-full px-3 py-2 border border-[#5A5A40]/15 rounded-lg text-[13px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                placeholder="Имя покупателя"
-              />
-              <input
-                type="text"
-                value={creditCustomerPhone}
-                onChange={(e) => setCreditCustomerPhone(e.target.value)}
-                className="w-full px-3 py-2 border border-[#5A5A40]/15 rounded-lg text-[13px] outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                placeholder="Номер телефона (необязательно)"
-              />
-              <p className="text-[11px] text-[#5A5A40]/55">
-                Продажа в долг спишет остаток со склада и создаст запись в разделе должников.
-              </p>
+              <div className="flex justify-between text-xl font-normal text-[#151619] pt-1.5 border-t border-[#5A5A40]/5">
+                <span className="tracking-tight text-sm text-[#5A5A40]/40">К оплате</span>
+                <span className="tabular-nums">{total.toFixed(2)} TJS</span>
+              </div>
             </div>
-          )}
 
-          {error && (
-            <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100 flex items-center gap-2">
-              <AlertCircle size={14} />
-              {error}
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => setPaymentType('CASH')} className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[10px] transition-all uppercase tracking-widest ${paymentType === 'CASH' ? 'bg-[#5A5A40] text-white' : 'bg-white text-[#5A5A40]/40 border border-[#5A5A40]/10'}`}><Wallet size={12} /> Нал</button>
+              <button onClick={() => setPaymentType('CARD')} className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[10px] transition-all uppercase tracking-widest ${paymentType === 'CARD' ? 'bg-[#5A5A40] text-white' : 'bg-white text-[#5A5A40]/40 border border-[#5A5A40]/10'}`}><CreditCard size={12} /> Карта</button>
+              <button onClick={() => setPaymentType('CREDIT')} className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[10px] transition-all uppercase tracking-widest shadow-sm ${paymentType === 'CREDIT' ? 'bg-amber-600 text-white' : 'bg-white text-amber-600 border border-amber-100'}`}><User size={12} /> Долг</button>
             </div>
-          )}
 
-          {success && (
-            <div className="p-3 bg-emerald-50 text-emerald-600 text-xs rounded-lg border border-emerald-100 flex items-center gap-2">
-              <CheckCircle2 size={14} />
-              Продажа успешно завершена
-            </div>
-          )}
+            {paymentType === 'CREDIT' && (
+              <div className="space-y-2.5 animate-in fade-in zoom-in duration-300">
+                <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Имя клиента..." className="w-full px-4 py-2.5 bg-white border border-[#5A5A40]/10 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#5A5A40]/5" />
+                <input type="number" value={paidAmount || ''} onChange={(e) => setPaidAmount(Number(e.target.value))} placeholder="Внесено (0.00)" className="w-full px-4 py-3 bg-[#f5f5f0]/30 border border-[#5A5A40]/10 rounded-xl text-sm font-normal text-[#151619] outline-none tabular-nums" />
+              </div>
+            )}
 
-          <button 
-            onClick={handleComplete}
-            disabled={cart.length === 0 || processing || !activeShift || shiftLoading}
-            className="w-full bg-[#5A5A40] text-white py-2.5 rounded-2xl font-bold shadow-xl hover:bg-[#4A4A30] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale disabled:scale-100"
-          >
-            {processing ? 'Обработка...' : !activeShift ? 'Сначала откройте смену' : 'Завершить продажу'}
-          </button>
+            {error && <div className="p-3 bg-red-50 text-red-500 text-[10px] rounded-xl border border-red-100 leading-tight">{error}</div>}
+            {success && <div className="p-3 bg-emerald-50 text-emerald-600 text-[10px] rounded-xl border border-emerald-100">Успешно!</div>}
+
+            <button onClick={handleComplete} disabled={cart.length === 0 || processing || !activeShift} className="w-full bg-[#5A5A40] text-white py-3.5 rounded-2xl text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-[#4A4A30] active:scale-[0.98] transition-all disabled:opacity-30 disabled:grayscale">
+              {processing ? '...' : 'Оплатить'}
+            </button>
+          </div>
         </div>
       </div>
 
-      </div>
-
-      <OpenShiftModal
-        open={isOpenShiftModal}
-        onClose={() => setIsOpenShiftModal(false)}
-        onOpened={() => {
-          setClosedShiftSummary(null);
-          void loadActiveShift();
-        }}
-      />
-      {activeShift && (
-        <CloseShiftModal
-          shiftId={activeShift.id}
-          open={isCloseShiftModal}
-          onClose={() => setIsCloseShiftModal(false)}
-          onClosed={(result) => {
-            if (result) {
-              saveLatestClosedShiftNotice(result);
-              setClosedShiftSummary(result);
-            }
-            void loadActiveShift();
-          }}
-        />
-      )}
+      <OpenShiftModal open={isOpenShiftModal} onClose={() => setIsOpenShiftModal(false)} onOpened={() => void loadActiveShift()} />
+      {activeShift && <CloseShiftModal shiftId={activeShift.id} open={isCloseShiftModal} onClose={() => setIsCloseShiftModal(false)} onClosed={(r) => { if (r) { saveLatestClosedShiftNotice(r); setClosedShiftSummary(r); } void loadActiveShift(); }} />}
     </>
   );
 };
+
+export default POSView;

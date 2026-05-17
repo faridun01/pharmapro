@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, type AuthedRequest } from '../../common/auth';
+import { authenticate, requireRole, type AuthedRequest } from '../../common/auth';
 import { asyncHandler } from '../../common/http';
 import { prisma } from '../../infrastructure/prisma';
 import { ValidationError } from '../../common/errors';
@@ -10,8 +10,26 @@ export const writeoffRouter = Router();
 const VALID_REASONS = ['EXPIRED', 'DAMAGED', 'LOST', 'INTERNAL_USE', 'MISMATCH', 'BROKEN_PACKAGING', 'OTHER'] as const;
 type WriteOffReasonStr = (typeof VALID_REASONS)[number];
 
-writeoffRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
+// GET / — All authenticated users can see write-offs
+writeoffRouter.get('/', authenticate, asyncHandler(async (req, res) => {
+  const parseDate = (val: any) => {
+    if (!val) return undefined;
+    const d = new Date(String(val));
+    return isNaN(d.getTime()) ? undefined : d;
+  };
+
+  const from = parseDate(req.query.from);
+  const to = parseDate(req.query.to);
+
+  const where: any = {};
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt.gte = from;
+    if (to) where.createdAt.lte = to;
+  }
+
   const writeOffs = await prisma.writeOff.findMany({
+    where,
     include: {
       items: { include: { product: true, batch: true } },
       createdBy: { select: { name: true } },
@@ -22,6 +40,7 @@ writeoffRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
   res.json(writeOffs);
 }));
 
+// POST / — Allowed for all roles (Service will decide if it is DRAFT or POSTED)
 writeoffRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const { items, ...data } = req.body ?? {};
@@ -51,7 +70,8 @@ writeoffRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   res.status(201).json(writeOff);
 }));
 
-writeoffRouter.patch('/:id', authenticate, asyncHandler(async (req, res) => {
+// PATCH /:id — PHARMACIST, ADMIN, OWNER
+writeoffRouter.patch('/:id', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
   const { items, ...data } = req.body ?? {};
 
@@ -80,9 +100,23 @@ writeoffRouter.patch('/:id', authenticate, asyncHandler(async (req, res) => {
   res.json(writeOff);
 }));
 
-writeoffRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
+// DELETE /:id — ADMIN, OWNER only
+writeoffRouter.delete('/:id', authenticate, requireRole(['ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
   const authedReq = req as AuthedRequest;
 
   await writeOffService.deleteWriteOff(String(req.params.id), authedReq.user.id, authedReq.user.role);
   res.json({ ok: true });
+}));
+// POST /approve/:id — PHARMACIST, ADMIN, OWNER
+writeoffRouter.post('/approve/:id', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const result = await writeOffService.approveWriteOff(req.params.id, authedReq.user.id, authedReq.user.role);
+  res.json(result);
+}));
+
+// POST /mass-expired — ADMIN, OWNER, PHARMACIST
+writeoffRouter.post('/mass-expired', authenticate, requireRole(['PHARMACIST', 'ADMIN', 'OWNER']), asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const result = await writeOffService.massWriteOffExpired(authedReq.user.id, authedReq.user.role);
+  res.json(result);
 }));

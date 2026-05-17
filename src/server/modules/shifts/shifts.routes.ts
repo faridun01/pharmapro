@@ -40,7 +40,7 @@ type ShiftWithReportData = {
 
 const getInvoicePaidAmount = (invoice: ShiftWithReportData['invoices'][number]) => {
   const paid = (invoice.payments || [])
-    .filter((payment) => payment.direction !== 'OUT')
+    .filter((payment) => payment.direction !== 'OUT' && (payment as any).status !== 'CANCELLED')
     .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
 
   return Math.min(Number(invoice.totalAmount || 0), paid);
@@ -49,14 +49,16 @@ const getInvoicePaidAmount = (invoice: ShiftWithReportData['invoices'][number]) 
 async function getOrCreateDefaultWarehouse(): Promise<string> {
   let wh = await prisma.warehouse.findFirst({ where: { isDefault: true } });
   if (!wh) {
-    wh = await prisma.warehouse.create({ data: { code: 'MAIN', name: 'Main Warehouse', isDefault: true } });
+    wh = await prisma.warehouse.create({ data: { code: 'MAIN', name: 'Аптечный склад', isDefault: true } });
   }
   return wh.id;
 }
 
 function calculateShiftSummary(shift: ShiftWithReportData) {
-  const totalSales = shift.invoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
-  const returnedAmount = shift.invoices.reduce((sum, inv) => {
+  const nonCancelledInvoices = shift.invoices.filter(inv => inv.status !== 'CANCELLED');
+
+  const totalSales = nonCancelledInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
+  const returnedAmount = nonCancelledInvoices.reduce((sum, inv) => {
     return sum + (inv.returns || []).reduce((invoiceReturnSum, ret) => {
       const itemTotal = ret.items.reduce((itemSum, item) => {
         const lineTotal = Number(item.lineTotal || 0);
@@ -67,13 +69,13 @@ function calculateShiftSummary(shift: ShiftWithReportData) {
     }, 0);
   }, 0);
 
-  const salesCogs = shift.invoices.reduce((sum, inv) => {
+  const salesCogs = nonCancelledInvoices.reduce((sum, inv) => {
     return sum + inv.items.reduce((itemSum, item) => {
       return itemSum + Number(item.quantity || 0) * Number(item.batch?.costBasis || 0);
     }, 0);
   }, 0);
 
-  const returnedCogs = shift.invoices.reduce((sum, inv) => {
+  const returnedCogs = nonCancelledInvoices.reduce((sum, inv) => {
     return sum + (inv.returns || []).reduce((invoiceReturnSum, ret) => {
       return invoiceReturnSum + ret.items.reduce((itemSum, item) => {
         return itemSum + Number(item.quantity || 0) * Number(item.batch?.costBasis || 0);
@@ -84,21 +86,24 @@ function calculateShiftSummary(shift: ShiftWithReportData) {
   const netSales = totalSales - returnedAmount;
   const netCogs = Math.max(0, salesCogs - returnedCogs);
   const grossProfit = netSales - netCogs;
-  const cashSales = shift.invoices.reduce((sum, inv) => {
+
+  const cashSales = nonCancelledInvoices.reduce((sum, inv) => {
     if (inv.status === 'RETURNED') return sum;
     const invoiceCash = (inv.payments || [])
-      .filter((payment) => payment.direction !== 'OUT' && payment.method === 'CASH')
+      .filter((payment) => payment.direction !== 'OUT' && payment.method === 'CASH' && (payment as any).status !== 'CANCELLED')
       .reduce((paymentSum, payment) => paymentSum + Number(payment.amount || 0), 0);
     return sum + invoiceCash;
   }, 0);
-  const cardSales = shift.invoices.reduce((sum, inv) => {
+
+  const cardSales = nonCancelledInvoices.reduce((sum, inv) => {
     if (inv.status === 'RETURNED') return sum;
     const invoiceCard = (inv.payments || [])
-      .filter((payment) => payment.direction !== 'OUT' && payment.method === 'CARD')
+      .filter((payment) => payment.direction !== 'OUT' && payment.method === 'CARD' && (payment as any).status !== 'CANCELLED')
       .reduce((paymentSum, payment) => paymentSum + Number(payment.amount || 0), 0);
     return sum + invoiceCard;
   }, 0);
-  const collectedSales = shift.invoices.reduce((sum, inv) => {
+
+  const collectedSales = nonCancelledInvoices.reduce((sum, inv) => {
     if (inv.status === 'RETURNED') return sum;
     return sum + getInvoicePaidAmount(inv);
   }, 0);
@@ -108,7 +113,14 @@ function calculateShiftSummary(shift: ShiftWithReportData) {
   const cashOut = shift.cashMovements
     .filter((movement) => movement.type === 'CASH_OUT')
     .reduce((sum, movement) => sum + Number(movement.amount || 0), 0);
-  const finalAmount = shift.openingCash + cashSales + cashIn - cashOut;
+  const totalRefunds = shift.invoices.reduce((sum, inv) => {
+    const invoiceRefunds = (inv.payments || [])
+      .filter((payment) => payment.direction === 'OUT' && payment.method === 'CASH')
+      .reduce((paymentSum, payment) => paymentSum + Number(payment.amount || 0), 0);
+    return sum + invoiceRefunds;
+  }, 0);
+
+  const finalAmount = shift.openingCash + cashSales - totalRefunds + cashIn - cashOut;
 
   return {
     totalInvoices: shift.invoices.length,
@@ -124,23 +136,57 @@ function calculateShiftSummary(shift: ShiftWithReportData) {
     cardSales,
     cashIn,
     cashOut,
+    totalRefunds,
     finalAmount,
-    netCash: shift.openingCash + cashSales + cashIn - cashOut,
+    netCash: finalAmount,
   };
 }
 
-// List recent shifts
-shiftsRouter.get('/', authenticate, asyncHandler(async (_req, res) => {
-  const shifts = await prisma.cashShift.findMany({
-    include: {
-      cashier: { select: { name: true } },
-      warehouse: { select: { name: true } },
-      _count: { select: { invoices: true, cashMovements: true } },
-    },
-    orderBy: { openAt: 'desc' },
-    take: 50,
+// List recent shifts (with pagination)
+shiftsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 25));
+
+  const parseDate = (val: any) => {
+    if (!val) return undefined;
+    const d = new Date(String(val));
+    return isNaN(d.getTime()) ? undefined : d;
+  };
+
+  const from = parseDate(req.query.from);
+  const to = parseDate(req.query.to);
+
+  const where: any = {};
+  if (from || to) {
+    where.openAt = {};
+    if (from) where.openAt.gte = from;
+    if (to) where.openAt.lte = to;
+  }
+
+  const [total, items] = await Promise.all([
+    prisma.cashShift.count({ where }),
+    prisma.cashShift.findMany({
+      where,
+      include: {
+        cashier: { select: { name: true } },
+        warehouse: { select: { name: true } },
+        _count: { select: { invoices: true, cashMovements: true } },
+      },
+      orderBy: { openAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    })
+  ]);
+
+  res.json({
+    items,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    }
   });
-  res.json(shifts);
 }));
 
 // Get my active shift
