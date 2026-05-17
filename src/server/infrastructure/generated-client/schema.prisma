@@ -236,6 +236,7 @@ model Batch {
   manufacturedDate DateTime
   receivedAt       DateTime             @default(now())
   expiryDate       DateTime
+  countryOfOrigin  String?
   status           BatchStatus
   productId        String
   product          Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -254,6 +255,7 @@ model Batch {
   @@index([batchNumber])
   @@index([status, expiryDate])
   @@index([productId, status])
+  @@index([warehouseId])
 }
 
 model BatchMovement {
@@ -270,8 +272,7 @@ model BatchMovement {
 
 model User {
   id                String            @id @default(uuid())
-  username          String?
-  email             String            @unique
+  username          String            @unique
   password          String
   name              String
   role              UserRole
@@ -305,7 +306,6 @@ model Supplier {
   id               String            @id @default(uuid())
   name             String
   contact          String?
-  email            String?
   address          String?
   contractNumber   String?
   contractDate     DateTime?
@@ -666,6 +666,7 @@ model PurchaseInvoiceItem {
   batchNumber       String?
   manufacturedDate  DateTime?
   expiryDate        DateTime?
+  countryOfOrigin   String?
   quantity          Int
   purchasePrice     Float
   wholesalePrice    Float?
@@ -702,6 +703,9 @@ model Payment {
 
   @@index([paymentDate])
   @@index([invoiceId, paymentDate])
+  @@index([invoiceId])
+  @@index([supplierId])
+  @@index([customerId])
 }
 
 model Payable {
@@ -852,7 +856,6 @@ model Customer {
   name            String
   legalName       String?
   phone           String?
-  email           String?
   address         String?
   taxId           String?
   managerName     String?
