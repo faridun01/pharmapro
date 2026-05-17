@@ -18,7 +18,7 @@ const getArgValue = (flag) => {
 };
 
 if (args.includes('--help') || args.includes('-h')) {
-  console.log('Usage: npm run bootstrap:admin -- --email owner@example.com --password <password> --name "Owner" --role OWNER [--username owner] [--env .env.production]');
+  console.log('Usage: npm run bootstrap:admin -- --username owner --password <password> --name "Owner" --role OWNER [--email owner@example.com] [--env .env.production]');
   process.exit(0);
 }
 
@@ -45,8 +45,8 @@ const username = String(getArgValue('--username') || email.split('@')[0] || 'adm
 const roleRaw = String(getArgValue('--role') || 'ADMIN').trim().toUpperCase();
 const validRoles = new Set(['OWNER', 'ADMIN']);
 
-if (!email || !password) {
-  console.error('[bootstrap-admin] --email and --password are required.');
+if (!username || !password) {
+  console.error('[bootstrap-admin] --username and --password are required.');
   process.exit(1);
 }
 
@@ -70,12 +70,11 @@ const prisma = new PrismaClient();
 try {
   const passwordHash = await bcrypt.hash(password, 10);
   const existing = await prisma.user.findUnique({
-    where: { email },
+    where: { username },
     select: { id: true },
   });
 
   const data = {
-    email,
     username,
     password: passwordHash,
     name,
@@ -85,13 +84,13 @@ try {
 
   if (existing) {
     await prisma.user.update({
-      where: { email },
+      where: { username },
       data,
     });
-    console.log(`[bootstrap-admin] Updated ${roleRaw} user: ${email}`);
+    console.log(`[bootstrap-admin] Updated ${roleRaw} user: ${username}`);
   } else {
     await prisma.user.create({ data });
-    console.log(`[bootstrap-admin] Created ${roleRaw} user: ${email}`);
+    console.log(`[bootstrap-admin] Created ${roleRaw} user: ${username}`);
   }
 } finally {
   await prisma.$disconnect();
