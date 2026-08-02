@@ -163,6 +163,19 @@ const AppLoader: React.FC<{
   </div>
 );
 
+const SmoothViewFallback: React.FC = () => (
+  <div className="w-full h-full min-h-[380px] flex flex-col gap-4 animate-pulse p-1">
+    <div className="h-1 w-full bg-gradient-to-r from-transparent via-[#0f766e]/40 to-transparent rounded-full" />
+    <div className="h-14 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm" />
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="h-28 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm" />
+      <div className="h-28 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm" />
+      <div className="h-28 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm" />
+    </div>
+    <div className="flex-1 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm min-h-[200px]" />
+  </div>
+);
+
 export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () => void }) {
   const { t } = useTranslation();
   const { user, logout, error } = usePharmacy();
@@ -488,28 +501,28 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
           </div>
         )}
 
-        <header className="h-24 bg-white/80 backdrop-blur-md border-b border-[#5A5A40]/5 flex items-center justify-between px-6 shrink-0 z-20">
+        <header className="h-20 bg-white/90 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between px-6 shrink-0 z-20">
           <div className="flex items-center gap-4 min-w-0">
             <div className="flex flex-col">
-              <h2 className="text-xl font-bold text-[#5A5A40]">{currentMenuItem?.label || t(currentView.replace('-', ' '))}</h2>
-              <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest font-bold">
+              <h2 className="text-xl font-bold text-slate-900 font-['Outfit']">{currentMenuItem?.label || t(currentView.replace('-', ' '))}</h2>
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-0.5">
                 {new Date().toLocaleDateString('ru-RU', { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-[#f5f5f0] rounded-2xl border border-[#5A5A40]/5">
+            <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 bg-emerald-50 rounded-xl border border-emerald-200/60">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-              <span className="text-[10px] font-bold text-[#5A5A40]/60 uppercase tracking-widest">{t('Server Connected')}</span>
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">{t('Server Connected')}</span>
             </div>
 
-            <div className="flex items-center gap-3 pl-3 border-l border-[#5A5A40]/10">
+            <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-[#5A5A40]">{user.name}</p>
-                <p className="text-[10px] text-[#5A5A40]/40 uppercase tracking-widest font-bold">{user.role}</p>
+                <p className="text-xs font-bold text-slate-800">{user.name}</p>
+                <p className="text-[10px] text-teal-600 font-bold uppercase tracking-wider">{user.role}</p>
               </div>
-              <div className="w-12 h-12 bg-[#f5f5f0] rounded-2xl flex items-center justify-center text-[#5A5A40] font-bold border-2 border-white shadow-md">
+              <div className="w-10 h-10 bg-gradient-to-br from-[#0F766E] to-[#0D9488] rounded-xl flex items-center justify-center text-white font-bold border-2 border-white shadow-sm text-sm">
                 {user.name.charAt(0)}
               </div>
             </div>
@@ -519,7 +532,7 @@ export default function AuthenticatedShell({ onSignedOut }: { onSignedOut?: () =
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar relative">
           <div key={currentView} className="pharma-view-enter">
             <ViewErrorBoundary onReset={() => setCurrentView('dashboard')}>
-              <Suspense fallback={<AppLoader compact label="Загружаем раздел" />}>
+              <Suspense fallback={<SmoothViewFallback />}>
                 {renderView()}
               </Suspense>
             </ViewErrorBoundary>
