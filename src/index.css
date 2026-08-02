@@ -54,10 +54,11 @@
   width: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  @apply bg-transparent;
+  background-color: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-stone-200 rounded-full;
+  background-color: #e7e5e4;
+  border-radius: 9999px;
 }
 
 .app-drag {
