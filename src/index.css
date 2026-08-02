@@ -4,46 +4,47 @@
   --font-manrope: "Outfit", "Inter", sans-serif;
   --font-inter: "Inter", system-ui, sans-serif;
 
-  --color-primary: #0f766e;
+  --color-primary: #0d9488;
   --color-primary-container: #ccfbf1;
   --color-on-primary: #ffffff;
   --color-on-primary-container: #115e59;
   
-  --color-secondary: #475569;
-  --color-secondary-container: #e2e8f0;
+  --color-secondary: #4b5563;
+  --color-secondary-container: #e5e7eb;
   --color-on-secondary: #ffffff;
-  --color-on-secondary-container: #1e293b;
+  --color-on-secondary-container: #1f2937;
 
   --color-tertiary: #0284c7;
   --color-tertiary-container: #e0f2fe;
   --color-on-tertiary: #ffffff;
   --color-on-tertiary-container: #0369a1;
 
-  --color-surface: #f8fafc;
-  --color-on-surface: #0f172a;
-  --color-surface-container-low: #f1f5f9;
+  --color-surface: #f4f6f5;
+  --color-on-surface: #111827;
+  --color-surface-container-low: #eef1f0;
   --color-surface-container-lowest: #ffffff;
   --color-surface-container-high: #e2e8f0;
   --color-surface-container-highest: #cbd5e1;
   
-  --color-error: #dc2626;
-  --color-error-container: #fee2e2;
+  --color-error: #e11d48;
+  --color-error-container: #ffe4e6;
   --color-on-error: #ffffff;
-  --color-on-error-container: #991b1b;
+  --color-on-error-container: #9f1239;
 
-  --color-outline: #94a3b8;
-  --color-outline-variant: #cbd5e1;
+  --color-outline: #9ca3af;
+  --color-outline-variant: #d1d5db;
 }
 
 @layer base {
   body {
-    font-family: "Inter", system-ui, sans-serif;
-    background-color: #f8fafc;
-    color: #0f172a;
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #f4f6f5;
+    color: #111827;
     -webkit-font-smoothing: antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: "Outfit", "Inter", sans-serif;
+    color: #111827;
     letter-spacing: -0.02em;
   }
 }

@@ -44,7 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   return (
     <aside
-      className="flex flex-col relative z-30 transition-all duration-300 ease-in-out pharma-sidebar bg-[#0F172A] border-r border-[#1E293B] shadow-2xl"
+      className="flex flex-col relative z-30 transition-all duration-300 ease-in-out pharma-sidebar bg-[#152220] border-r border-[#1F3330] shadow-2xl"
       style={{ width: isSidebarOpen ? 260 : 80 }}
     >
       {/* Logo Section */}
