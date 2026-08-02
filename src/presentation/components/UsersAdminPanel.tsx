@@ -419,7 +419,7 @@ export const UsersAdminPanel: React.FC<UsersAdminPanelProps> = ({ currentUserRol
                   <input
                     type={showPassword ? 'text' : 'password'}
                     className="w-full px-4 py-2.5 pr-10 border border-[#5A5A40]/15 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5A5A40]/20"
-                    placeholder={modalMode === 'create' ? 'Минимум 6 символов' : 'Новый пароль...'}
+                    placeholder={modalMode === 'create' ? 'Минимум 8 символов' : 'Новый пароль...'}
                     value={form.password}
                     onChange={e => setForm(s => ({ ...s, password: e.target.value }))}
                   />

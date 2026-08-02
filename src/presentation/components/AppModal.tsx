@@ -5,7 +5,8 @@ type AppModalTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 type AppModalSize = 'sm' | 'md' | 'lg' | 'xl';
 
 type AppModalProps = {
-  open: boolean;
+  open?: boolean;
+  isOpen?: boolean;
   title: string;
   subtitle?: string;
   tone?: AppModalTone;
@@ -32,6 +33,7 @@ const sizeClass: Record<AppModalSize, string> = {
 
 export const AppModal: React.FC<AppModalProps> = ({
   open,
+  isOpen,
   title,
   subtitle,
   tone = 'neutral',
@@ -40,7 +42,8 @@ export const AppModal: React.FC<AppModalProps> = ({
   children,
   footer,
 }) => {
-  if (!open) return null;
+  const isVisible = open ?? isOpen ?? false;
+  if (!isVisible) return null;
 
   return (
     <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">

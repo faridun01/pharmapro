@@ -29,6 +29,53 @@ export const buildApiHeaders = async (contentType = true) => {
   };
 };
 
+export async function apiGet<T = any>(url: string): Promise<T> {
+  const headers = await buildApiHeaders(false);
+  const response = await fetch(url, { headers });
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : {};
+  if (!response.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+export async function apiPost<T = any>(url: string, body?: any): Promise<T> {
+  const headers = await buildApiHeaders(true);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : {};
+  if (!response.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+export async function apiPut<T = any>(url: string, body?: any): Promise<T> {
+  const headers = await buildApiHeaders(true);
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : {};
+  if (!response.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+export async function apiDelete<T = any>(url: string): Promise<T> {
+  const headers = await buildApiHeaders(false);
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers,
+  });
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : {};
+  if (!response.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
 /**
  * Base API class to handle common logic like auth headers.
  */

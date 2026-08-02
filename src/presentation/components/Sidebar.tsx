@@ -44,51 +44,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   return (
     <aside
-      className="flex flex-col relative z-30 transition-all duration-300 ease-in-out pharma-sidebar bg-[#151619] shadow-2xl"
+      className="flex flex-col relative z-30 transition-all duration-300 ease-in-out pharma-sidebar bg-[#0F172A] border-r border-[#1E293B] shadow-2xl"
       style={{ width: isSidebarOpen ? 260 : 80 }}
     >
       {/* Logo Section */}
-      <div className="px-6 py-10 flex items-center gap-4">
-        <div className="w-12 h-12 bg-[#5A5A40] rounded-2xl flex items-center justify-center text-white shadow-xl rotate-3 hover:rotate-0 transition-transform cursor-pointer shrink-0">
-          <Pill size={28} />
+      <div className="px-6 py-8 flex items-center gap-4">
+        <div className="w-11 h-11 bg-gradient-to-br from-[#0F766E] to-[#14B8A6] rounded-2xl flex items-center justify-center text-white shadow-lg shadow-[#0F766E]/25 rotate-2 hover:rotate-0 transition-all cursor-pointer shrink-0">
+          <Pill size={24} />
         </div>
         {isSidebarOpen && (
           <div className="flex flex-col pharma-fade-in">
-            <h1 className="font-normal text-xl tracking-tight leading-none text-white">3C: Pharma</h1>
-            <span className="text-[10px] text-[#5A5A40] font-normal uppercase tracking-[0.2em] mt-1.5">ITFORCE System</span>
+            <h1 className="font-extrabold text-xl tracking-tight leading-none text-white font-['Outfit']">PharmaPro</h1>
+            <span className="text-[10px] text-[#14B8A6] font-bold uppercase tracking-[0.2em] mt-1">Pharmacy Management</span>
           </div>
         )}
       </div>
 
       {/* Navigation Section */}
-      <div className="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar flex flex-col">
+      <div className="flex-1 px-3 py-2 overflow-y-auto custom-scrollbar flex flex-col">
         {menuItems.map((group) => (
-          <div key={group.group} className="mb-6 last:mb-0">
+          <div key={group.group} className="mb-5 last:mb-0">
             {isSidebarOpen && (
-              <h3 className="px-4 mb-3 text-[10px] font-normal text-white/20 uppercase tracking-[0.25em] pharma-fade-in">
+              <h3 className="px-4 mb-2.5 text-[10px] font-bold text-slate-400/60 uppercase tracking-[0.22em] pharma-fade-in">
                 {group.group}
               </h3>
             )}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1">
               {group.items.map((item) => {
                 const isActive = currentView === item.id;
                 return (
                   <button
                     key={item.id}
                     onClick={() => onViewChange(item.id)}
-                    className={`group relative flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-200 ${
+                    className={`group relative flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-200 ${
                       isActive 
-                        ? 'bg-[#5A5A40] text-white shadow-lg shadow-[#5A5A40]/20' 
-                        : 'text-white/40 hover:text-white hover:bg-white/5'
+                        ? 'bg-gradient-to-r from-[#0F766E] to-[#0D9488] text-white shadow-md shadow-[#0F766E]/30 font-semibold' 
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
                     }`}
                     title={!isSidebarOpen ? item.label : undefined}
                   >
-                    <item.icon size={22} className={`${isActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
+                    <item.icon size={20} className={`${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200 group-hover:scale-110 transition-transform'}`} />
                     {isSidebarOpen && (
-                      <span className="font-normal text-sm tracking-tight flex-1 flex items-center gap-2">
-                        {item.label}
+                      <span className="text-xs tracking-tight flex-1 flex items-center justify-between font-medium">
+                        <span>{item.label}</span>
                         {item.id === 'notifications' && notificationsCount > 0 && (
-                          <span className="inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-normal shadow-lg">
+                          <span className="inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold shadow-sm">
                             {notificationsCount}
                           </span>
                         )}
@@ -98,40 +98,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 );
               })}
             </div>
-            {isSidebarOpen && <div className="mx-4 mt-6 border-b border-white/5" />}
+            {isSidebarOpen && <div className="mx-4 mt-4 border-b border-slate-800/60" />}
           </div>
         ))}
       </div>
 
       {/* User & Footer Section */}
-      <div className="mt-auto p-4 border-t border-white/5 bg-black/10">
+      <div className="mt-auto p-4 border-t border-slate-800/80 bg-slate-900/50">
         {isSidebarOpen && (
-          <div className="flex items-center gap-3 p-3 mb-4 rounded-2xl bg-white/5 border border-white/5 pharma-fade-in">
-            <div className="w-10 h-10 bg-[#5A5A40] rounded-xl flex items-center justify-center text-white font-normal shadow-lg shadow-[#5A5A40]/10">
+          <div className="flex items-center gap-3 p-3 mb-3 rounded-xl bg-slate-800/40 border border-slate-700/40 pharma-fade-in">
+            <div className="w-9 h-9 bg-gradient-to-br from-[#0F766E] to-[#0D9488] rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-sm">
               {user.name.charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-normal truncate leading-none mb-1 text-white">{user.name}</p>
-              <p className="text-[10px] text-white/30 font-normal uppercase tracking-widest truncate">{user.role}</p>
+              <p className="text-xs font-semibold truncate leading-none mb-1 text-slate-100">{user.name}</p>
+              <p className="text-[10px] text-teal-400 font-bold uppercase tracking-wider truncate">{user.role}</p>
             </div>
           </div>
         )}
 
         <button
           onClick={onLogout}
-          className="w-full flex items-center justify-center sm:justify-start gap-4 px-4 py-4 text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-2xl transition-all group"
+          className="w-full flex items-center justify-center sm:justify-start gap-3 px-3.5 py-3 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition-all group text-xs font-semibold"
         >
-          <LogOut size={22} className="shrink-0 group-hover:-translate-x-1 transition-transform" />
-          {isSidebarOpen && <span className="font-normal text-xs uppercase tracking-[0.2em]">Выход</span>}
+          <LogOut size={18} className="shrink-0 group-hover:-translate-x-0.5 transition-transform" />
+          {isSidebarOpen && <span className="uppercase tracking-[0.15em]">Выход</span>}
         </button>
       </div>
 
       {/* Toggle Button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="absolute -right-4 top-24 w-8 h-8 bg-[#5A5A40] rounded-full flex items-center justify-center text-white shadow-2xl hover:scale-110 transition-transform z-40 border-4 border-[#f5f5f0] app-no-drag"
+        className="absolute -right-3.5 top-20 w-7 h-7 bg-[#0F766E] rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 transition-transform z-40 border-2 border-[#f8fafc] app-no-drag"
       >
-        {isSidebarOpen ? <X size={14} /> : <Menu size={14} />}
+        {isSidebarOpen ? <X size={12} /> : <Menu size={12} />}
       </button>
     </aside>
   );

@@ -88,7 +88,7 @@ export const LoginView: React.FC<{
             </button>
           </form>
           
-          <div className="mt-8 pt-6 border-top border-[#5A5A40]/10 text-center">
+          <div className="mt-8 pt-6 border-t border-[#5A5A40]/10 text-center">
             <p className="text-xs text-[#5A5A40]/50 uppercase tracking-widest">
               {t('Secure Access Only')}
             </p>

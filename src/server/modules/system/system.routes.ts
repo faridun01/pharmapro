@@ -217,3 +217,36 @@ systemRouter.post('/stock-integrity/fix', authenticate, asyncHandler(async (req,
     throw err;
   }
 }));
+
+// GET /backups — list database backups
+systemRouter.get('/backups', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  if (!canManageSystem(authedReq.user.role)) {
+    throw new ValidationError('Only ADMIN or OWNER can list backups');
+  }
+  const { backupService } = await import('./backup.service');
+  const backups = await backupService.listBackups();
+  res.json(backups);
+}));
+
+// POST /backups/trigger — trigger immediate backup creation
+systemRouter.post('/backups/trigger', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  if (!canManageSystem(authedReq.user.role)) {
+    throw new ValidationError('Only ADMIN or OWNER can create backups');
+  }
+  const { backupService } = await import('./backup.service');
+  const backup = await backupService.createBackup(authedReq.user.id, false);
+  res.status(201).json(backup);
+}));
+
+// POST /backups/:id/restore — restore database from backup
+systemRouter.post('/backups/:id/restore', authenticate, asyncHandler(async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  if (!canManageSystem(authedReq.user.role)) {
+    throw new ValidationError('Only ADMIN or OWNER can restore backups');
+  }
+  const { backupService } = await import('./backup.service');
+  const result = await backupService.restoreBackup(String(req.params.id), authedReq.user.id);
+  res.json(result);
+}));

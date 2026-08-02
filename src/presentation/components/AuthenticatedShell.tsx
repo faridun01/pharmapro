@@ -155,10 +155,10 @@ const AppLoader: React.FC<{
   label?: string;
   compact?: boolean;
 }> = ({ label = 'Загрузка...', compact = false }) => (
-  <div className={`${compact ? 'min-h-60' : 'h-full min-h-0'} flex items-center justify-center bg-[#f5f5f0]`}>
+  <div className={`${compact ? 'min-h-60' : 'h-full min-h-0'} flex items-center justify-center bg-[#f8fafc]`}>
     <div className="flex flex-col items-center gap-3 text-center px-6">
-      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#5A5A40]" />
-      <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#5A5A40]/55">{label}</p>
+      <div className="animate-spin rounded-full h-9 w-9 border-2 border-[#0f766e]/20 border-t-[#0f766e]" />
+      <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#0f766e]/70">{label}</p>
     </div>
   </div>
 );

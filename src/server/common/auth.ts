@@ -19,6 +19,10 @@ const DEV_ADMIN_PASSWORD_HASH = '$2b$10$QWHZjMpDfrae3H8.xQL3R.eQmv7Lj9cUOxkD.2E1
 const PRODUCTION_BOOTSTRAP_HINT = 'Run `npm run bootstrap:admin -- --email owner@example.com --password <strong-password> --name "Owner" --role OWNER` before first production login.';
 
 const isTrustedDesktopRequest = (req: Request) => {
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+
   const desktopSecret = process.env.ELECTRON_DESKTOP_AUTH_SECRET;
   const desktopHeader = req.headers['x-pharmapro-desktop-auth'];
   const headerValue = Array.isArray(desktopHeader) ? desktopHeader[0] : desktopHeader;

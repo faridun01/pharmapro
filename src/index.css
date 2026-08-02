@@ -1,46 +1,50 @@
 @import "tailwindcss";
 
 @theme {
-  --font-manrope: "Segoe UI", "Arial", sans-serif;
-  --font-inter: "Segoe UI", "Arial", sans-serif;
+  --font-manrope: "Outfit", "Inter", sans-serif;
+  --font-inter: "Inter", system-ui, sans-serif;
 
-  --color-primary: #005c97;
-  --color-primary-container: #d1e4ff;
+  --color-primary: #0f766e;
+  --color-primary-container: #ccfbf1;
   --color-on-primary: #ffffff;
-  --color-on-primary-container: #001d36;
+  --color-on-primary-container: #115e59;
   
-  --color-secondary: #535f70;
-  --color-secondary-container: #d7e3f7;
+  --color-secondary: #475569;
+  --color-secondary-container: #e2e8f0;
   --color-on-secondary: #ffffff;
-  --color-on-secondary-container: #101c2b;
+  --color-on-secondary-container: #1e293b;
 
-  --color-tertiary: #6b5778;
-  --color-tertiary-container: #f2daff;
+  --color-tertiary: #0284c7;
+  --color-tertiary-container: #e0f2fe;
   --color-on-tertiary: #ffffff;
-  --color-on-tertiary-container: #251431;
+  --color-on-tertiary-container: #0369a1;
 
-  --color-surface: #f8f9ff;
-  --color-on-surface: #191c1e;
-  --color-surface-container-low: #f1f4f9;
+  --color-surface: #f8fafc;
+  --color-on-surface: #0f172a;
+  --color-surface-container-low: #f1f5f9;
   --color-surface-container-lowest: #ffffff;
-  --color-surface-container-high: #e1e2e9;
-  --color-surface-container-highest: #dbdde4;
+  --color-surface-container-high: #e2e8f0;
+  --color-surface-container-highest: #cbd5e1;
   
-  --color-error: #ba1a1a;
-  --color-error-container: #ffdad6;
+  --color-error: #dc2626;
+  --color-error-container: #fee2e2;
   --color-on-error: #ffffff;
-  --color-on-error-container: #93000a;
+  --color-on-error-container: #991b1b;
 
-  --color-outline: #73777f;
-  --color-outline-variant: #c3c7cf;
+  --color-outline: #94a3b8;
+  --color-outline-variant: #cbd5e1;
 }
 
 @layer base {
   body {
-    @apply font-inter bg-surface text-on-surface;
+    font-family: "Inter", system-ui, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-manrope;
+    font-family: "Outfit", "Inter", sans-serif;
+    letter-spacing: -0.02em;
   }
 }
 

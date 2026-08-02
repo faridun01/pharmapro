@@ -13,6 +13,7 @@ import { returnsRouter } from '../modules/returns/returns.routes';
 import { writeoffRouter } from '../modules/writeoff/writeoff.routes';
 import { shiftsRouter } from '../modules/shifts/shifts.routes';
 import { warehousesRouter } from '../modules/warehouses/warehouses.routes';
+import { transfersRouter } from '../modules/warehouses/transfers.routes';
 import { reportsRouter } from '../modules/reports/reports.routes';
 import { systemRouter } from '../modules/system/system.routes';
 import { usersRouter } from '../modules/system/users.routes';
@@ -75,6 +76,7 @@ export const createApp = () => {
   app.use('/api/writeoffs', writeoffRouter);
   app.use('/api/shifts', shiftsRouter);
   app.use('/api/warehouses', warehousesRouter);
+  app.use('/api/transfers', transfersRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/system', systemRouter);
   app.use('/api/system/users', usersRouter);

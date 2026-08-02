@@ -17,16 +17,6 @@ productsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
-productsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
-  const product = await productService.getProductById(req.params.id);
-  res.json(product);
-}));
-
-productsRouter.get('/:id/price-history', authenticate, asyncHandler(async (req, res) => {
-  const history = await productService.getPriceHistory(req.params.id);
-  res.json(history);
-}));
-
 // GET /barcode/:code — exact barcode lookup (for POS scanners)
 // NOTE: must be placed BEFORE /:id to avoid route conflict
 productsRouter.get('/barcode/:code', authenticate, asyncHandler(async (req, res) => {
@@ -55,6 +45,16 @@ productsRouter.get('/barcode/:code', authenticate, asyncHandler(async (req, res)
   }
 
   res.json(product);
+}));
+
+productsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
+  const product = await productService.getProductById(req.params.id);
+  res.json(product);
+}));
+
+productsRouter.get('/:id/price-history', authenticate, asyncHandler(async (req, res) => {
+  const history = await productService.getPriceHistory(req.params.id);
+  res.json(history);
 }));
 
 

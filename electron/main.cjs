@@ -95,10 +95,23 @@ const stringifyLogPayload = (payload) => {
   }
 };
 
+const MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 const writeRuntimeLog = (tag, payload) => {
   const line = `[${new Date().toISOString()}] [${tag}] ${stringifyLogPayload(payload)}\n`;
   try {
-    fs.mkdirSync(path.dirname(runtimeLogPath), { recursive: true });
+    const logDir = path.dirname(runtimeLogPath);
+    fs.mkdirSync(logDir, { recursive: true });
+    if (fs.existsSync(runtimeLogPath)) {
+      const stats = fs.statSync(runtimeLogPath);
+      if (stats.size > MAX_LOG_SIZE_BYTES) {
+        const backupLogPath = `${runtimeLogPath}.old`;
+        if (fs.existsSync(backupLogPath)) {
+          fs.unlinkSync(backupLogPath);
+        }
+        fs.renameSync(runtimeLogPath, backupLogPath);
+      }
+    }
     fs.appendFileSync(runtimeLogPath, line, 'utf8');
   } catch {
     // Ignore file logging errors and still print to stderr.

@@ -60,7 +60,18 @@ export type ProcessPdfDocumentResult = {
   warnings: string[];
 };
 
-const PYTHON_EXECUTABLE = process.env.PYTHON_EXECUTABLE || 'c:/python313/python.exe';
+import fs from 'node:fs';
+
+const resolvePythonExecutable = (): string => {
+  if (process.env.PYTHON_EXECUTABLE && fs.existsSync(process.env.PYTHON_EXECUTABLE)) {
+    return process.env.PYTHON_EXECUTABLE;
+  }
+  if (fs.existsSync('c:/python313/python.exe')) {
+    return 'c:/python313/python.exe';
+  }
+  return 'python';
+};
+
 const CAMELOT_SCRIPT = path.join(process.cwd(), 'scripts', 'pdf_camelot_extract.py');
 const PDF_RENDER_SCRIPT = path.join(process.cwd(), 'scripts', 'pdf_render_page.py');
 const PDF_PARSE_TIMEOUT_MS = Number(process.env.PDF_PARSE_TIMEOUT_MS || 30000);
@@ -209,7 +220,8 @@ const buildConfidenceSummary = (items: OcrResultItem[]) => {
 
 const runPythonJsonProcess = <T,>(scriptPath: string, payload: Record<string, unknown>, timeoutMs: number): Promise<T> =>
   new Promise((resolve, reject) => {
-    const child = spawn(PYTHON_EXECUTABLE, [scriptPath], {
+    const pythonExe = resolvePythonExecutable();
+    const child = spawn(pythonExe, [scriptPath], {
       cwd: process.cwd(),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
